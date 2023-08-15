@@ -9,9 +9,10 @@ Created on Thurs Aug 3 2023
 import numpy as np
 from enum import IntEnum, StrEnum
 from webscraping.weburl import WebURL
+from webscraping.webnodes import WebJSON
 from webscraping.webpages import WebJsonPage
-from utilities.pipelines import Uploader
-from utilities.dispatchers import kwargsdispatcher
+from support.pipelines import Uploader
+from support.dispatchers import kwargsdispatcher
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -45,68 +46,73 @@ class ETradeOrdersURL(WebURL):
     def path_cancel(cls, *args, account, **kwargs): return "/v1/accounts/{account}/orders/cancel.json".format(account=str(account))
 
 
-class ETradeOrderData(WebJSON.List, locator="//Order"):
-    class Status(WebJSON.Text, locator="//status", key="status", parser=Status.__getitem__): pass
-    class Cost(WebJSON.Text, locator="//estimatedTotalAmount", key="cost", parser=np.float32): pass
+class ETradeOrderData(WebJSON, locator="//Order", key="orders", collection=True):
+    class Status(WebJSON.Text, locator="//status", key="status", value=Status.__getitem__): pass
+    class Cost(WebJSON.Json, locator="//estimatedTotalAmount", key="cost", value=np.float32): pass
 
-    class Price(WebJSON.Text, locator="//priceValue", key="price", parser=np.float32): pass
-    class Terms(WebJSON.Text, locator="//priceType", key="terms", parser=Terms.__getitem__): pass
-    class Contents(WebJSON.Text, locator="//orderType", key="strategy", parser=Content.__getitem__): pass
-    class Tenure(WebJSON.Text, locator="//orderTerm", key="tenure", parser=Tenure.__getitem__): pass
-    class Session(WebJSON.Text, locator="//marketSession", key="session", parser=Session.__getitem__): pass
-    class Timing(WebJSON.Text, locator="//allOrNone", key="timing", parser=Partial.__getitem__): pass
+    class Price(WebJSON.Json, locator="//priceValue", key="price", value=np.float32): pass
+    class Terms(WebJSON.Json, locator="//priceType", key="terms", value=Terms.__getitem__): pass
+    class Contents(WebJSON.Json, locator="//orderType", key="strategy", value=Content.__getitem__): pass
+    class Tenure(WebJSON.Json, locator="//orderTerm", key="tenure", value=Tenure.__getitem__): pass
+    class Session(WebJSON.Json, locator="//marketSession", key="session", value=Session.__getitem__): pass
+    class Timing(WebJSON.Json, locator="//allOrNone", key="timing", value=Partial.__getitem__): pass
 
-    class Instrument(WebJSON.List, locator="//Instrument", key="instruments"):
-        class Action(WebJSON.Text, locator="//orderAction", key="action", parser=Action.__getitem__): pass
-        class Quantity(WebJSON.Text, locator="//quantity", key="quantity", parser=np.int16): pass
-        class Basis(WebJSON.Text, locator="//quantityType", key="basis", parser=Basis.__getitem__): pass
+    class Instruments(WebJSON, locator="//Instrument", key="instruments", collection=True):
+        class Action(WebJSON.Json, locator="//orderAction", key="action", value=Action.__getitem__): pass
+        class Quantity(WebJSON.Json, locator="//quantity", key="quantity", value=np.int16): pass
+        class Basis(WebJSON.Json, locator="//quantityType", key="basis", value=Basis.__getitem__): pass
 
-        class Product(WebJSON.Dict, locator="//Product", key="product"):
-            class Ticker(WebJSON.Text, locator="//symbol", key="ticker", parser=str): pass
-            class Security(WebJSON.Text, locator="//securityType", key="type", parser=Security.__getitem__): pass
-            class Option(WebJSON.Text, locator="//callPut", key="security", parser=Option.__getitem__, optional=True): pass
-            class Strike(WebJSON.Text, locator="//strikePrice", key="strike", parser=np.float32, optional=True): pass
-            class Year(WebJSON.Text, locator="//expiryYear", key="year", parser=np.int16, optional=True): pass
-            class Month(WebJSON.Text, locator="//expiryMonth", key="month", parser=np.int16, optional=True): pass
-            class Day(WebJSON.Text, locator="//expiryDay", key="day", parser=np.int16, optional=True): pass
+        class Product(WebJSON, locator="//Product", key="product"):
+            class Ticker(WebJSON.Json, locator="//symbol", key="ticker", value=str): pass
+            class Security(WebJSON.Json, locator="//securityType", key="type", value=Security.__getitem__): pass
+            class Option(WebJSON.Json, locator="//callPut", key="security", value=Option.__getitem__, optional=True): pass
+            class Strike(WebJSON.Json, locator="//strikePrice", key="strike", value=np.float32, optional=True): pass
+            class Year(WebJSON.Json, locator="//expiryYear", key="year", value=np.int16, optional=True): pass
+            class Month(WebJSON.Json, locator="//expiryMonth", key="month", value=np.int16, optional=True): pass
+            class Day(WebJSON.Json, locator="//expiryDay", key="day", value=np.int16, optional=True): pass
 
-
-class ETradePreviewPayload(WebJSON.Dict, locator="//PreviewOrderRequest"):
-    class Orders(ETradeOrderData, key="orders"): pass
-
-
-class ETradePreviewData(WebJSON.Dict, locator="//PreviewOrderResponse"):
-    class Orders(ETradeOrderData, key="orders"): pass
-    class Previews(WebJSON.List, locator="//PreviewIds", key="previews"):
-        class ID(WebJSON.Text, locator="//previewId", key="id", parser=np.int64): pass
+    @staticmethod
+    def extractor(source, *args, **kwargs): pass
+    @staticmethod
+    def parser(contents, *args, **kwargs): pass
 
 
-class ETradePlacePayload(WebJSON.Dict, locator="//PlaceOrderRequest"):
-    class Orders(ETradeOrderData, key="orders"): pass
-    class Previews(WebJSON.List, locator="//PreviewIds", key="previews"):
-        class ID(WebJSON.Text, locator="//previewId", key="id", parser=np.int64): pass
+class ETradePreviewPayload(WebJSON, locator="//PreviewOrderRequest"):
+    class Orders(ETradeOrderData): pass
+
+    @staticmethod
+    def extractor(source, *args, **kwargs): pass
 
 
-class ETradePlaceData(WebJSON.Dict, locator="//PlaceOrderResponse"):
-    class Orders(ETradeOrderData, key="orders"): pass
-    class Submits(WebJSON.List, locator="//OrderIds", key="submits"):
-        class ID(WebJSON.Text, locator="//orderId", key="id", parser=np.int64): pass
+class ETradePreviewData(WebJSON, locator="//PreviewOrderResponse"):
+    class Previews(WebJSON.Text, locator="//PreviewIds/previewId", key="previews", value=np.int64, collection=True): pass
+    class Orders(ETradeOrderData): pass
+
+    @staticmethod
+    def parser(contents, *args, **kwargs): pass
 
 
-class ETradeCancelPayload(WebJSON.Dict, locator=""):
-    class ID(WebJSON.Text, locator="//orderId", key="id", parser=np.int64): pass
+class ETradePlacePayload(WebJSON, locator="//PlaceOrderRequest"):
+    class Previews(WebJSON.Text, locator="//PreviewIds/previewId", key="previews", value=np.int64, collection=True): pass
+    class Orders(ETradeOrderData): pass
+
+    @staticmethod
+    def extractor(source, *args, **kwargs): pass
 
 
-class ETradeCancelData(WebJSON.Dict, locator=""):
-    class ID(WebJSON.Text, locator="//orderId", key="id", parser=np.int64): pass
+class ETradePlaceData(WebJSON, locator="//PlaceOrderResponse"):
+    class Submits(WebJSON.Text, locator="//OrderIds/orderId", key="submits", value=np.int64, collection=True): pass
+    class Orders(ETradeOrderData): pass
+
+    @staticmethod
+    def parser(contents, *args, **kwargs): pass
 
 
-class ETradePreviewPage(WebJsonPage, writer=ETradePreviewPayload, reader=ETradePreviewData): pass
-class ETradePlacePage(WebJsonPage, writer=ETradePlacePayload, reader=ETradePlaceData): pass
-class ETradeCancelPage(WebJsonPage, writier=ETradeCancelPayload, reader=ETradeCancelData): pass
+class ETradePreviewPage(WebJsonPage): pass
+class ETradePlacePage(WebJsonPage): pass
 
 
-order_pages = {"preview": ETradePreviewPage, "place": ETradePlacePage, "cancel": ETradeCancelPage}
+order_pages = {"preview": ETradePreviewPage, "place": ETradePlacePage}
 class ETradeOrderUploader(Uploader, pages=order_pages):
     def execute(self, *args, **kwargs):
         pass

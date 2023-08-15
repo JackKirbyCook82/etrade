@@ -17,18 +17,18 @@ from datetime import datetime as Datetime
 from datetime import timedelta as Timedelta
 
 MAIN = os.path.dirname(os.path.realpath(__file__))
-MODULE = os.path.abspath(os.path.join(MAIN, os.pardir))
-ROOT = os.path.abspath(os.path.join(MODULE, os.pardir))
+PROJ = os.path.abspath(os.path.join(MAIN, os.pardir))
+ROOT = os.path.abspath(os.path.join(PROJ, os.pardir))
 if ROOT not in sys.path:
     sys.path.append(ROOT)
-USER = os.path.join(ROOT, "resources", "api.csv")
-SAVE = os.path.join(ROOT, "save", "options")
+API = os.path.join(ROOT, "Library", "api.csv")
+SAVE = os.path.join(ROOT, "Library", "repository")
 
 from webscraping.webreaders import WebAuthorizer, WebReader
-from utilities.synchronize import Queue, Consumer
+from support.synchronize import Queue, Consumer
+from finance.securities import DateRange, OptionSaver
 
-from finance.etrade.market import ETradeOptionDownloader
-from finance.calculations.securities import DateRange, OptionSaver
+from market import ETradeOptionDownloader
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -58,7 +58,7 @@ class ETradeReader(WebReader, delay=10): pass
 
 
 def main(tickers, *args, expires, **kwargs):
-    api = pd.read_csv(USER, header=0, index_col="website").loc["etrade"].to_dict()
+    api = pd.read_csv(API, header=0, index_col="website").loc["etrade"].to_dict()
     source = Queue(tickers, size=None, name="ETradeTickerQueue")
     authorizer = ETradeAuthorizer(apikey=api["key"], apicode=api["code"], name="ETradeAuthorizer")
     with ETradeReader(authorizer=authorizer, name="ETradeReader") as reader:
