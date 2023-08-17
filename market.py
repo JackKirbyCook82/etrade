@@ -18,7 +18,7 @@ from datetime import timezone as Timezone
 from collections import namedtuple as ntuple
 
 from webscraping.weburl import WebURL
-from webscraping.webnodes import WebJSON
+from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
 from support.pipelines import Downloader
 from support.dispatchers import kwargsdispatcher
@@ -75,67 +75,67 @@ class ETradeMarketsURL(WebURL):
 
 
 class ETradeStockData(WebJSON, locator="//QuoteResponse/QuoteData", collection=True):
-    class Ticker(WebJSON.Text, locator="//Product/symbol", key="ticker", value=str): pass
-    class Date(WebJSON.Text, locator="//dateTimeUTC", key="date", value=date_parser): pass
-    class DateTime(WebJSON.Text, locator="//dateTimeUTC", key="datetime", value=datetime_parser): pass
-    class LastTrade(WebJSON.Text, locator="//All/lastTrade", key="price", value=np.float16): pass
-    class Open(WebJSON.Text, locator="//All/open", key="open", value=np.float16): pass
-    class High(WebJSON.Text, locator="//All/high52", key="high", value=np.float16): pass
-    class Low(WebJSON.Text, locator="//All/low52", key="low", value=np.float16): pass
-    class BidPrice(WebJSON.Text, locator="//All/bid", key="bid", value=np.float16): pass
-    class BidSize(WebJSON.Text, locator="//All/bidSize", key="demand", value=np.int32): pass
-    class AskPrice(WebJSON.Text, locator="//All/ask", key="ask", value=np.float16): pass
-    class AskSize(WebJSON.Text, locator="//All/askSize", key="supply", value=np.int32): pass
-    class Volume(WebJSON.Text, locator="//All/totalVolume", key="volume", value=np.int64): pass
+    class Ticker(WebJSON.Text, locator="//Product/symbol", key="ticker", parser=str): pass
+    class Date(WebJSON.Text, locator="//dateTimeUTC", key="date", parser=date_parser): pass
+    class DateTime(WebJSON.Text, locator="//dateTimeUTC", key="datetime", parser=datetime_parser): pass
+    class LastTrade(WebJSON.Text, locator="//All/lastTrade", key="price", parser=np.float16): pass
+    class Open(WebJSON.Text, locator="//All/open", key="open", parser=np.float16): pass
+    class High(WebJSON.Text, locator="//All/high52", key="high", parser=np.float16): pass
+    class Low(WebJSON.Text, locator="//All/low52", key="low", parser=np.float16): pass
+    class BidPrice(WebJSON.Text, locator="//All/bid", key="bid", parser=np.float16): pass
+    class BidSize(WebJSON.Text, locator="//All/bidSize", key="demand", parser=np.int32): pass
+    class AskPrice(WebJSON.Text, locator="//All/ask", key="ask", parser=np.float16): pass
+    class AskSize(WebJSON.Text, locator="//All/askSize", key="supply", parser=np.int32): pass
+    class Volume(WebJSON.Text, locator="//All/totalVolume", key="volume", parser=np.int64): pass
 
     @staticmethod
-    def parser(contents, *args, **kwargs):
+    def execute(contents, *args, **kwargs):
         quote = ETradeStockQuote(**{key: value(*args, **kwargs) for key, value in contents[0].items()})
         return quote
 
 
 class ETradeExpireData(WebJSON, locator="//OptionExpireDateResponse/ExpirationDate", collection=True, optional=True):
-    class Year(WebJSON.Text, locator="//year", key="year", value=np.int16): pass
-    class Month(WebJSON.Text, locator="//month", key="month", value=np.int16): pass
-    class Day(WebJSON.Text, locator="//day", key="day", value=np.int16): pass
+    class Year(WebJSON.Text, locator="//year", key="year", parser=np.int16): pass
+    class Month(WebJSON.Text, locator="//month", key="month", parser=np.int16): pass
+    class Day(WebJSON.Text, locator="//day", key="day", parser=np.int16): pass
 
     @staticmethod
-    def parser(contents, *args, **kwargs):
+    def execute(contents, *args, **kwargs):
         expire = lambda content: Date(year=content["year"](*args, **kwargs), month=content["month"](*args, **kwargs), day=content["day"](*args, **kwargs))
         return [expire(content) for content in iter(contents)]
 
 
 class ETradeOptionData(WebJSON, locator="//OptionChainResponse/OptionPair", collection=True, optional=True):
     class Call(WebJSON, locator="//Call", key="call"):
-        class Ticker(WebJSON.Text, locator="//symbol", key="ticker", value=str): pass
-        class Security(WebJSON.Text, locator="//optionType", key="security", value=security_parser): pass
-        class Date(WebJSON.Text, locator="//timeStamp", key="date", value=date_parser): pass
-        class DateTime(WebJSON.Text, locator="//timeStamp", key="datetime", value=datetime_parser): pass
-        class Expire(WebJSON.Text, locator="//quoteDetail", key="expire", value=expire_parser): pass
-        class Strike(WebJSON.Text, locator="//strikePrice", key="strike", value=np.float32): pass
-        class Bid(WebJSON.Text, locator="//bid", key="bid", value=np.float32): pass
-        class Demand(WebJSON.Text, locator="//bidSize", key="demand", value=np.float32): pass
-        class Ask(WebJSON.Text, locator="//ask", key="ask", value=np.float32): pass
-        class Supply(WebJSON.Text, locator="//askSize", key="supply", value=np.float32): pass
-        class Volume(WebJSON.Text, locator="//volume", key="volume", value=np.int64): pass
-        class Interest(WebJSON.Text, locator="//openInterest", key="interest", value=np.int32): pass
+        class Ticker(WebJSON.Text, locator="//symbol", key="ticker", parser=str): pass
+        class Security(WebJSON.Text, locator="//optionType", key="security", parser=security_parser): pass
+        class Date(WebJSON.Text, locator="//timeStamp", key="date", parser=date_parser): pass
+        class DateTime(WebJSON.Text, locator="//timeStamp", key="datetime", parser=datetime_parser): pass
+        class Expire(WebJSON.Text, locator="//quoteDetail", key="expire", parser=expire_parser): pass
+        class Strike(WebJSON.Text, locator="//strikePrice", key="strike", parser=np.float32): pass
+        class Bid(WebJSON.Text, locator="//bid", key="bid", parser=np.float32): pass
+        class Demand(WebJSON.Text, locator="//bidSize", key="demand", parser=np.float32): pass
+        class Ask(WebJSON.Text, locator="//ask", key="ask", parser=np.float32): pass
+        class Supply(WebJSON.Text, locator="//askSize", key="supply", parser=np.float32): pass
+        class Volume(WebJSON.Text, locator="//volume", key="volume", parser=np.int64): pass
+        class Interest(WebJSON.Text, locator="//openInterest", key="interest", parser=np.int32): pass
 
     class Put(WebJSON, locator="//Put", key="put"):
-        class Ticker(WebJSON.Text, locator="//symbol", key="ticker", value=str): pass
-        class Security(WebJSON.Text, locator="//optionType", key="security", value=security_parser): pass
-        class Date(WebJSON.Text, locator="//timeStamp", key="date", value=date_parser): pass
-        class DateTime(WebJSON.Text, locator="//timeStamp", key="datetime", value=datetime_parser): pass
-        class Expire(WebJSON.Text, locator="//quoteDetail", key="expire", value=expire_parser): pass
-        class Strike(WebJSON.Text, locator="//strikePrice", key="strike", value=np.float32): pass
-        class Bid(WebJSON.Text, locator="//bid", key="bid", value=np.float32): pass
-        class Demand(WebJSON.Text, locator="//bidSize", key="demand", value=np.float32): pass
-        class Ask(WebJSON.Text, locator="//ask", key="ask", value=np.float32): pass
-        class Supply(WebJSON.Text, locator="//askSize", key="supply", value=np.float32): pass
-        class Volume(WebJSON.Text, locator="//volume", key="volume", value=np.int64): pass
-        class Interest(WebJSON.Text, locator="//openInterest", key="interest", value=np.int32): pass
+        class Ticker(WebJSON.Text, locator="//symbol", key="ticker", parser=str): pass
+        class Security(WebJSON.Text, locator="//optionType", key="security", parser=security_parser): pass
+        class Date(WebJSON.Text, locator="//timeStamp", key="date", parser=date_parser): pass
+        class DateTime(WebJSON.Text, locator="//timeStamp", key="datetime", parser=datetime_parser): pass
+        class Expire(WebJSON.Text, locator="//quoteDetail", key="expire", parser=expire_parser): pass
+        class Strike(WebJSON.Text, locator="//strikePrice", key="strike", parser=np.float32): pass
+        class Bid(WebJSON.Text, locator="//bid", key="bid", parser=np.float32): pass
+        class Demand(WebJSON.Text, locator="//bidSize", key="demand", parser=np.float32): pass
+        class Ask(WebJSON.Text, locator="//ask", key="ask", parser=np.float32): pass
+        class Supply(WebJSON.Text, locator="//askSize", key="supply", parser=np.float32): pass
+        class Volume(WebJSON.Text, locator="//volume", key="volume", parser=np.int64): pass
+        class Interest(WebJSON.Text, locator="//openInterest", key="interest", parser=np.int32): pass
 
     @staticmethod
-    def parser(contents, *args, **kwargs):
+    def execute(contents, *args, **kwargs):
         puts = [{key: value(*args, **kwargs) for key, value in iter(content["put"])} for content in iter(contents)]
         calls = [{key: value(*args, **kwargs) for key, value in iter(content["call"])} for content in iter(contents)]
         dataframe = pd.DataFrame.from_records(puts + calls)
