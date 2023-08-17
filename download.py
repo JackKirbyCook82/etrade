@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 """
 Created on Weds Jul 12 2023
@@ -22,7 +23,7 @@ ROOT = os.path.abspath(os.path.join(PROJ, os.pardir))
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 API = os.path.join(ROOT, "Library", "api.csv")
-SAVE = os.path.join(ROOT, "Library", "repository")
+SAVE = os.path.join(ROOT, "Library", "repository", "option")
 
 from webscraping.webreaders import WebAuthorizer, WebReader
 from support.synchronize import Queue, Consumer
@@ -75,7 +76,7 @@ if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
     sysTickers = ["NVDA", "AMD", "AMC", "TSLA", "AAPL", "IWM", "AMZN", "SPY", "QQQ", "MSFT", "BAC", "BABA", "GOOGL", "META", "ZIM", "XOM", "INTC", "OXY", "CSCO", "COIN", "NIO"]
     sysExpires = DateRange([(Datetime.today() + Timedelta(days=1)).date(), (Datetime.today() + Timedelta(weeks=26)).date()])
-    main(sysTickers[5:], expires=sysExpires)
+    main(sysTickers, expires=sysExpires)
 
 
 

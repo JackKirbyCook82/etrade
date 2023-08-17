@@ -7,7 +7,9 @@ Created on Thurs Aug 3 2023
 """
 
 import numpy as np
-from enum import IntEnum, StrEnum
+import xarray as xr
+from enum import StrEnum
+
 from webscraping.weburl import WebURL
 from webscraping.webnodes import WebJSON
 from webscraping.webpages import WebJsonPage
@@ -29,8 +31,7 @@ Session = StrEnum("Session", [("MARKET", "REGULAR"), ("EXTENDED", "EXTENDED")])
 Basis = StrEnum("Basis", [("QUANTITY", "QUANTITY"), ("CURRENCY", "DOLLAR")])
 Security = StrEnum("Security", [("STOCK", "STOCK"), ("OPTION", "OPTION")])
 Option = StrEnum("Option", [("PUT", "PUT"), ("CALL", "CALL")])
-Action = StrEnum("Action", [("BUY", "BUY"), ("SELL", "SELL")])
-Partial = IntEnum("Partial", ["false", "true"], start=0)
+Action = StrEnum("Action", [("LONG", "BUY"), ("SHORT", "SELL")])
 
 
 class ETradeOrdersURL(WebURL):
@@ -52,10 +53,10 @@ class ETradeOrderData(WebJSON, locator="//Order", key="orders", collection=True)
 
     class Price(WebJSON.Json, locator="//priceValue", key="price", value=np.float32): pass
     class Terms(WebJSON.Json, locator="//priceType", key="terms", value=Terms.__getitem__): pass
-    class Contents(WebJSON.Json, locator="//orderType", key="strategy", value=Content.__getitem__): pass
+    class Contents(WebJSON.Json, locator="//orderType", key="contents", value=Content.__getitem__): pass
     class Tenure(WebJSON.Json, locator="//orderTerm", key="tenure", value=Tenure.__getitem__): pass
     class Session(WebJSON.Json, locator="//marketSession", key="session", value=Session.__getitem__): pass
-    class Timing(WebJSON.Json, locator="//allOrNone", key="timing", value=Partial.__getitem__): pass
+    class Timing(WebJSON.Json, locator="//allOrNone", key="timing", value=): pass
 
     class Instruments(WebJSON, locator="//Instrument", key="instruments", collection=True):
         class Action(WebJSON.Json, locator="//orderAction", key="action", value=Action.__getitem__): pass
@@ -65,7 +66,7 @@ class ETradeOrderData(WebJSON, locator="//Order", key="orders", collection=True)
         class Product(WebJSON, locator="//Product", key="product"):
             class Ticker(WebJSON.Json, locator="//symbol", key="ticker", value=str): pass
             class Security(WebJSON.Json, locator="//securityType", key="type", value=Security.__getitem__): pass
-            class Option(WebJSON.Json, locator="//callPut", key="security", value=Option.__getitem__, optional=True): pass
+            class Option(WebJSON.Json, locator="//callPut", key="option", value=Option.__getitem__, optional=True): pass
             class Strike(WebJSON.Json, locator="//strikePrice", key="strike", value=np.float32, optional=True): pass
             class Year(WebJSON.Json, locator="//expiryYear", key="year", value=np.int16, optional=True): pass
             class Month(WebJSON.Json, locator="//expiryMonth", key="month", value=np.int16, optional=True): pass
@@ -114,8 +115,27 @@ class ETradePlacePage(WebJsonPage): pass
 
 order_pages = {"preview": ETradePreviewPage, "place": ETradePlacePage}
 class ETradeOrderUploader(Uploader, pages=order_pages):
-    def execute(self, *args, **kwargs):
-        pass
+    def execute(self, contents, *args, funds, apy=0, **kwargs):
+        ticker, expire, strategy, securities, dataset = contents
+        assert isinstance(dataset, xr.Dataset)
+        dataframe = dataset.to_dask_dataframe() if bool(dataset.chunks) else dataset.to_dataframe()
+        dataframe = dataframe.where(dataframe["apy"] >= apy)
+        dataframe = dataframe.where(dataframe["cost"] <= funds)
+        dataframe = dataframe.dropna(how="all")
+        for index in dataframe.npartitions:
+            partition = dataframe.get_partition(index).compute()
+            partition = partition.sort_values("apy", axis=1, ascending=False, ignore_index=True, inplace=False)
+            for order in partition.to_dict("records"):
+                pass
+
+
+
+
+# class ETradeOrderInstrument(ntuple("Order", "option position strike")):
+#     def __new__(cls, key, strike):
+#         option, position = list(map(str.upper, str(key).strip("@strike").split("|")))
+#         option, position = Option[option], Action[position]
+#         return super().__new__(cls, option, position, strike)
 
 
 
