@@ -154,19 +154,19 @@ class ETradeOptionsPage(WebJsonPage): pass
 option_pages = {"stock": ETradeStocksPage, "expire": ETradeExpiresPage, "option": ETradeOptionsPage}
 class ETradeSecurityDownloader(Downloader, pages=option_pages):
     def execute(self, ticker, *args, expires, **kwargs):
-        curl = ETradeMarketsURL(dataset="stock", ticker=ticker)
-        self["stock"].load(str(curl.address), params=dict(curl.query))
-        source = self.pages["stock"].source
-        stocks = ETradeStockData(source)(*args, **kwargs)
-        bid = stocks["price"].sel({"security": int(Securities.STOCK), "position": int(Positions.LONG)})
-        ask = stocks["price"].sel({"security": int(Securities.STOCK), "position": int(Positions.SHORT)})
-        price = np.average(bid, ask)
         curl = ETradeMarketsURL(dataset="expire", ticker=ticker)
         self["expire"].load(str(curl.address), params=dict(curl.query))
         source = self.pages["expire"].source
         for expire in ETradeExpireData(source)(*args, **kwargs):
             if expire not in expires:
                 continue
+            curl = ETradeMarketsURL(dataset="stock", ticker=ticker)
+            self["stock"].load(str(curl.address), params=dict(curl.query))
+            source = self.pages["stock"].source
+            stocks = ETradeStockData(source)(*args, **kwargs)
+            bid = stocks["price"].sel({"security": int(Securities.STOCK), "position": int(Positions.LONG)})
+            ask = stocks["price"].sel({"security": int(Securities.STOCK), "position": int(Positions.SHORT)})
+            price = np.average(bid, ask)
             curl = ETradeMarketsURL(dataset="option", ticker=ticker, expire=expire, strike=price)
             self["option"].load(str(curl.address), params=dict(curl.query))
             source = self.pages["option"].source
