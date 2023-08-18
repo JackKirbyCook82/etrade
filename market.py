@@ -11,27 +11,23 @@ import regex as re
 import numpy as np
 import xarray as xr
 import pandas as pd
-from enum import IntEnum
 from datetime import date as Date
 from datetime import datetime as Datetime
 from datetime import timezone as Timezone
-from collections import namedtuple as ntuple
 
 from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
 from support.pipelines import Downloader
 from support.dispatchers import kwargsdispatcher
+from finance.securities import Securities, Positions
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["ETradeStockDownloader", "ETradeOptionDownloader"]
+__all__ = ["ETradeSecurityDownloader"]
 __copyright__ = "Copyright 2023, Jack Kirby Cook"
 __license__ = ""
 
-
-Securities = IntEnum("Security", ["STOCK", "PUT", "CALL"], start=1)
-Positions = IntEnum("Position", ["LONG", "SHORT"], start=1)
 
 timestamp_parser = lambda x: Datetime.fromtimestamp(int(x), Timezone.utc).astimezone(pytz.timezone("US/Central"))
 quote_parser = lambda x: Datetime.strptime(re.findall("(?<=:)[0-9:]+(?=:CALL|:PUT)", x)[0], "%Y:%m:%d")
@@ -40,12 +36,6 @@ date_parser = lambda x: np.datetime64(timestamp_parser(x).date(), "D")
 expire_parser = lambda x: np.datetime64(quote_parser(x).date(), "D")
 security_parser = lambda x: int(Securities[str(x).upper()])
 position_parser = lambda x: int(Positions[str(x).upper()])
-
-
-class ETradeStockQuote(ntuple("Queue", "ticker datetime price bid ask demand supply volume")):
-    def __new__(cls, *args, **kwargs):
-        contents = [kwargs.get(field, None) for field in cls._fields]
-        return super().__new__(cls, *contents)
 
 
 class ETradeMarketsURL(WebURL):
@@ -78,10 +68,6 @@ class ETradeStockData(WebJSON, locator="//QuoteResponse/QuoteData", collection=T
     class Ticker(WebJSON.Text, locator="//Product/symbol", key="ticker", parser=str): pass
     class Date(WebJSON.Text, locator="//dateTimeUTC", key="date", parser=date_parser): pass
     class DateTime(WebJSON.Text, locator="//dateTimeUTC", key="datetime", parser=datetime_parser): pass
-    class LastTrade(WebJSON.Text, locator="//All/lastTrade", key="price", parser=np.float16): pass
-    class Open(WebJSON.Text, locator="//All/open", key="open", parser=np.float16): pass
-    class High(WebJSON.Text, locator="//All/high52", key="high", parser=np.float16): pass
-    class Low(WebJSON.Text, locator="//All/low52", key="low", parser=np.float16): pass
     class BidPrice(WebJSON.Text, locator="//All/bid", key="bid", parser=np.float16): pass
     class BidSize(WebJSON.Text, locator="//All/bidSize", key="demand", parser=np.int32): pass
     class AskPrice(WebJSON.Text, locator="//All/ask", key="ask", parser=np.float16): pass
@@ -90,8 +76,18 @@ class ETradeStockData(WebJSON, locator="//QuoteResponse/QuoteData", collection=T
 
     @staticmethod
     def execute(contents, *args, **kwargs):
-        quote = ETradeStockQuote(**{key: value(*args, **kwargs) for key, value in contents[0].items()})
-        return quote
+        stocks = [{key: value(*args, **kwargs) for key, value in iter(content)} for content in iter(contents)]
+        dataframe = pd.DataFrame.from_records(stocks)
+        dataframe["security"] = int(Securities.STOCK)
+        long = dataframe.drop(["bid", "demand"], axis=1, inplace=False).rename(columns={"ask": "price", "supply": "size"})
+        long["position"] = int(Positions.LONG)
+        short = dataframe.drop(["ask", "supply"], axis=1, inplace=False).rename(columns={"bid": "price", "demand": "size"})
+        short["position"] = int(Positions.SHORT)
+        dataframe = pd.concat([long, short], axis=0)
+        dataframe = dataframe.set_index(["ticker", "security", "position", "date"], inplace=False, drop=True)
+        dataset = xr.Dataset.from_dataframe(dataframe)
+        dataset = dataset.squeeze("ticker").squeeze("date")
+        return dataset
 
 
 class ETradeExpireData(WebJSON, locator="//OptionExpireDateResponse/ExpirationDate", collection=True, optional=True):
@@ -155,34 +151,28 @@ class ETradeExpiresPage(WebJsonPage): pass
 class ETradeOptionsPage(WebJsonPage): pass
 
 
-stock_pages = {"stock": ETradeStocksPage}
-class ETradeStockDownloader(Downloader, pages=stock_pages):
-    def execute(self, ticker, *args, **kwargs):
-        curl = ETradeMarketsURL(dataset="stocks", ticker=str(ticker))
-        self["stock"].load(str(curl.address), params=dict(curl.query))
-        source = self.pages["stock"].source
-        stocks = ETradeStockData(source)(*args, **kwargs)
-        yield stocks
-
-
 option_pages = {"stock": ETradeStocksPage, "expire": ETradeExpiresPage, "option": ETradeOptionsPage}
-class ETradeOptionDownloader(Downloader, pages=option_pages):
+class ETradeSecurityDownloader(Downloader, pages=option_pages):
     def execute(self, ticker, *args, expires, **kwargs):
         curl = ETradeMarketsURL(dataset="stock", ticker=ticker)
         self["stock"].load(str(curl.address), params=dict(curl.query))
         source = self.pages["stock"].source
         stocks = ETradeStockData(source)(*args, **kwargs)
+        bid = stocks["price"].sel({"security": int(Securities.STOCK), "position": int(Positions.LONG)})
+        ask = stocks["price"].sel({"security": int(Securities.STOCK), "position": int(Positions.SHORT)})
+        price = np.average(bid, ask)
         curl = ETradeMarketsURL(dataset="expire", ticker=ticker)
         self["expire"].load(str(curl.address), params=dict(curl.query))
         source = self.pages["expire"].source
         for expire in ETradeExpireData(source)(*args, **kwargs):
             if expire not in expires:
                 continue
-            curl = ETradeMarketsURL(dataset="option", ticker=ticker, expire=expire, strike=stocks.price)
+            curl = ETradeMarketsURL(dataset="option", ticker=ticker, expire=expire, strike=price)
             self["option"].load(str(curl.address), params=dict(curl.query))
             source = self.pages["option"].source
             options = ETradeOptionData(source)(*args, ticker=ticker, expire=expire, **kwargs)
-            yield ticker, expire, options
+            securities = xr.concat([options, stocks], dim="security")
+            yield ticker, expire, securities
 
 
 

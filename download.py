@@ -23,13 +23,13 @@ ROOT = os.path.abspath(os.path.join(PROJ, os.pardir))
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 API = os.path.join(ROOT, "Library", "api.csv")
-SAVE = os.path.join(ROOT, "Library", "repository", "option")
+SAVE = os.path.join(ROOT, "Library", "repository", "security")
 
 from webscraping.webreaders import WebAuthorizer, WebReader
 from support.synchronize import Queue, Consumer
-from finance.securities import DateRange, OptionSaver
+from finance.securities import DateRange, SecuritySaver
 
-from market import ETradeOptionDownloader
+from market import ETradeSecurityDownloader
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -63,8 +63,8 @@ def main(tickers, *args, expires, **kwargs):
     source = Queue(tickers, size=None, name="ETradeTickerQueue")
     authorizer = ETradeAuthorizer(apikey=api["key"], apicode=api["code"], name="ETradeAuthorizer")
     with ETradeReader(authorizer=authorizer, name="ETradeReader") as reader:
-        downloader = ETradeOptionDownloader(source=reader, name="ETradeOptionDownloader")
-        saver = OptionSaver(repository=SAVE, name="ETradeOptionSaver")
+        downloader = ETradeSecurityDownloader(source=reader, name="ETradeSecurityDownloader")
+        saver = SecuritySaver(repository=SAVE, name="ETradeSecuritySaver")
         pipeline = downloader + saver
         consumer = Consumer(pipeline, source=source, name="ETradeDownloader")
         consumer.setup(expires=expires)

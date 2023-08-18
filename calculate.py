@@ -22,7 +22,7 @@ API = os.path.join(ROOT, "Library", "api.csv")
 LOAD = os.path.join(ROOT, "Library", "repository", "option")
 
 from support.synchronize import Queue, Consumer
-from finance.securities import OptionLoader
+from finance.securities import SecurityLoader
 from finance.strategies import StrategyCalculator, ValuationCalculator
 
 __version__ = "1.0.0"
@@ -52,9 +52,9 @@ class Consumer(Consumer):
 
 def main(tickers, *args, **kwargs):
     source = Queue(tickers, size=None, name="ETradeTickerQueue")
-    loader = OptionLoader(repository=LOAD, name="ETradeOptionLoader")
-    strategies = StrategyCalculator(name="ETradeOptionStrategies")
-    valuations = ValuationCalculator(name="ETradeOptionValuations")
+    loader = SecurityLoader(repository=LOAD, name="ETradeSecurityLoader")
+    strategies = StrategyCalculator(name="ETradeStrategies")
+    valuations = ValuationCalculator(name="ETradeValuations")
     pipeline = loader + strategies + valuations
     processor = Consumer(pipeline, source=source, name="ETradeCalculator")
     processor.setup(discount=0, partition=None)

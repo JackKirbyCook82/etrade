@@ -16,6 +16,8 @@ from webscraping.webpayloads import WebPayload
 from webscraping.webpages import WebJsonPage
 from support.pipelines import Uploader
 from support.dispatchers import kwargsdispatcher
+from finance.securities import Security, Securities, Positions
+from finance.strategies import Strategy, Strategies
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
