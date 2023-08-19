@@ -6,9 +6,9 @@ Created on Thurs Aug 3 2023
 
 """
 
+import enum
 import numpy as np
 import xarray as xr
-from enum import StrEnum
 
 from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
@@ -24,16 +24,16 @@ __copyright__ = "Copyright 2023, Jack Kirby Cook"
 __license__ = ""
 
 
-Status = StrEnum("Status", [("PLACED", "OPEN"), ("EXECUTED", "EXECUTED"), ("REVOKED", "CANCEL_REQUESTED"), ("CANCELLED", "CANCELLED"), ("EXPIRED", "EXPIRED"), ("REJECTED", "REJECTED")])
-Contents = StrEnum("ContentType", [("STOCKS", "EQ"), ("OPTIONS", "OPTN"), ("SPREADS", "SPREADS")])
-Pricing = StrEnum("PriceType", [("MARKET", "MARKET"), ("LIMIT", "LIMIT"), ("STOP", "STOP"), ("STOPLIMIT", "STOP_LIMIT"), ("DEBIT", "NET_DEBIT"), ("CREDIT", "NET_CREDIT")])
-Tenure = StrEnum("OrderType", [("DAY", "GOOD_FOR_DAY"), ("DATE", "GOOD_TILL_DATE"), ("IMMEDIATE", "IMMEDIATE_OR_CANCEL"), ("FILLKILL", "FILL_OR_KILL")])
-Session = StrEnum("Session", [("MARKET", "REGULAR"), ("EXTENDED", "EXTENDED")])
-Concurrent = StrEnum("Concurrent", [("TRUE", "true"), ("FALSE", "false")])
-Action = StrEnum("Action", [("LONG", "BUY"), ("SHORT", "SELL")])
-Basis = StrEnum("QuantityType", [("QUANTITY", "QUANTITY"), ("CURRENCY", "DOLLAR")])
-SecurityType = StrEnum("SecurityType", [("STOCK", "STOCK"), ("OPTION", "OPTION")])
-OptionType = StrEnum("OptionType", [("PUT", "PUT"), ("CALL", "CALL")])
+Status = enum.StrEnum("Status", [("PLACED", "OPEN"), ("EXECUTED", "EXECUTED"), ("REVOKED", "CANCEL_REQUESTED"), ("CANCELLED", "CANCELLED"), ("EXPIRED", "EXPIRED"), ("REJECTED", "REJECTED")])
+Contents = enum.StrEnum("ContentType", [("STOCKS", "EQ"), ("OPTIONS", "OPTN"), ("SPREADS", "SPREADS")])
+Pricing = enum.StrEnum("PriceType", [("MARKET", "MARKET"), ("LIMIT", "LIMIT"), ("STOP", "STOP"), ("STOPLIMIT", "STOP_LIMIT"), ("DEBIT", "NET_DEBIT"), ("CREDIT", "NET_CREDIT")])
+Tenure = enum.StrEnum("OrderType", [("DAY", "GOOD_FOR_DAY"), ("DATE", "GOOD_TILL_DATE"), ("IMMEDIATE", "IMMEDIATE_OR_CANCEL"), ("FILLKILL", "FILL_OR_KILL")])
+Session = enum.StrEnum("Session", [("MARKET", "REGULAR"), ("EXTENDED", "EXTENDED")])
+Concurrent = enum.StrEnum("Concurrent", [("TRUE", "true"), ("FALSE", "false")])
+Action = enum.StrEnum("Action", [("LONG", "BUY"), ("SHORT", "SELL")])
+Basis = enum.StrEnum("QuantityType", [("QUANTITY", "QUANTITY"), ("CURRENCY", "DOLLAR")])
+SecurityType = enum.StrEnum("SecurityType", [("STOCK", "STOCK"), ("OPTION", "OPTION")])
+OptionType = enum.StrEnum("OptionType", [("PUT", "PUT"), ("CALL", "CALL")])
 
 
 class ETradeOrdersURL(WebURL):
