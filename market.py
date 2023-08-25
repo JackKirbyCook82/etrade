@@ -64,7 +64,7 @@ class ETradeMarketsURL(WebURL):
         return {"symbol": str(ticker), **expires, **strikes}
 
 
-class ETradeStockData(WebJSON, locator="//QuoteResponse/QuoteData", collection=True):
+class ETradeStockData(WebJSON, locator="//QuoteResponse/QuoteData[]", collection=True):
     class Ticker(WebJSON.Text, locator="//Product/symbol", key="ticker", parser=str): pass
     class Date(WebJSON.Text, locator="//dateTimeUTC", key="date", parser=date_parser): pass
     class DateTime(WebJSON.Text, locator="//dateTimeUTC", key="datetime", parser=datetime_parser): pass
@@ -90,7 +90,7 @@ class ETradeStockData(WebJSON, locator="//QuoteResponse/QuoteData", collection=T
         return dataset
 
 
-class ETradeExpireData(WebJSON, locator="//OptionExpireDateResponse/ExpirationDate", collection=True, optional=True):
+class ETradeExpireData(WebJSON, locator="//OptionExpireDateResponse/ExpirationDate[]", collection=True, optional=True):
     class Year(WebJSON.Text, locator="//year", key="year", parser=np.int16): pass
     class Month(WebJSON.Text, locator="//month", key="month", parser=np.int16): pass
     class Day(WebJSON.Text, locator="//day", key="day", parser=np.int16): pass
@@ -101,7 +101,7 @@ class ETradeExpireData(WebJSON, locator="//OptionExpireDateResponse/ExpirationDa
         return [expire(content) for content in iter(contents)]
 
 
-class ETradeOptionData(WebJSON, locator="//OptionChainResponse/OptionPair", collection=True, optional=True):
+class ETradeOptionData(WebJSON, locator="//OptionChainResponse/OptionPair[]", collection=True, optional=True):
     class Call(WebJSON, locator="//Call", key="call"):
         class Ticker(WebJSON.Text, locator="//symbol", key="ticker", parser=str): pass
         class Security(WebJSON.Text, locator="//optionType", key="security", parser=security_parser): pass

@@ -16,11 +16,10 @@ from webscraping.webpayloads import WebPayload
 from webscraping.webpages import WebJsonPage
 from support.pipelines import Uploader
 from support.dispatchers import kwargsdispatcher
-from finance.securities import Securities, Positions
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["ETradeOrderUploader"]
+__all__ = []
 __copyright__ = "Copyright 2023, Jack Kirby Cook"
 __license__ = ""
 
@@ -50,19 +49,19 @@ class ETradeOrdersURL(WebURL):
     def path_cancel(cls, *args, account, **kwargs): return "/v1/accounts/{account}/orders/cancel.json".format(account=str(account))
 
 
-stock_contents = dict(ticker="//symbol", securitytype="//securityType")
-option_contents = dict(optiontype="//optionType", strike="//strikePrice", year="//expiryYear", month="//expiryMonth", day="//expiryDay")
-instrument_contents = dict(action="//orderAction", basis="//quantityType", quantity="//quantity")
-order_contents = dict(price="//priceValue", pricing="//priceType", ordertype="//orderType", tenure="//orderTerm", session="//marketSession", concurrent="//allOrNone")
-place_contents = dict(previews="//PreviewIds/previewId")
+stock_fields = dict(ticker="//symbol", securitytype="//securityType")
+option_fields = dict(optiontype="//optionType", strike="//strikePrice", year="//expiryYear", month="//expiryMonth", day="//expiryDay")
+instrument_fields = dict(action="//orderAction", basis="//quantityType", quantity="//quantity")
+order_fields = dict(price="//priceValue", pricing="//priceType", ordertype="//orderType", tenure="//orderTerm", session="//marketSession", concurrent="//allOrNone")
+place_fields = dict(previews="//PreviewIds[]/previewId")
 
 class Product(WebPayload, locator="//Product", key="product"): pass
-class StockProduct(Product, contents=stock_contents, securitytype=SecurityType.STOCK): pass
-class OptionProduct(Product, contents=option_contents, securitytype=SecurityType.OPTION): pass
+class StockProduct(Product, fields=stock_fields, securitytype=SecurityType.STOCK): pass
+class OptionProduct(Product, fields=option_fields, securitytype=SecurityType.OPTION): pass
 class PutProduct(OptionProduct, optiontype=OptionType.PUT): pass
 class CallProduct(OptionProduct, optiontype=OptionType.CALL): pass
 
-class Instrument(WebPayload, locator="//Instrument", key="instruments", contents=instrument_contents): pass
+class Instrument(WebPayload, locator="//Instrument[]", key="instruments", fields=instrument_fields, collection=True): pass
 class BuyInstrument(Instrument, action=Action.BUY, quantity=1): pass
 class SellInstrument(Instrument, action=Action.SELL, quantity=1): pass
 
@@ -80,7 +79,7 @@ verticalput_payloads = {"put|long": BuyPutInstrument, "put|short": SellPutInstru
 verticalcall_payloads = {"call|long": BuyCallInstrument, "call|short": SellCallInstrument}
 condor_payloads = {"put|long": BuyPutInstrument, "call|long": BuyCallInstrument, "put|short": SellPutInstrument, "call|long": SellCallInstrument}
 
-class Order(WebPayload, locator="//Order", key="orders", contents=order_contents): pass
+class Order(WebPayload, locator="//Order[]", key="orders", fields=order_fields, collection=True): pass
 class StrategyOrder(Order, pricing=Pricing.DEBIT, ordertype=OrderType.SPREADS, tenure=Tenure.FILLKILL, session=Session.MARKET, concurrent=Concurrent.TRUE): pass
 class StrangleOrder(StrategyOrder, payloads=stranglelong_payloads): pass
 class CollarLongOrder(StrategyOrder, payloads=collarlong_payloads): pass
@@ -93,10 +92,10 @@ order_payloads = {"strangle|long": StrangleOrder, "collar|long": CollarLongOrder
 order_payloads.update({"vertical|put": VerticalPutOrder, "vertical|call": VerticalCallOrder, "condor": CondorOrder})
 
 class ETradePreviewPayload(WebPayload, payloads=order_payloads): pass
-class ETradePlacePayload(WebPayload, contents=place_contents, payloads=order_payloads): pass
+class ETradePlacePayload(WebPayload, fields=place_fields, payloads=order_payloads): pass
 
 
-class ETradeOrderData(WebJSON, locator="//Order", key="orders", collection=True):
+class ETradeOrderData(WebJSON, locator="//Order[]", key="orders", collection=True):
     class Status(WebJSON.Text, locator="//status", key="status", parser=Status.__getitem__): pass
     class Cost(WebJSON.Json, locator="//estimatedTotalAmount", key="cost", parser=np.float32): pass
 
@@ -107,11 +106,11 @@ class ETradeOrderData(WebJSON, locator="//Order", key="orders", collection=True)
     class Session(WebJSON.Json, locator="//marketSession", key="session", parser=Session.__getitem__): pass
     class Concurrent(WebJSON.Json, locator="//allOrNone", key="concurrent", parser=Concurrent.__getitem__): pass
 
-    class Messages(WebJSON, locator="//messages/Message", key="messages", collection=True, optional=True):
+    class Messages(WebJSON, locator="//messages/Message[]", key="messages", collection=True, optional=True):
         class Code(WebJSON.Text, locator="//code", key="code", parsers=np.int32): pass
         class Description(WebJSON.Text, locator="//description", key="message", parser=str): pass
 
-    class Instruments(WebJSON, locator="//Instrument", key="instruments", collection=True):
+    class Instruments(WebJSON, locator="//Instrument[]", key="instruments", collection=True):
         class Action(WebJSON.Json, locator="//orderAction", key="action", parser=Action.__getitem__): pass
         class Basis(WebJSON.Json, locator="//quantityType", key="basis", parser=Basis.__getitem__): pass
         class Quantity(WebJSON.Json, locator="//quantity", key="quantity", parser=np.int16): pass
@@ -126,11 +125,11 @@ class ETradeOrderData(WebJSON, locator="//Order", key="orders", collection=True)
             class Day(WebJSON.Json, locator="//expiryDay", key="day", parser=np.int16, optional=True): pass
 
 class ETradePreviewData(WebJSON, locator="//PreviewOrderResponse"):
-    class Previews(WebJSON.Text, locator="//PreviewIds/previewId", key="previews", parser=np.int64, collection=True): pass
+    class Previews(WebJSON.Text, locator="//PreviewIds[]/previewId", key="previews", parser=np.int64, collection=True): pass
     class Orders(ETradeOrderData): pass
 
 class ETradePlaceData(WebJSON, locator="//PlaceOrderResponse"):
-    class Places(WebJSON.Text, locator="//OrderIds/orderId", key="places", parser=np.int64, collection=True): pass
+    class Places(WebJSON.Text, locator="//OrderIds[]/orderId", key="places", parser=np.int64, collection=True): pass
     class Orders(ETradeOrderData): pass
 
 
@@ -153,7 +152,7 @@ class ETradePreviewUploader(Uploader, pages={"preview": ETradePreviewPage}):
     def preview(self, dataframe, strategy, securities):
         for partition in self.partitions(dataframe):
             for orders in self.orders(partition, strategy, securities):
-                preview = ETradePreviewPayload(orders)
+                preview = ETradePreviewPayload(orders=orders)
                 yield preview
 
     @staticmethod
@@ -171,7 +170,7 @@ class ETradePreviewUploader(Uploader, pages={"preview": ETradePreviewPage}):
         for record in partition.to_dict("records"):
             product = {"price": record["spot"]} | {attr: getattr(record["expire"], attr) for attr in ("year", "month", "day")}
             instruments = {str(security): ({"strike": record[str(security)]} if str(security) in record else {}) | product for security in securities}
-            orders = {str(strategy): instruments}
+            orders = [{str(strategy): instruments}]
             return orders
 
 
