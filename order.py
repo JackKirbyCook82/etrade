@@ -8,13 +8,10 @@ Created on Thurs Aug 3 2023
 
 import enum
 import numpy as np
-import xarray as xr
 
 from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
 from webscraping.webpayloads import WebPayload
-from webscraping.webpages import WebJsonPage
-from support.pipelines import Uploader
 from support.dispatchers import kwargsdispatcher
 
 __version__ = "1.0.0"
@@ -56,43 +53,33 @@ order_fields = dict(price="//priceValue", pricing="//priceType", ordertype="//or
 place_fields = dict(previews="//PreviewIds[]/previewId")
 
 class Product(WebPayload, locator="//Product", key="product"): pass
-class StockProduct(Product, fields=stock_fields, securitytype=SecurityType.STOCK): pass
-class OptionProduct(Product, fields=option_fields, securitytype=SecurityType.OPTION): pass
-class PutProduct(OptionProduct, optiontype=OptionType.PUT): pass
-class CallProduct(OptionProduct, optiontype=OptionType.CALL): pass
+class StockProduct(Product, key="stock", fields=stock_fields, values={"securitytype": SecurityType.STOCK}): pass
+class OptionProduct(Product, key="option", fields=option_fields, values={"securitytype": SecurityType.OPTION}): pass
+class PutProduct(OptionProduct, key="put", values={"optiontype": OptionType.PUT}): pass
+class CallProduct(OptionProduct, key="call", values={"optiontype": OptionType.CALL}): pass
 
 class Instrument(WebPayload, locator="//Instrument[]", key="instruments", fields=instrument_fields, collection=True): pass
-class BuyInstrument(Instrument, action=Action.BUY, quantity=1): pass
-class SellInstrument(Instrument, action=Action.SELL, quantity=1): pass
+class BuyInstrument(Instrument, key="long", values={"action": Action.BUY, "quantity": 1}): pass
+class SellInstrument(Instrument, key="short", values={"action": Action.SELL, "quantity": 1}): pass
 
-BuyPutInstrument = BuyInstrument + PutProduct
-SellPutInstrument = SellInstrument + PutProduct
-BuyCallInstrument = BuyInstrument + CallProduct
-SellCallInstrument = SellInstrument + CallProduct
-BuyStockInstrument = BuyInstrument + StockProduct
-SellStockInstrument = SellInstrument + StockProduct
-
-stranglelong_payloads = {"put|long": BuyPutInstrument, "call|long": BuyCallInstrument}
-collarlong_payloads = {"put|long": BuyPutInstrument, "call|short": SellCallInstrument, "stock|long": BuyStockInstrument}
-collarshort_payloads = {"put|short": SellPutInstrument, "call|long": BuyCallInstrument, "stock|short": SellStockInstrument}
-verticalput_payloads = {"put|long": BuyPutInstrument, "put|short": SellPutInstrument}
-verticalcall_payloads = {"call|long": BuyCallInstrument, "call|short": SellCallInstrument}
-condor_payloads = {"put|long": BuyPutInstrument, "call|long": BuyCallInstrument, "put|short": SellPutInstrument, "call|long": SellCallInstrument}
+class BuyPutInstrument(BuyInstrument + PutProduct, key="put|long"): pass
+class SellPutInstrument(SellInstrument + PutProduct, key="put|short"): pass
+class BuyCallInstrument(BuyInstrument + CallProduct, key="call|long"): pass
+class SellCallInstrument(SellInstrument + CallProduct, key="call|short"): pass
+class BuyStockInstrument(BuyInstrument + StockProduct, key="stock|long"): pass
+class SellStockInstrument(SellInstrument + StockProduct, key="stock|short"): pass
 
 class Order(WebPayload, locator="//Order[]", key="orders", fields=order_fields, collection=True): pass
-class StrategyOrder(Order, pricing=Pricing.DEBIT, ordertype=OrderType.SPREADS, tenure=Tenure.FILLKILL, session=Session.MARKET, concurrent=Concurrent.TRUE): pass
-class StrangleOrder(StrategyOrder, payloads=stranglelong_payloads): pass
-class CollarLongOrder(StrategyOrder, payloads=collarlong_payloads): pass
-class CollarShortOrder(StrategyOrder, payloads=collarshort_payloads): pass
-class VerticalPutOrder(StrategyOrder, payloads=verticalput_payloads): pass
-class VerticalCallOrder(StrategyOrder, payloads=verticalcall_payloads): pass
-class CondorOrder(StrategyOrder, payloads=condor_payloads): pass
+class SpreadOrder(Order, values={"pricing": Pricing.DEBIT, "ordertype": OrderType.SPREADS, "tenure": Tenure.FILLKILL, "session": Session.MARKET, "concurrent": Concurrent.TRUE}): pass
+class StrangleOrder(SpreadOrder + [BuyPutInstrument, BuyCallInstrument], key="strangle|long"): pass
+class CollarLongOrder(SpreadOrder + [BuyPutInstrument, SellCallInstrument, BuyStockInstrument], key="collar|long"): pass
+class CollarShortOrder(SpreadOrder + [SellPutInstrument, BuyCallInstrument, SellStockInstrument], key="collar|short"): pass
+class VerticalPutOrder(SpreadOrder + [BuyPutInstrument, SellPutInstrument], key="vertical|put"): pass
+class VerticalCallOrder(SpreadOrder + [BuyCallInstrument, SellCallInstrument], key="vertical|call"): pass
+class CondorOrder(SpreadOrder + [BuyPutInstrument, BuyCallInstrument, SellPutInstrument, SellCallInstrument], key="condor"): pass
 
-order_payloads = {"strangle|long": StrangleOrder, "collar|long": CollarLongOrder, "collar|short": CollarShortOrder}
-order_payloads.update({"vertical|put": VerticalPutOrder, "vertical|call": VerticalCallOrder, "condor": CondorOrder})
-
-class ETradePreviewPayload(WebPayload, payloads=order_payloads): pass
-class ETradePlacePayload(WebPayload, fields=place_fields, payloads=order_payloads): pass
+class ETradePreviewPayload(WebPayload): pass
+class ETradePlacePayload(WebPayload, fields=place_fields): pass
 
 
 class ETradeOrderData(WebJSON, locator="//Order[]", key="orders", collection=True):
@@ -131,51 +118,6 @@ class ETradePreviewData(WebJSON, locator="//PreviewOrderResponse"):
 class ETradePlaceData(WebJSON, locator="//PlaceOrderResponse"):
     class Places(WebJSON.Text, locator="//OrderIds[]/orderId", key="places", parser=np.int64, collection=True): pass
     class Orders(ETradeOrderData): pass
-
-
-class ETradePreviewPage(WebJsonPage): pass
-class ETradePlacePage(WebJsonPage): pass
-
-
-order_pages = {"preview": ETradePreviewPage, "place": ETradePlacePage}
-class ETradePreviewUploader(Uploader, pages={"preview": ETradePreviewPage}):
-    def execute(self, contents, *args, funds, apy=0, **kwargs):
-        ticker, expire, strategy, securities, dataset = contents
-        assert isinstance(dataset, xr.Dataset)
-        dataframe = dataset.to_dask_dataframe() if bool(dataset.chunks) else dataset.to_dataframe()
-        dataframe = dataframe.where(dataframe["apy"] >= apy)
-        dataframe = dataframe.where(dataframe["cost"] <= funds)
-        dataframe = dataframe.dropna(how="all")
-        for preview in self.previews(dataframe, strategy, securities):
-            yield
-
-    def preview(self, dataframe, strategy, securities):
-        for partition in self.partitions(dataframe):
-            for orders in self.orders(partition, strategy, securities):
-                preview = ETradePreviewPayload(orders=orders)
-                yield preview
-
-    @staticmethod
-    def partitions(dataframe):
-        if not hasattr(dataframe, "npartitions"):
-            yield dataframe
-            return
-        for index in dataframe.npartitions:
-            partition = dataframe.get_partition(index).compute()
-            yield partition
-
-    @staticmethod
-    def orders(partition, strategy, securities):
-        partition = partition.sort_values("apy", axis=1, ascending=False, ignore_index=True, inplace=False)
-        for record in partition.to_dict("records"):
-            product = {"price": record["spot"]} | {attr: getattr(record["expire"], attr) for attr in ("year", "month", "day")}
-            instruments = {str(security): ({"strike": record[str(security)]} if str(security) in record else {}) | product for security in securities}
-            orders = [{str(strategy): instruments}]
-            return orders
-
-
-
-
 
 
 
