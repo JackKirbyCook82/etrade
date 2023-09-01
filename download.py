@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on Weds Jul 12 2023
-@name:   ETrade Option Downloader
+@name:   ETrade Securities Downloader
 @author: Jack Kirby Cook
 
 """
@@ -18,8 +18,8 @@ from datetime import datetime as Datetime
 from datetime import timedelta as Timedelta
 
 MAIN = os.path.dirname(os.path.realpath(__file__))
-PROJ = os.path.abspath(os.path.join(MAIN, os.pardir))
-ROOT = os.path.abspath(os.path.join(PROJ, os.pardir))
+PROJECT = os.path.abspath(os.path.join(MAIN, os.pardir))
+ROOT = os.path.abspath(os.path.join(PROJECT, os.pardir))
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 API = os.path.join(ROOT, "Library", "api.csv")
@@ -60,11 +60,11 @@ class ETradeReader(WebReader, delay=10): pass
 
 def main(tickers, *args, expires, **kwargs):
     api = pd.read_csv(API, header=0, index_col="website").loc["etrade"].to_dict()
-    source = Queue(tickers, size=None, name="ETradeTickerQueue")
+    source = Queue(tickers, size=None, name="TickerQueue")
     authorizer = ETradeAuthorizer(apikey=api["key"], apicode=api["code"], name="ETradeAuthorizer")
     with ETradeReader(authorizer=authorizer, name="ETradeReader") as reader:
-        downloader = ETradeSecurityDownloader(source=reader, name="ETradeSecurityDownloader")
-        saver = SecuritySaver(repository=SAVE, name="ETradeSecuritySaver")
+        downloader = ETradeSecurityDownloader(source=reader, name="SecurityDownloader")
+        saver = SecuritySaver(repository=SAVE, name="SecuritySaver")
         pipeline = downloader + saver
         consumer = Consumer(pipeline, source=source, name="ETradeDownloader")
         consumer.setup(expires=expires)

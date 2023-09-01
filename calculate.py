@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on Weds Jul 12 2023
-@name:   ETrade Option Calculation
+@name:   ETrade Strategies Calculation
 @author: Jack Kirby Cook
 
 """
@@ -14,16 +14,18 @@ import xarray as xr
 import pandas as pd
 
 MAIN = os.path.dirname(os.path.realpath(__file__))
-PROJ = os.path.abspath(os.path.join(MAIN, os.pardir))
-ROOT = os.path.abspath(os.path.join(PROJ, os.pardir))
+PROJECT = os.path.abspath(os.path.join(MAIN, os.pardir))
+ROOT = os.path.abspath(os.path.join(PROJECT, os.pardir))
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 API = os.path.join(ROOT, "Library", "api.csv")
-LOAD = os.path.join(ROOT, "Library", "repository", "option")
+LOAD = os.path.join(ROOT, "Library", "repository", "security")
 
 from support.synchronize import Queue, Consumer
-from finance.securities import SecurityLoader
-from finance.strategies import StrategyCalculator, ValuationCalculator
+from finance.securities import SecurityLoader, SecurityCalculator
+from finance.strategies import StrategyCalculator
+from finance.valuations import ValuationCalculator
+from finance.targets import TargetCalculator
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -50,21 +52,24 @@ class Consumer(Consumer):
         print(dataset)
 
 
-def main(tickers, *args, **kwargs):
-    source = Queue(tickers, size=None, name="ETradeTickerQueue")
-    loader = SecurityLoader(repository=LOAD, name="ETradeSecurityLoader")
-    strategies = StrategyCalculator(name="ETradeStrategies")
-    valuations = ValuationCalculator(name="ETradeValuations")
-    pipeline = loader + strategies + valuations
-    processor = Consumer(pipeline, source=source, name="ETradeCalculator")
-    processor.setup(discount=0, partition=None)
-    processor.start()
-    processor.join()
+def main(tickers, *args, parameters, **kwargs):
+    source = Queue(tickers, size=None, name="TickerQueue")
+    loader = SecurityLoader(repository=LOAD, name="SecurityLoader")
+    securities = SecurityCalculator(name="SecurityCalculator")
+    strategies = StrategyCalculator(name="StrategyCalculator")
+    valuations = ValuationCalculator(name="ValuationCalculator")
+    targets = TargetCalculator(name="TargetCalculator")
+    pipeline = loader + securities + strategies + valuations + targets
+    consumer = Consumer(pipeline, source=source, name="ETradeCalculator")
+    consumer.setup(funds=, **parameters)
+    consumer.start()
+    consumer.join()
 
 
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
     sysTickers = ["NVDA", "AMD", "AMC", "TSLA", "AAPL", "IWM", "AMZN", "SPY", "QQQ", "MSFT", "BAC", "BABA", "GOOGL", "META", "ZIM", "XOM", "INTC", "OXY", "CSCO", "COIN", "NIO"]
-    main(sysTickers)
+    sysParameters = {"size": None, "interest": None, "volume": None, "partition": None, "fees": 0, "discount": 0, "apy": 0}
+    main(sysTickers, parameters=sysParameters)
 
 
