@@ -43,13 +43,16 @@ pd.set_option('display.max_rows', 20)
 pd.set_option("display.max_columns", 25)
 
 
-class Consumer(Consumer):
+class ETradeConsumer(Consumer):
     @staticmethod
-    def consume(contents, *args, **kwargs):
+    def execute(contents, *args, **kwargs):
         ticker, expire, strategy, securities, dataset = contents
         print(" ".join([str(ticker), str(expire)]))
         print("{}[{}]".format(str(strategy), ", ".join(list(map(str, securities)))))
         print(dataset)
+
+    def terminate(self, *args, **kwargs):
+        pass
 
 
 def main(tickers, *args, parameters, **kwargs):
