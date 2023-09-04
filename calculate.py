@@ -27,6 +27,8 @@ from finance.strategies import StrategyCalculator
 from finance.valuations import ValuationCalculator
 from finance.targets import TargetCalculator
 
+from order import ETradeOrderUploader
+
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
 __all__ = []
@@ -44,15 +46,7 @@ pd.set_option("display.max_columns", 25)
 
 
 class ETradeConsumer(Consumer):
-    @staticmethod
-    def execute(contents, *args, **kwargs):
-        ticker, expire, strategy, securities, dataset = contents
-        print(" ".join([str(ticker), str(expire)]))
-        print("{}[{}]".format(str(strategy), ", ".join(list(map(str, securities)))))
-        print(dataset)
-
-    def terminate(self, *args, **kwargs):
-        pass
+    pass
 
 
 def main(tickers, *args, parameters, **kwargs):
@@ -62,9 +56,10 @@ def main(tickers, *args, parameters, **kwargs):
     strategies = StrategyCalculator(name="StrategyCalculator")
     valuations = ValuationCalculator(name="ValuationCalculator")
     targets = TargetCalculator(name="TargetCalculator")
-    pipeline = loader + securities + strategies + valuations + targets
+    uploader = ETradeOrderUploader(name="TargetUploader")
+    pipeline = loader + securities + strategies + valuations + targets + uploader
     consumer = Consumer(pipeline, source=source, name="ETradeCalculator")
-    consumer.setup(funds=, **parameters)
+    consumer.setup(**parameters)
     consumer.start()
     consumer.join()
 

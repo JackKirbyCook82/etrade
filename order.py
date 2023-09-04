@@ -11,12 +11,14 @@ import numpy as np
 
 from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
+from webscraping.webpages import WebJsonPage
 from webscraping.webpayloads import WebPayload
+from support.pipelines import Uploader
 from support.dispatchers import kwargsdispatcher
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = []
+__all__ = ["ETradeOrderUploader"]
 __copyright__ = "Copyright 2023, Jack Kirby Cook"
 __license__ = ""
 
@@ -119,5 +121,20 @@ class ETradePlaceData(WebJSON, locator="//PlaceOrderResponse"):
     class Places(WebJSON.Text, locator="//OrderIds[]/orderId", key="places", parser=np.int64, collection=True): pass
     class Orders(ETradeOrderData): pass
 
+
+class ETradePreviewPage(WebJsonPage): pass
+class ETradePlacePage(WebJsonPage): pass
+
+
+pages = {"preview": ETradePreviewPage, "place": ETradePlacePage}
+class ETradeOrderUploader(Uploader, pages=pages):
+    def execute(self, target, *args, **kwargs):
+        pass
+
+    def preview(self, *args, **kwargs):
+        pass
+
+    def place(self, *args, **kwargs):
+        pass
 
 

@@ -148,8 +148,8 @@ class ETradeExpiresPage(WebJsonPage): pass
 class ETradeOptionsPage(WebJsonPage): pass
 
 
-option_pages = {"stock": ETradeStocksPage, "expire": ETradeExpiresPage, "option": ETradeOptionsPage}
-class ETradeSecurityDownloader(Downloader, pages=option_pages):
+pages = {"stock": ETradeStocksPage, "expire": ETradeExpiresPage, "option": ETradeOptionsPage}
+class ETradeSecurityDownloader(Downloader, pages=pages):
     def execute(self, ticker, *args, expires, **kwargs):
         for expire in self.expires(ticker, *args, **kwargs):
             if expire not in expires:

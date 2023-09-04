@@ -56,9 +56,7 @@ base = "https://api.etrade.com"
 
 class ETradeAuthorizer(WebAuthorizer, authorize=authorize, request=request, access=access, base=base): pass
 class ETradeReader(WebReader, delay=10): pass
-class ETradeConsumer(Consumer):
-    def terminate(self, *args, funds, **kwargs): return not bool(self.source) or not bool(funds)
-    def execute(self, content, *args, **kwargs): pass
+class ETradeConsumer(Consumer): pass
 
 
 def main(tickers, *args, expires, **kwargs):
