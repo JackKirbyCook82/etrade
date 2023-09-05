@@ -18,7 +18,6 @@ from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
 from support.pipelines import Downloader
-from support.dispatchers import kwargsdispatcher
 from finance.securities import Securities
 
 __version__ = "1.0.0"
@@ -38,27 +37,29 @@ expire_parser = lambda x: np.datetime64(quote_parser(x).date(), "D")
 class ETradeMarketsURL(WebURL):
     def domain(cls, *args, **kwargs): return "https://api.etrade.com"
 
-    @kwargsdispatcher("dataset")
-    def path(cls, *args, dataset, **kwargs): raise KeyError(dataset)
-    @path.register.value("stock")
-    def path_stocks(cls, *args, ticker, **kwargs): return "/v1/market/quote/{ticker}.json".format(ticker=str(ticker))
-    @path.register.value("expire")
-    def path_expires(cls, *args, **kwargs): return "/v1/market/optionexpiredate.json"
-    @path.register.value("option")
-    def path_options(cls, *args, **kwargs): return "/v1/market/optionchains.json"
+class ETradeStockURL(ETradeMarketsURL):
+    def path(cls, *args, ticker=None, tickers=[], **kwargs):
+        tickers = ",".join([ticker] if bool(ticker) else [] + tickers)
+        return "/v1/market/quote/{tickers}.json".format(tickers=tickers)
 
-    @kwargsdispatcher("dataset")
-    def parms(cls, *args, dataset, **kwargs): raise KeyError(dataset)
-    @parms.register.value("stock")
-    def parms_stocks(cls, *args, **kwargs): return {}
-    @parms.register.value("expire")
-    def parms_expires(cls, *args, ticker, **kwargs): return {"symbol": str(ticker), "expiryType": "ALL"}
+class ETradeExpireURL(ETradeMarketsURL):
+    def path(cls, *args, **kwargs): return "/v1/market/optionexpiredate.json"
+    def parms(cls, *args, ticker, **kwargs): return {"symbol": str(ticker), "expiryType": "ALL"}
 
-    @parms.register.value("option")
-    def parms_options(cls, *args, ticker, expire, strike, count=1000, **kwargs):
-        expires = {"expiryYear": "{:04.0f}".format(expire.year), "expiryMonth": "{:02.0f}".format(expire.month), "expiryDay": "{:02.0f}".format(expire.day), "expiryType": "ALL", "includeWeekly": "true"}
-        strikes = {"strikePriceNear": str(int(strike)), "noOfStrikes": str(int(count)), "priceType": "ALL"}
-        return {"symbol": str(ticker), **expires, **strikes}
+class ETradeOptionURL(ETradeMarketsURL):
+    def path(cls, *args, **kwargs): return "/v1/market/optionchains.json"
+    def parms(cls, *args, ticker, **kwargs):
+        options = cls.options(*args, **kwargs)
+        expires = cls.expires(*args, **kwargs)
+        strikes = cls.strikes(*args, **kwargs)
+        return {"symbol": str(ticker), **options, **expires, **strikes}
+
+    @staticmethod
+    def expires(*args, expire, **kwargs): return {"expiryYear": "{:04.0f}".format(expire.year), "expiryMonth": "{:02.0f}".format(expire.month), "expiryDay": "{:02.0f}".format(expire.day), "expiryType": "ALL"}
+    @staticmethod
+    def strikes(*args, price, **kwargs): return {"strikePriceNear": str(int(price)), "noOfStrikes": "1000", "priceType": "ALL"}
+    @staticmethod
+    def options(*args, **kwargs): return {"optionCategory": "STANDARD", "chainType": "CALLPUT", "skipAdjusted": "true"}
 
 
 class ETradeStockData(WebJSON, locator="//QuoteResponse/QuoteData[]", collection=True):
@@ -91,14 +92,14 @@ class ETradeExpireData(WebJSON, locator="//OptionExpireDateResponse/ExpirationDa
     class Day(WebJSON.Text, locator="//day", key="day", parser=np.int16): pass
 
     def execute(self, contents, *args, **kwargs):
-        return [self.date(content, *args, **kwargs) for content in iter(contents)]
+        return [self.expires(content, *args, **kwargs) for content in iter(contents)]
 
     @staticmethod
-    def date(content, *args, **kwargs):
+    def expires(content, *args, **kwargs):
         year = content["year"](*args, **kwargs)
         month = content["month"](*args, **kwargs)
         day = content["day"](*args, **kwargs)
-        Date(year=year, month=month, day=day)
+        return Date(year=year, month=month, day=day)
 
 
 class ETradeOptionData(WebJSON, locator="//OptionChainResponse/OptionPair[]", collection=True, optional=True):
@@ -143,12 +144,12 @@ class ETradeOptionData(WebJSON, locator="//OptionChainResponse/OptionPair[]", co
         return {getattr(Securities.Option, str(option).title()).Long: long, getattr(Securities.Option, str(option).title()).Short: short}
 
 
-class ETradeStocksPage(WebJsonPage): pass
-class ETradeExpiresPage(WebJsonPage): pass
-class ETradeOptionsPage(WebJsonPage): pass
+class ETradeStockPage(WebJsonPage): pass
+class ETradeExpirePage(WebJsonPage): pass
+class ETradeOptionPage(WebJsonPage): pass
 
 
-pages = {"stock": ETradeStocksPage, "expire": ETradeExpiresPage, "option": ETradeOptionsPage}
+pages = {"stock": ETradeStockPage, "expire": ETradeExpirePage, "option": ETradeOptionPage}
 class ETradeSecurityDownloader(Downloader, pages=pages):
     def execute(self, ticker, *args, expires, **kwargs):
         for expire in self.expires(ticker, *args, **kwargs):
@@ -162,21 +163,21 @@ class ETradeSecurityDownloader(Downloader, pages=pages):
             yield ticker, expire, stocks | options
 
     def stocks(self, ticker, *args, **kwargs):
-        curl = ETradeMarketsURL(dataset="stock", ticker=ticker)
+        curl = ETradeStockURL(ticker=ticker)
         self["stock"].load(str(curl.address), params=dict(curl.query))
         source = self.pages["stock"].source
         stocks = ETradeStockData(source)(*args, **kwargs)
         return stocks
 
     def expires(self, ticker, *args, **kwargs):
-        curl = ETradeMarketsURL(dataset="expire", ticker=ticker)
+        curl = ETradeExpireURL(ticker=ticker)
         self["expire"].load(str(curl.address), params=dict(curl.query))
         source = self.pages["expire"].source
         expires = ETradeExpireData(source)(*args, **kwargs)
         return expires
 
     def options(self, ticker, *args, expire, price, **kwargs):
-        curl = ETradeMarketsURL(dataset="option", ticker=ticker, expire=expire, strike=price)
+        curl = ETradeOptionURL(ticker=ticker, expire=expire, strike=price)
         self["option"].load(str(curl.address), params=dict(curl.query))
         source = self.pages["option"].source
         options = ETradeOptionData(source)(*args, ticker=ticker, expire=expire, **kwargs)

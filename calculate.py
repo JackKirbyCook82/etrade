@@ -27,8 +27,6 @@ from finance.strategies import StrategyCalculator
 from finance.valuations import ValuationCalculator
 from finance.targets import TargetCalculator
 
-from order import ETradeOrderUploader
-
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
 __all__ = []
@@ -56,8 +54,7 @@ def main(tickers, *args, parameters, **kwargs):
     strategies = StrategyCalculator(name="StrategyCalculator")
     valuations = ValuationCalculator(name="ValuationCalculator")
     targets = TargetCalculator(name="TargetCalculator")
-    uploader = ETradeOrderUploader(name="TargetUploader")
-    pipeline = loader + securities + strategies + valuations + targets + uploader
+    pipeline = loader + securities + strategies + valuations + targets
     consumer = Consumer(pipeline, source=source, name="ETradeCalculator")
     consumer.setup(**parameters)
     consumer.start()

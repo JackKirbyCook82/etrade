@@ -35,7 +35,7 @@ SecurityType = enum.StrEnum("SecurityType", [("STOCK", "STOCK"), ("OPTION", "OPT
 OptionType = enum.StrEnum("OptionType", [("PUT", "PUT"), ("CALL", "CALL")])
 
 
-class ETradeOrdersURL(WebURL):
+class ETradeOrderURL(WebURL):
     def domain(cls, *args, **kwargs): return "https://api.etrade.com"
 
     @kwargsdispatcher("dataset")
@@ -56,7 +56,7 @@ place_fields = dict(previews="//PreviewIds[]/previewId")
 
 class Product(WebPayload, locator="//Product", key="product"): pass
 class StockProduct(Product, key="stock", fields=stock_fields, values={"securitytype": SecurityType.STOCK}): pass
-class OptionProduct(Product, key="option", fields=option_fields, values={"securitytype": SecurityType.OPTION}): pass
+class OptionProduct(Product, key="security", fields=option_fields, values={"securitytype": SecurityType.OPTION}): pass
 class PutProduct(OptionProduct, key="put", values={"optiontype": OptionType.PUT}): pass
 class CallProduct(OptionProduct, key="call", values={"optiontype": OptionType.CALL}): pass
 
@@ -107,7 +107,7 @@ class ETradeOrderData(WebJSON, locator="//Order[]", key="orders", collection=Tru
         class Product(WebJSON, locator="//Product", key="product"):
             class Ticker(WebJSON.Json, locator="//symbol", key="ticker", parser=str): pass
             class SecurityType(WebJSON.Json, locator="//securityType", key="type", parser=SecurityType.__getitem__): pass
-            class OptionType(WebJSON.Json, locator="//callPut", key="option", parser=OptionType.__getitem__, optional=True): pass
+            class OptionType(WebJSON.Json, locator="//callPut", key="security", parser=OptionType.__getitem__, optional=True): pass
             class Strike(WebJSON.Json, locator="//strikePrice", key="strike", parser=np.float32, optional=True): pass
             class Year(WebJSON.Json, locator="//expiryYear", key="year", parser=np.int16, optional=True): pass
             class Month(WebJSON.Json, locator="//expiryMonth", key="month", parser=np.int16, optional=True): pass
