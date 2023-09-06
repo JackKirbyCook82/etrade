@@ -53,6 +53,7 @@ option_fields = dict(optiontype="//optionType", strike="//strikePrice", year="//
 instrument_fields = dict(action="//orderAction", basis="//quantityType", quantity="//quantity")
 order_fields = dict(price="//priceValue", pricing="//priceType", ordertype="//orderType", tenure="//orderTerm", session="//marketSession", concurrent="//allOrNone")
 place_fields = dict(previews="//PreviewIds[]/previewId")
+order_values = dict(pricing=Pricing.DEBIT, ordertype=OrderType.SPREADS, tenure=Tenure.FILLKILL, session=Session.MARKET, concurrent=Concurrent.TRUE)
 
 class Product(WebPayload, locator="//Product", key="product"): pass
 class StockProduct(Product, key="stock", fields=stock_fields, values={"securitytype": SecurityType.STOCK}): pass
@@ -71,14 +72,13 @@ class SellCallInstrument(SellInstrument + CallProduct, key="call|short"): pass
 class BuyStockInstrument(BuyInstrument + StockProduct, key="stock|long"): pass
 class SellStockInstrument(SellInstrument + StockProduct, key="stock|short"): pass
 
-class Order(WebPayload, locator="//Order[]", key="orders", fields=order_fields, collection=True): pass
-class SpreadOrder(Order, values={"pricing": Pricing.DEBIT, "ordertype": OrderType.SPREADS, "tenure": Tenure.FILLKILL, "session": Session.MARKET, "concurrent": Concurrent.TRUE}): pass
-class StrangleOrder(SpreadOrder + [BuyPutInstrument, BuyCallInstrument], key="strangle|long"): pass
-class CollarLongOrder(SpreadOrder + [BuyPutInstrument, SellCallInstrument, BuyStockInstrument], key="collar|long"): pass
-class CollarShortOrder(SpreadOrder + [SellPutInstrument, BuyCallInstrument, SellStockInstrument], key="collar|short"): pass
-class VerticalPutOrder(SpreadOrder + [BuyPutInstrument, SellPutInstrument], key="vertical|put"): pass
-class VerticalCallOrder(SpreadOrder + [BuyCallInstrument, SellCallInstrument], key="vertical|call"): pass
-class CondorOrder(SpreadOrder + [BuyPutInstrument, BuyCallInstrument, SellPutInstrument, SellCallInstrument], key="condor"): pass
+class Order(WebPayload, locator="//Order[]", key="orders", fields=order_fields, values=order_values, collection=True): pass
+class StrangleOrder(Order + [BuyPutInstrument, BuyCallInstrument], key="strangle|long"): pass
+class CollarLongOrder(Order + [BuyPutInstrument, SellCallInstrument, BuyStockInstrument], key="collar|long"): pass
+class CollarShortOrder(Order + [SellPutInstrument, BuyCallInstrument, SellStockInstrument], key="collar|short"): pass
+class VerticalPutOrder(Order + [BuyPutInstrument, SellPutInstrument], key="vertical|put"): pass
+class VerticalCallOrder(Order + [BuyCallInstrument, SellCallInstrument], key="vertical|call"): pass
+class CondorOrder(Order + [BuyPutInstrument, BuyCallInstrument, SellPutInstrument, SellCallInstrument], key="condor"): pass
 
 class ETradePreviewPayload(WebPayload): pass
 class ETradePlacePayload(WebPayload, fields=place_fields): pass
@@ -129,7 +129,8 @@ class ETradePlacePage(WebJsonPage): pass
 pages = {"preview": ETradePreviewPage, "place": ETradePlacePage}
 class ETradeOrderUploader(Uploader, pages=pages):
     def execute(self, target, *args, **kwargs):
-        pass
+        instruments = {str(security): security.todict() for security in target.securities}
+        order = Order[str(target.strategy)](price=target.valuation.price, instruments=instruments)
 
     def preview(self, *args, **kwargs):
         pass
