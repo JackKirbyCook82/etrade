@@ -14,7 +14,6 @@ from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
 from webscraping.webpayloads import WebPayload
 from support.pipelines import Uploader
-from support.dispatchers import kwargsdispatcher
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -38,14 +37,11 @@ OptionType = enum.StrEnum("OptionType", [("PUT", "PUT"), ("CALL", "CALL")])
 class ETradeOrderURL(WebURL):
     def domain(cls, *args, **kwargs): return "https://api.etrade.com"
 
-    @kwargsdispatcher("dataset")
-    def path(cls, *args, dataset, **kwargs): raise KeyError(dataset)
-    @path.register.value("preview")
-    def path_preview(cls, *args, account, **kwargs): return "/v1/accounts/{account}/orders/preview.json".format(account=str(account))
-    @path.register.value("place")
-    def path_place(cls, *args, account, **kwargs): return "/v1/accounts/{account}/orders/place.json".format(account=str(account))
-    @path.register.value("cancel")
-    def path_cancel(cls, *args, account, **kwargs): return "/v1/accounts/{account}/orders/cancel.json".format(account=str(account))
+class ETradePreviewURL(ETradeOrderURL):
+    def path(cls, *args, account, **kwargs): return "/v1/accounts/{account}/orders/preview.json".format(account=str(account))
+
+class ETradePlaceURL(ETradeOrderURL):
+    def path(cls, *args, account, **kwargs): return "/v1/accounts/{account}/orders/place.json".format(account=str(account))
 
 
 stock_fields = dict(ticker="//symbol", securitytype="//securityType")
@@ -129,8 +125,10 @@ class ETradePlacePage(WebJsonPage): pass
 pages = {"preview": ETradePreviewPage, "place": ETradePlacePage}
 class ETradeOrderUploader(Uploader, pages=pages):
     def execute(self, target, *args, **kwargs):
-        instruments = {str(security): security.todict() for security in target.securities}
-        order = Order[str(target.strategy)](price=target.valuation.price, instruments=instruments)
+        pass
+
+#        instruments = {str(security): security.todict() for security in target.securities}
+#        order = Order[str(target.strategy)](price=target.valuation.price, instruments=instruments)
 
     def preview(self, *args, **kwargs):
         pass

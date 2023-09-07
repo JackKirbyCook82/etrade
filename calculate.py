@@ -44,7 +44,8 @@ pd.set_option("display.max_columns", 25)
 
 
 class ETradeConsumer(Consumer):
-    pass
+    def execute(self, target, *args, **kwargs):
+        pass
 
 
 def main(tickers, *args, parameters, **kwargs):
