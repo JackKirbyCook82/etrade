@@ -124,16 +124,28 @@ class ETradePlacePage(WebJsonPage): pass
 
 pages = {"preview": ETradePreviewPage, "place": ETradePlacePage}
 class ETradeOrderUploader(Uploader, pages=pages):
-    def execute(self, target, *args, **kwargs):
-        pass
+    def execute(self, target, *args, account, funds, **kwargs):
+        valuation = target.valuation
+        if not bool(valuation):
+            return
+        instruments = {str(security): security.contents() for security in target.securities}
+        order = Order[str(target.strategy)](price=target.valuation.spot, instruments=instruments)
+        preview = ETradePreviewPayload()
+        preview["orders"] = order
 
-#        instruments = {str(security): security.todict() for security in target.securities}
-#        order = Order[str(target.strategy)](price=target.valuation.price, instruments=instruments)
 
-    def preview(self, *args, **kwargs):
-        pass
 
-    def place(self, *args, **kwargs):
-        pass
+
+
+
+
+
+
+
+
+
+
+
+
 
 

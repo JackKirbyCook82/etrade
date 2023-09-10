@@ -65,7 +65,7 @@ class ETradeOptionURL(ETradeMarketsURL):
 class ETradeStockData(WebJSON, locator="//QuoteResponse/QuoteData[]", collection=True):
     class Ticker(WebJSON.Text, locator="//Product/symbol", key="ticker", parser=str): pass
     class Date(WebJSON.Text, locator="//dateTimeUTC", key="date", parser=date_parser): pass
-    class DateTime(WebJSON.Text, locator="//dateTimeUTC", key="datetime", parser=datetime_parser): pass
+    class DateTime(WebJSON.Text, locator="//dateTimeUTC", key="time", parser=datetime_parser): pass
     class BidPrice(WebJSON.Text, locator="//All/bid", key="bid", parser=np.float16): pass
     class BidSize(WebJSON.Text, locator="//All/bidSize", key="demand", parser=np.int32): pass
     class AskPrice(WebJSON.Text, locator="//All/ask", key="ask", parser=np.float16): pass
@@ -80,7 +80,7 @@ class ETradeStockData(WebJSON, locator="//QuoteResponse/QuoteData[]", collection
     def stocks(contents, *args, **kwargs):
         stocks = [{key: value(*args, **kwargs) for key, value in iter(content)} for content in iter(contents)]
         dataframe = pd.DataFrame.from_records(stocks)
-        dataframe = dataframe.set_index("ticker", inplace=False, drop=True)
+        dataframe = dataframe.set_index(["date", "ticker"], inplace=False, drop=True)
         long = dataframe.drop(["bid", "demand"], axis=1, inplace=False).rename(columns={"ask": "price", "supply": "size"})
         short = dataframe.drop(["ask", "supply"], axis=1, inplace=False).rename(columns={"bid": "price", "demand": "size"})
         return {Securities.Stock.Long: long, Securities.Stock.Short: short}
@@ -106,7 +106,7 @@ class ETradeOptionData(WebJSON, locator="//OptionChainResponse/OptionPair[]", co
     class Call(WebJSON, locator="//Call", key="call"):
         class Ticker(WebJSON.Text, locator="//symbol", key="ticker", parser=str): pass
         class Date(WebJSON.Text, locator="//timeStamp", key="date", parser=date_parser): pass
-        class DateTime(WebJSON.Text, locator="//timeStamp", key="datetime", parser=datetime_parser): pass
+        class DateTime(WebJSON.Text, locator="//timeStamp", key="time", parser=datetime_parser): pass
         class Expire(WebJSON.Text, locator="//quoteDetail", key="expire", parser=expire_parser): pass
         class Strike(WebJSON.Text, locator="//strikePrice", key="strike", parser=np.float32): pass
         class Bid(WebJSON.Text, locator="//bid", key="bid", parser=np.float32): pass
@@ -119,7 +119,7 @@ class ETradeOptionData(WebJSON, locator="//OptionChainResponse/OptionPair[]", co
     class Put(WebJSON, locator="//Put", key="put"):
         class Ticker(WebJSON.Text, locator="//symbol", key="ticker", parser=str): pass
         class Date(WebJSON.Text, locator="//timeStamp", key="date", parser=date_parser): pass
-        class DateTime(WebJSON.Text, locator="//timeStamp", key="datetime", parser=datetime_parser): pass
+        class DateTime(WebJSON.Text, locator="//timeStamp", key="time", parser=datetime_parser): pass
         class Expire(WebJSON.Text, locator="//quoteDetail", key="expire", parser=expire_parser): pass
         class Strike(WebJSON.Text, locator="//strikePrice", key="strike", parser=np.float32): pass
         class Bid(WebJSON.Text, locator="//bid", key="bid", parser=np.float32): pass
@@ -138,7 +138,7 @@ class ETradeOptionData(WebJSON, locator="//OptionChainResponse/OptionPair[]", co
     def options(contents, *args, option, **kwargs):
         option = [{key: value(*args, **kwargs) for key, value in iter(content[option])} for content in iter(contents)]
         dataframe = pd.DataFrame.from_records(option)
-        dataframe = dataframe.set_index(["ticker", "expire", "strike"], inplace=False, drop=True)
+        dataframe = dataframe.set_index(["date", "ticker", "expire", "strike"], inplace=False, drop=True)
         long = dataframe.drop(["bid", "demand"], axis=1, inplace=False).rename(columns={"ask": "price", "supply": "size"})
         short = dataframe.drop(["ask", "supply"], axis=1, inplace=False).rename(columns={"bid": "price", "demand": "size"})
         return {getattr(Securities.Option, str(option).title()).Long: long, getattr(Securities.Option, str(option).title()).Short: short}
