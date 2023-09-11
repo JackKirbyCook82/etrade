@@ -76,8 +76,14 @@ class VerticalPutOrder(Order + [BuyPutInstrument, SellPutInstrument], key="verti
 class VerticalCallOrder(Order + [BuyCallInstrument, SellCallInstrument], key="vertical|call"): pass
 class CondorOrder(Order + [BuyPutInstrument, BuyCallInstrument, SellPutInstrument, SellCallInstrument], key="condor"): pass
 
-class ETradePreviewPayload(WebPayload): pass
 class ETradePlacePayload(WebPayload, fields=place_fields): pass
+class ETradePreviewPayload(WebPayload):
+    def __init__(self, *args, valuation, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__valuation = valuation
+
+    @property
+    def valuation(self): return self.__valuation
 
 
 class ETradeOrderData(WebJSON, locator="//Order[]", key="orders", collection=True):
@@ -125,13 +131,16 @@ class ETradePlacePage(WebJsonPage): pass
 pages = {"preview": ETradePreviewPage, "place": ETradePlacePage}
 class ETradeOrderUploader(Uploader, pages=pages):
     def execute(self, target, *args, account, funds, **kwargs):
-        valuation = target.valuation
-        if not bool(valuation):
-            return
         instruments = {str(security): security.contents() for security in target.securities}
         order = Order[str(target.strategy)](price=target.valuation.spot, instruments=instruments)
-        preview = ETradePreviewPayload()
+        preview = ETradePreviewPayload(valuation=target.valuation)
         preview["orders"] = order
+        if not bool(preview.valuation):
+            return
+
+
+
+
 
 
 

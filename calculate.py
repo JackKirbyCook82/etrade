@@ -44,7 +44,8 @@ pd.set_option("display.max_columns", 25)
 
 
 class ETradeConsumer(Consumer):
-    def execute(self, target, *args, **kwargs): print(str(target))
+    def execute(self, target, *args, **kwargs):
+        pass
 
 
 def main(tickers, *args, parameters, **kwargs):
@@ -64,7 +65,7 @@ def main(tickers, *args, parameters, **kwargs):
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
     sysTickers = ["NVDA", "AMD", "AMC", "TSLA", "AAPL", "IWM", "AMZN", "SPY", "QQQ", "MSFT", "BAC", "BABA", "GOOGL", "META", "ZIM", "XOM", "INTC", "OXY", "CSCO", "COIN", "NIO"]
-    sysParameters = {"size": None, "interest": None, "volume": None, "partition": None, "fees": 0, "discount": 0, "apy": 0, "funds": None, "tenure": None}
+    sysParameters = {"size": None, "interest": None, "volume": None, "partition": None, "fees": 0, "discount": 0, "apy": 0, "funds": None, "lifetime": None}
     main(sysTickers, parameters=sysParameters)
 
 
