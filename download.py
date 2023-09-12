@@ -26,7 +26,7 @@ API = os.path.join(ROOT, "Library", "api.csv")
 SAVE = os.path.join(ROOT, "Library", "repository", "security")
 
 from webscraping.webreaders import WebAuthorizer, WebReader
-from support.synchronize import Queue, Consumer
+from support.synchronize import Consumer, FIFOQueue
 from finance.securities import DateRange, SecuritySaver
 
 from market import ETradeSecurityDownloader
@@ -61,7 +61,7 @@ class ETradeConsumer(Consumer): pass
 
 def main(tickers, *args, expires, **kwargs):
     api = pd.read_csv(API, header=0, index_col="website").loc["etrade"].to_dict()
-    source = Queue(tickers, size=None, name="TickerQueue")
+    source = FIFOQueue(tickers, size=None, name="TickerQueue")
     authorizer = ETradeAuthorizer(apikey=api["key"], apicode=api["code"], name="ETradeAuthorizer")
     with ETradeReader(authorizer=authorizer, name="ETradeReader") as reader:
         downloader = ETradeSecurityDownloader(source=reader, name="SecurityDownloader")

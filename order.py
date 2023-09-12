@@ -140,21 +140,3 @@ class ETradeOrderUploader(Uploader, pages=pages):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

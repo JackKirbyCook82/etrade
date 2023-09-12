@@ -21,7 +21,7 @@ if ROOT not in sys.path:
 API = os.path.join(ROOT, "Library", "api.csv")
 LOAD = os.path.join(ROOT, "Library", "repository", "security")
 
-from support.synchronize import Queue, Consumer
+from support.synchronize import Consumer, FIFOQueue
 from finance.securities import SecurityLoader, SecurityCalculator
 from finance.strategies import StrategyCalculator
 from finance.valuations import ValuationCalculator
@@ -49,7 +49,7 @@ class ETradeConsumer(Consumer):
 
 
 def main(tickers, *args, parameters, **kwargs):
-    source = Queue(tickers, size=None, name="TickerQueue")
+    source = FIFOQueue(tickers, size=None, name="TickerQueue")
     loader = SecurityLoader(repository=LOAD, name="SecurityLoader")
     securities = SecurityCalculator(name="SecurityCalculator")
     strategies = StrategyCalculator(name="StrategyCalculator")
