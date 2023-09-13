@@ -20,12 +20,13 @@ if ROOT not in sys.path:
     sys.path.append(ROOT)
 API = os.path.join(ROOT, "Library", "api.csv")
 LOAD = os.path.join(ROOT, "Library", "repository", "security")
+SAVE = os.path.join(ROOT, "Library", "repository", "strategy")
 
 from support.synchronize import Consumer, FIFOQueue
 from finance.securities import SecurityLoader, SecurityCalculator
 from finance.strategies import StrategyCalculator
 from finance.valuations import ValuationCalculator
-from finance.targets import TargetCalculator
+from finance.targets import TargetSaver
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -44,8 +45,7 @@ pd.set_option("display.max_columns", 25)
 
 
 class ETradeConsumer(Consumer):
-    def execute(self, target, *args, **kwargs):
-        pass
+    pass
 
 
 def main(tickers, *args, parameters, **kwargs):
@@ -54,9 +54,9 @@ def main(tickers, *args, parameters, **kwargs):
     securities = SecurityCalculator(name="SecurityCalculator")
     strategies = StrategyCalculator(name="StrategyCalculator")
     valuations = ValuationCalculator(name="ValuationCalculator")
-    targets = TargetCalculator(name="TargetCalculator")
-    pipeline = loader + securities + strategies + valuations + targets
-    consumer = Consumer(pipeline, source=source, name="ETradeCalculator")
+    saver = TargetSaver(repository=SAVE, name="TargetSaver")
+    pipeline = loader + securities + strategies + valuations + saver
+    consumer = ETradeConsumer(pipeline, source=source, name="ETradeStrategies")
     consumer.setup(**parameters)
     consumer.start()
     consumer.join()
@@ -65,7 +65,7 @@ def main(tickers, *args, parameters, **kwargs):
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
     sysTickers = ["NVDA", "AMD", "AMC", "TSLA", "AAPL", "IWM", "AMZN", "SPY", "QQQ", "MSFT", "BAC", "BABA", "GOOGL", "META", "ZIM", "XOM", "INTC", "OXY", "CSCO", "COIN", "NIO"]
-    sysParameters = {"size": None, "interest": None, "volume": None, "partition": None, "fees": 0, "discount": 0, "apy": 0, "funds": None, "lifetime": None}
+    sysParameters = {"size": None, "interest": None, "volume": None, "partition": None, "fees": 0, "discount": 0}
     main(sysTickers, parameters=sysParameters)
 
 

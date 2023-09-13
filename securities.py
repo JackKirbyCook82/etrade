@@ -59,7 +59,7 @@ class ETradeReader(WebReader, delay=10): pass
 class ETradeConsumer(Consumer): pass
 
 
-def main(tickers, *args, expires, **kwargs):
+def main(tickers, *args, expires, parameters, **kwargs):
     api = pd.read_csv(API, header=0, index_col="website").loc["etrade"].to_dict()
     source = FIFOQueue(tickers, size=None, name="TickerQueue")
     authorizer = ETradeAuthorizer(apikey=api["key"], apicode=api["code"], name="ETradeAuthorizer")
@@ -67,8 +67,8 @@ def main(tickers, *args, expires, **kwargs):
         downloader = ETradeSecurityDownloader(source=reader, name="SecurityDownloader")
         saver = SecuritySaver(repository=SAVE, name="SecuritySaver")
         pipeline = downloader + saver
-        consumer = ETradeConsumer(pipeline, source=source, name="ETradeDownloader")
-        consumer.setup(expires=expires)
+        consumer = ETradeConsumer(pipeline, source=source, name="ETradeSecurities")
+        consumer.setup(expires=expires, **parameters)
         consumer.start()
         consumer.join()
 
@@ -77,7 +77,8 @@ if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
     sysTickers = ["NVDA", "AMD", "AMC", "TSLA", "AAPL", "IWM", "AMZN", "SPY", "QQQ", "MSFT", "BAC", "BABA", "GOOGL", "META", "ZIM", "XOM", "INTC", "OXY", "CSCO", "COIN", "NIO"]
     sysExpires = DateRange([(Datetime.today() + Timedelta(days=1)).date(), (Datetime.today() + Timedelta(weeks=26)).date()])
-    main(sysTickers, expires=sysExpires)
+    sysParameters = {}
+    main(sysTickers, expires=sysExpires, parameters=sysParameters)
 
 
 
