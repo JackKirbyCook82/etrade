@@ -22,7 +22,7 @@ API = os.path.join(ROOT, "Library", "api.csv")
 LOAD = os.path.join(ROOT, "Library", "repository", "strategies")
 
 from support.synchronize import Consumer, FIFOQueue
-from finance.targets import TargetLoader, TargetCalculator
+from finance.targets import TargetLoader, TargetAnalysis
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -47,8 +47,8 @@ class ETradeConsumer(Consumer):
 def main(tickers, *args, parameters, **kwargs):
     source = FIFOQueue(tickers, size=None, name="TickerQueue")
     loader = TargetLoader(repository=LOAD, name="TargetLoader")
-    strategies = TargetCalculator(name="TargetCalculator")
-    pipeline = loader + strategies
+    analysis = TargetAnalysis(name="TargetAnalysis")
+    pipeline = loader + analysis
     consumer = ETradeConsumer(pipeline, source=source, name="ETradeTargets")
     consumer.setup(**parameters)
     consumer.start()
@@ -58,5 +58,5 @@ def main(tickers, *args, parameters, **kwargs):
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
     sysTickers = ["NVDA", "AMD", "AMC", "TSLA", "AAPL", "IWM", "AMZN", "SPY", "QQQ", "MSFT", "BAC", "BABA", "GOOGL", "META", "ZIM", "XOM", "INTC", "OXY", "CSCO", "COIN", "NIO"]
-    sysParameters = {"apy": 0, "size": None, "interest": None, "volume": None, "funds": None, "lifetime": None}
+    sysParameters = {}
     main(sysTickers, parameters=sysParameters)
