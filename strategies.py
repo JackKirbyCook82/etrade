@@ -44,10 +44,6 @@ pd.set_option('display.max_rows', 20)
 pd.set_option("display.max_columns", 25)
 
 
-class ETradeConsumer(Consumer):
-    pass
-
-
 def main(tickers, *args, parameters, **kwargs):
     source = FIFOQueue(tickers, size=None, name="TickerQueue")
     loader = SecurityLoader(repository=LOAD, name="SecurityLoader")
@@ -56,7 +52,7 @@ def main(tickers, *args, parameters, **kwargs):
     valuations = ValuationCalculator(name="ValuationCalculator")
     saver = TargetSaver(repository=SAVE, name="TargetSaver")
     pipeline = loader + securities + strategies + valuations + saver
-    consumer = ETradeConsumer(pipeline, source=source, name="ETradeStrategies")
+    consumer = Consumer(pipeline, source=source, name="ETradeStrategies")
     consumer.setup(**parameters)
     consumer.start()
     consumer.join()

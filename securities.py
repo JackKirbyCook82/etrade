@@ -56,7 +56,6 @@ base = "https://api.etrade.com"
 
 class ETradeAuthorizer(WebAuthorizer, authorize=authorize, request=request, access=access, base=base): pass
 class ETradeReader(WebReader, delay=10): pass
-class ETradeConsumer(Consumer): pass
 
 
 def main(tickers, *args, expires, parameters, **kwargs):
@@ -67,7 +66,7 @@ def main(tickers, *args, expires, parameters, **kwargs):
         downloader = ETradeSecurityDownloader(source=reader, name="SecurityDownloader")
         saver = SecuritySaver(repository=SAVE, name="SecuritySaver")
         pipeline = downloader + saver
-        consumer = ETradeConsumer(pipeline, source=source, name="ETradeSecurities")
+        consumer = Consumer(pipeline, source=source, name="ETradeSecurities")
         consumer.setup(expires=expires, **parameters)
         consumer.start()
         consumer.join()

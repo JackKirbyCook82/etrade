@@ -40,16 +40,12 @@ pd.set_option('display.max_rows', 20)
 pd.set_option("display.max_columns", 25)
 
 
-class ETradeConsumer(Consumer):
-    pass
-
-
 def main(tickers, *args, parameters, **kwargs):
     source = FIFOQueue(tickers, size=None, name="TickerQueue")
     loader = TargetLoader(repository=LOAD, name="TargetLoader")
     analysis = TargetAnalysis(name="TargetAnalysis")
     pipeline = loader + analysis
-    consumer = ETradeConsumer(pipeline, source=source, name="ETradeTargets")
+    consumer = Consumer(pipeline, source=source, name="ETradeTargets")
     consumer.setup(**parameters)
     consumer.start()
     consumer.join()
@@ -58,5 +54,5 @@ def main(tickers, *args, parameters, **kwargs):
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
     sysTickers = ["NVDA", "AMD", "AMC", "TSLA", "AAPL", "IWM", "AMZN", "SPY", "QQQ", "MSFT", "BAC", "BABA", "GOOGL", "META", "ZIM", "XOM", "INTC", "OXY", "CSCO", "COIN", "NIO"]
-    sysParameters = {}
+    sysParameters = {"apy": 0, "funds": None}
     main(sysTickers, parameters=sysParameters)
