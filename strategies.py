@@ -65,7 +65,7 @@ def main(tickers, *args, parameters, **kwargs):
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
     sysTickers = ["NVDA", "AMD", "AMC", "TSLA", "AAPL", "IWM", "AMZN", "SPY", "QQQ", "MSFT", "BAC", "BABA", "GOOGL", "META", "ZIM", "XOM", "INTC", "OXY", "CSCO", "COIN", "NIO"]
-    sysParameters = {"size": None, "interest": None, "volume": None, "partition": None, "fees": 0, "discount": 0}
+    sysParameters = {"size": 1, "interest": 1, "volume": None, "partition": None, "fees": 0, "discount": 0}
     main(sysTickers, parameters=sysParameters)
 
 
