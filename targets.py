@@ -49,6 +49,14 @@ def main(tickers, *args, parameters, **kwargs):
     consumer.setup(**parameters)
     consumer.start()
     consumer.join()
+    figure = visualize(analysis)
+    figure()
+
+def visualize(analysis):
+    variables = {"x": "tau", "y": "cost", "z": "apy"}
+    strings = {"x": "{:.0f}|{:.0f}", "y": "${:.0f}K|${:.0f}K", "z": "{:.0f}%|{:.0f}%"}
+    scales = {"x": 1, "y": 0.001, "z": 100}
+    return analysis.figure(variables=variables, strings=strings, scales=scales, size=25)
 
 
 if __name__ == "__main__":
