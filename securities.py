@@ -11,6 +11,8 @@ import os
 import sys
 import logging
 import warnings
+
+import support.synchronize
 import xarray as xr
 import pandas as pd
 import PySimpleGUI as gui

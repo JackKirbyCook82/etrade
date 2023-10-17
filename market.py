@@ -72,18 +72,18 @@ class ETradeStockData(WebJSON, locator="//QuoteResponse/QuoteData[]", collection
     class AskSize(WebJSON.Text, locator="//All/askSize", key="supply", parser=np.int32): pass
     class Volume(WebJSON.Text, locator="//All/totalVolume", key="volume", parser=np.int64): pass
 
-    def execute(self, contents, *args, **kwargs):
-        stocks = self.stocks(contents, *args, **kwargs)
-        return stocks
-
-    @staticmethod
-    def stocks(contents, *args, **kwargs):
-        stocks = [{key: value(*args, **kwargs) for key, value in iter(content)} for content in iter(contents)]
-        dataframe = pd.DataFrame.from_records(stocks)
-        dataframe = dataframe.set_index(["date", "ticker"], inplace=False, drop=True)
-        long = dataframe.drop(["bid", "demand"], axis=1, inplace=False).rename(columns={"ask": "price", "supply": "size"})
-        short = dataframe.drop(["ask", "supply"], axis=1, inplace=False).rename(columns={"bid": "price", "demand": "size"})
-        return {Securities.Stock.Long: long, Securities.Stock.Short: short}
+    # def __call__(self, *args, **kwargs):
+    #     stocks = [{key: value.data for key, value in iter(content)} for content in iter(self)]
+    #     stocks = {key: value for key, value in self.execute(stocks)}
+    #     return stocks
+    #
+    # @staticmethod
+    # def stocks(contents):
+    #     dataframe = pd.DataFrame.from_records(contents)
+    #     dataframe = dataframe.set_index(["date", "ticker"], inplace=False, drop=True)
+    #     long = dataframe.drop(["bid", "demand"], axis=1, inplace=False).rename(columns={"ask": "price", "supply": "size"})
+    #     short = dataframe.drop(["ask", "supply"], axis=1, inplace=False).rename(columns={"bid": "price", "demand": "size"})
+    #     return {Securities.Stock.Long: long, Securities.Stock.Short: short}
 
 
 class ETradeExpireData(WebJSON, locator="//OptionExpireDateResponse/ExpirationDate[]", collection=True, optional=True):
@@ -91,15 +91,8 @@ class ETradeExpireData(WebJSON, locator="//OptionExpireDateResponse/ExpirationDa
     class Month(WebJSON.Text, locator="//month", key="month", parser=np.int16): pass
     class Day(WebJSON.Text, locator="//day", key="day", parser=np.int16): pass
 
-    def execute(self, contents, *args, **kwargs):
-        return [self.expires(content, *args, **kwargs) for content in iter(contents)]
-
-    @staticmethod
-    def expires(content, *args, **kwargs):
-        year = content["year"](*args, **kwargs)
-        month = content["month"](*args, **kwargs)
-        day = content["day"](*args, **kwargs)
-        return Date(year=year, month=month, day=day)
+    # def __call__(self, *args, **kwargs):
+    #     return [Date(year=content["year"].data, month=content["month"].data, day=content["day"].data) for content in iter(self)]
 
 
 class ETradeOptionData(WebJSON, locator="//OptionChainResponse/OptionPair[]", collection=True, optional=True):
@@ -129,19 +122,20 @@ class ETradeOptionData(WebJSON, locator="//OptionChainResponse/OptionPair[]", co
         class Volume(WebJSON.Text, locator="//volume", key="volume", parser=np.int64): pass
         class Interest(WebJSON.Text, locator="//openInterest", key="interest", parser=np.int32): pass
 
-    def execute(self, contents, *args, **kwargs):
-        puts = self.options(contents, *args, option="put", **kwargs)
-        calls = self.options(contents, *args, option="call", **kwargs)
-        return puts | calls
-
-    @staticmethod
-    def options(contents, *args, option, **kwargs):
-        option = [{key: value(*args, **kwargs) for key, value in iter(content[option])} for content in iter(contents)]
-        dataframe = pd.DataFrame.from_records(option)
-        dataframe = dataframe.set_index(["date", "ticker", "expire", "strike"], inplace=False, drop=True)
-        long = dataframe.drop(["bid", "demand"], axis=1, inplace=False).rename(columns={"ask": "price", "supply": "size"})
-        short = dataframe.drop(["ask", "supply"], axis=1, inplace=False).rename(columns={"bid": "price", "demand": "size"})
-        return {getattr(Securities.Option, str(option).title()).Long: long, getattr(Securities.Option, str(option).title()).Short: short}
+    # def __call__(self, *args, **kwargs):
+    #     puts = [{key: value.data for key, value in iter(content["put"])} for content in iter(self)]
+    #     puts = {key: value for key, value in self.execute(Securities.Option.Put, puts)}
+    #     calls = [{key: value.data for key, value in iter(content["call"])} for content in iter(self)]
+    #     calls = {key: value for key, value in self.execute(Securities.Option.Call, calls)}
+    #     return puts | calls
+    #
+    # @staticmethod
+    # def execute(instrument, contents):
+    #     dataframe = pd.DataFrame.from_records(contents)
+    #     dataframe = dataframe.set_index(["date", "ticker", "expire", "strike"], inplace=False, drop=True)
+    #     long = dataframe.drop(["bid", "demand"], axis=1, inplace=False).rename(columns={"ask": "price", "supply": "size"})
+    #     short = dataframe.drop(["ask", "supply"], axis=1, inplace=False).rename(columns={"bid": "price", "demand": "size"})
+    #     return {instrument.Long: long, instrument.Short: short}
 
 
 class ETradeStockPage(WebJsonPage): pass
