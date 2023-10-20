@@ -24,7 +24,7 @@ SAVE = os.path.join(ROOT, "Library", "repository", "strategy")
 
 from support.synchronize import Consumer, FIFOQueue
 from finance.securities import SecurityLoader, SecurityCalculator
-from finance.strategies import StrategyCalculator
+from finance.strategies import Strategies, StrategyCalculator
 from finance.valuations import ValuationCalculator
 from finance.targets import TargetSaver
 
@@ -45,10 +45,11 @@ pd.set_option("display.max_columns", 25)
 
 
 def main(tickers, *args, parameters, **kwargs):
+    calculations = [Strategies.StrangleLong, Strategies.VerticalPut, Strategies.VerticalCall, Strategies.CollarLong, Strategies.CollarShort]
     source = FIFOQueue(tickers, size=None, name="TickerQueue")
     loader = SecurityLoader(repository=LOAD, name="SecurityLoader")
     securities = SecurityCalculator(name="SecurityCalculator")
-    strategies = StrategyCalculator(name="StrategyCalculator")
+    strategies = StrategyCalculator(name="StrategyCalculator", calculations=calculations)
     valuations = ValuationCalculator(name="ValuationCalculator")
     saver = TargetSaver(repository=SAVE, name="TargetSaver")
     pipeline = loader + securities + strategies + valuations + saver
