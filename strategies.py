@@ -12,6 +12,8 @@ import logging
 import warnings
 import xarray as xr
 import pandas as pd
+from datetime import datetime as Datetime
+from datetime import timedelta as Timedelta
 
 MAIN = os.path.dirname(os.path.realpath(__file__))
 PROJECT = os.path.abspath(os.path.join(MAIN, os.pardir))
@@ -20,13 +22,11 @@ if ROOT not in sys.path:
     sys.path.append(ROOT)
 API = os.path.join(ROOT, "Library", "api.csv")
 LOAD = os.path.join(ROOT, "Library", "repository", "security")
-SAVE = os.path.join(ROOT, "Library", "repository", "strategy")
 
 from support.synchronize import Consumer, FIFOQueue
-from finance.securities import SecurityLoader, SecurityCalculator
+from finance.securities import DateRange, Securities, SecurityLoader, SecurityProcessor, SecurityCalculator
 from finance.strategies import Strategies, StrategyCalculator
-from finance.valuations import ValuationCalculator
-from finance.targets import TargetSaver
+from finance.valuations import Valuations, ValuationCalculator
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -45,14 +45,13 @@ pd.set_option("display.max_columns", 25)
 
 
 def main(tickers, *args, parameters, **kwargs):
-    calculations = [Strategies.StrangleLong, Strategies.VerticalPut, Strategies.VerticalCall, Strategies.CollarLong, Strategies.CollarShort]
     source = FIFOQueue(tickers, size=None, name="TickerQueue")
     loader = SecurityLoader(repository=LOAD, name="SecurityLoader")
-    securities = SecurityCalculator(name="SecurityCalculator")
-    strategies = StrategyCalculator(name="StrategyCalculator", calculations=calculations)
-    valuations = ValuationCalculator(name="ValuationCalculator")
-    saver = TargetSaver(repository=SAVE, name="TargetSaver")
-    pipeline = loader + securities + strategies + valuations + saver
+    processor = SecurityProcessor(name="SecurityProcessor")
+    securities = SecurityCalculator(calculations=Securities, name="SecurityCalculator")
+    strategies = StrategyCalculator(calculations=Strategies, name="StrategyCalculator")
+    valuations = ValuationCalculator(calculations=Valuations, name="ValuationCalculator")
+    pipeline = loader + processor + securities + strategies + valuations
     consumer = Consumer(pipeline, source=source, name="ETradeStrategies")
     consumer.setup(**parameters)
     consumer.start()
@@ -62,7 +61,8 @@ def main(tickers, *args, parameters, **kwargs):
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
     sysTickers = ["NVDA", "AMD", "AMC", "TSLA", "AAPL", "IWM", "AMZN", "SPY", "QQQ", "MSFT", "BAC", "BABA", "GOOGL", "META", "ZIM", "XOM", "INTC", "OXY", "CSCO", "COIN", "NIO"]
-    sysParameters = {"size": 1, "interest": 1, "volume": None, "partition": None, "fees": 0, "discount": 0}
+    sysExpires = DateRange([(Datetime.today() + Timedelta(days=1)).date(), (Datetime.today() + Timedelta(weeks=26)).date()])
+    sysParameters = {"size": None, "interest": None, "volume": None, "partition": None, "fees": 0, "discount": 0}
     main(sysTickers, parameters=sysParameters)
 
 

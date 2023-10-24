@@ -11,8 +11,6 @@ import os
 import sys
 import logging
 import warnings
-
-import support.synchronize
 import xarray as xr
 import pandas as pd
 import PySimpleGUI as gui
@@ -78,7 +76,7 @@ if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
     sysTickers = ["NVDA", "AMD", "AMC", "TSLA", "AAPL", "IWM", "AMZN", "SPY", "QQQ", "MSFT", "BAC", "BABA", "GOOGL", "META", "ZIM", "XOM", "INTC", "OXY", "CSCO", "COIN", "NIO"]
     sysExpires = DateRange([(Datetime.today() + Timedelta(days=1)).date(), (Datetime.today() + Timedelta(weeks=26)).date()])
-    sysParameters = {}
+    sysParameters = {"size": None, "interest": None, "volume": None}
     main(sysTickers, expires=sysExpires, parameters=sysParameters)
 
 
