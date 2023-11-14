@@ -22,11 +22,12 @@ if ROOT not in sys.path:
     sys.path.append(ROOT)
 API = os.path.join(ROOT, "Library", "api.csv")
 LOAD = os.path.join(ROOT, "Library", "repository", "security")
+SAVE = os.path.join(ROOT, "Library", "repository", "strategy")
 
 from support.synchronize import Consumer, FIFOQueue
 from finance.securities import DateRange, Securities, SecurityLoader, SecurityProcessor, SecurityCalculator
 from finance.strategies import Strategies, StrategyCalculator
-from finance.valuations import Valuations, ValuationCalculator
+from finance.valuations import Valuations, ValuationCalculator, ValuationSaver
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -51,7 +52,8 @@ def main(tickers, *args, parameters, **kwargs):
     securities = SecurityCalculator(calculations=Securities, name="SecurityCalculator")
     strategies = StrategyCalculator(calculations=Strategies, name="StrategyCalculator")
     valuations = ValuationCalculator(calculations=Valuations, name="ValuationCalculator")
-    pipeline = loader + processor + securities + strategies + valuations
+    saver = ValuationSaver(repository=SAVE, name="ValuationSaver")
+    pipeline = loader + processor + securities + strategies + valuations + saver
     consumer = Consumer(pipeline, source=source, name="ETradeStrategies")
     consumer.setup(**parameters)
     consumer.start()
