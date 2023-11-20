@@ -116,13 +116,12 @@ class ETradeStockPage(WebJsonPage):
     def stocks(contents):
         columns = ["date", "ticker", "security", "price", "size", "volume"]
         stocks = [{key: value.data for key, value in iter(content)} for content in iter(contents)]
-        dataframe = pd.DataFrame.from_records(stocks)[columns]
-        dataframe = dataframe.set_index(["date", "ticker"], inplace=False, drop=True)
+        dataframe = pd.DataFrame.from_records(stocks)
         long = dataframe.drop(["bid", "demand"], axis=1, inplace=False).rename(columns={"ask": "price", "supply": "size"})
         short = dataframe.drop(["ask", "supply"], axis=1, inplace=False).rename(columns={"bid": "price", "demand": "size"})
         long["security"] = int(Securities.Stock.Long)
         short["security"] = int(Securities.Stock.Short)
-        stocks = {Securities.Stock.Long: long, Securities.Stock.Short: short}
+        stocks = {Securities.Stock.Long: long[columns], Securities.Stock.Short: short[columns]}
         return stocks
 
 
@@ -152,26 +151,28 @@ class ETradeOptionPage(WebJsonPage):
     def options(instrument, contents):
         columns = ["date", "ticker", "expire", "strike", "security", "price", "size", "volume", "interest"]
         contents = [{key: value.data for key, value in iter(content["put"])} for content in iter(contents)]
-        dataframe = pd.DataFrame.from_records(contents)[columns]
-        dataframe = dataframe.set_index(["date", "ticker", "expire", "strike"], inplace=False, drop=True)
+        dataframe = pd.DataFrame.from_records(contents)
         long = dataframe.drop(["bid", "demand"], axis=1, inplace=False).rename(columns={"ask": "price", "supply": "size"})
         short = dataframe.drop(["ask", "supply"], axis=1, inplace=False).rename(columns={"bid": "price", "demand": "size"})
         long["security"] = int(instrument.Long)
         short["security"] = int(instrument.Short)
-        return {instrument.Long: long, instrument.Short: short}
+        return {instrument.Long: long[columns], instrument.Short: short[columns]}
 
 
 pages = {"stock": ETradeStockPage, "expire": ETradeExpirePage, "option": ETradeOptionPage}
 class ETradeSecurityDownloader(Downloader, pages=pages):
     def execute(self, ticker, *args, expires, **kwargs):
+        underlying = self.pages["stock"](ticker, *args, **kwargs)
+        bid = underlying[Securities.Stock.Long].set_index(["date", "ticker"], inplace=False, drop=True)
+        ask = underlying[Securities.Stock.Short].set_index(["date", "ticker"], inplace=False, drop=True)
+        bid = np.float32(bid["price"].values[0])
+        ask = np.float32(ask["price"].values[0])
+        strike = (bid + ask) / 2
         for expire in self.pages["expire"](ticker, *args, **kwargs):
             if expire not in expires:
                 continue
-            current = np.datetime64(Datetime.now(), "m")
+            current = Datetime.now()
             stocks = self.pages["stock"](ticker, *args, **kwargs)
-            bid = np.float32(stocks[Securities.Stock.Long]["price"].values[0])
-            ask = np.float32(stocks[Securities.Stock.Short]["price"].values[0])
-            strike = (bid + ask) / 2
             options = self.pages["option"](ticker, *args, expire=expire, strike=strike, **kwargs)
             yield current, ticker, expire, stocks | options
 

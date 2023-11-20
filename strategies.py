@@ -45,7 +45,7 @@ pd.set_option('display.max_rows', 20)
 pd.set_option("display.max_columns", 25)
 
 
-def main(tickers, *args, parameters, **kwargs):
+def main(tickers, *args, expires, parameters, **kwargs):
     source = FIFOQueue(tickers, size=None, name="TickerQueue")
     loader = SecurityLoader(repository=LOAD, name="SecurityLoader")
     processor = SecurityProcessor(name="SecurityProcessor")
@@ -55,7 +55,7 @@ def main(tickers, *args, parameters, **kwargs):
     saver = ValuationSaver(repository=SAVE, name="ValuationSaver")
     pipeline = loader + processor + securities + strategies + valuations + saver
     consumer = Consumer(pipeline, source=source, name="ETradeStrategies")
-    consumer.setup(**parameters)
+    consumer.setup(expires=expires, **parameters)
     consumer.start()
     consumer.join()
 
