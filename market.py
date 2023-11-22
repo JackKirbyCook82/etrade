@@ -114,13 +114,11 @@ class ETradeStockPage(WebJsonPage):
 
     @staticmethod
     def stocks(contents):
-        columns = ["date", "ticker", "security", "price", "size", "volume"]
+        columns = ["date", "ticker", "price", "size", "volume"]
         stocks = [{key: value.data for key, value in iter(content)} for content in iter(contents)]
         dataframe = pd.DataFrame.from_records(stocks)
         long = dataframe.drop(["bid", "demand"], axis=1, inplace=False).rename(columns={"ask": "price", "supply": "size"})
         short = dataframe.drop(["ask", "supply"], axis=1, inplace=False).rename(columns={"bid": "price", "demand": "size"})
-        long["security"] = int(Securities.Stock.Long)
-        short["security"] = int(Securities.Stock.Short)
         stocks = {Securities.Stock.Long: long[columns], Securities.Stock.Short: short[columns]}
         return stocks
 
@@ -149,13 +147,11 @@ class ETradeOptionPage(WebJsonPage):
 
     @staticmethod
     def options(instrument, contents):
-        columns = ["date", "ticker", "expire", "strike", "security", "price", "size", "volume", "interest"]
+        columns = ["date", "ticker", "expire", "strike", "price", "size", "volume", "interest"]
         contents = [{key: value.data for key, value in iter(content["put"])} for content in iter(contents)]
         dataframe = pd.DataFrame.from_records(contents)
         long = dataframe.drop(["bid", "demand"], axis=1, inplace=False).rename(columns={"ask": "price", "supply": "size"})
         short = dataframe.drop(["ask", "supply"], axis=1, inplace=False).rename(columns={"bid": "price", "demand": "size"})
-        long["security"] = int(instrument.Long)
-        short["security"] = int(instrument.Short)
         return {instrument.Long: long[columns], instrument.Short: short[columns]}
 
 
