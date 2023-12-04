@@ -27,7 +27,7 @@ SAVE = os.path.join(ROOT, "Library", "repository", "security")
 
 from webscraping.webreaders import WebAuthorizer, WebReader
 from support.synchronize import Consumer, FIFOQueue
-from finance.securities import DateRange, SecuritySaver
+from finance.securities import DateRange, SecurityProcessor, SecuritySaver
 
 from market import ETradeSecurityDownloader
 
@@ -58,14 +58,15 @@ class ETradeAuthorizer(WebAuthorizer, authorize=authorize, request=request, acce
 class ETradeReader(WebReader, delay=10): pass
 
 
-def main(tickers, *args, expires, parameters, **kwargs):
+def main(*args, tickers, expires, parameters, **kwargs):
     api = pd.read_csv(API, header=0, index_col="website").loc["etrade"].to_dict()
     source = FIFOQueue(tickers, size=None, name="TickerQueue")
     authorizer = ETradeAuthorizer(apikey=api["key"], apicode=api["code"], name="ETradeAuthorizer")
     with ETradeReader(authorizer=authorizer, name="ETradeReader") as reader:
         downloader = ETradeSecurityDownloader(source=reader, name="SecurityDownloader")
+        screener = SecurityProcessor(name="SecurityProcessor")
         saver = SecuritySaver(repository=SAVE, name="SecuritySaver")
-        pipeline = downloader + saver
+        pipeline = downloader + screener + saver
         consumer = Consumer(pipeline, source=source, name="ETradeSecurities")
         consumer.setup(expires=expires, **parameters)
         consumer.start()
@@ -77,7 +78,7 @@ if __name__ == "__main__":
     sysTickers = ["NVDA", "AMD", "AMC", "TSLA", "AAPL", "IWM", "AMZN", "SPY", "QQQ", "MSFT", "BAC", "BABA", "GOOGL", "META", "ZIM", "XOM", "INTC", "OXY", "CSCO", "COIN", "NIO"]
     sysExpires = DateRange([(Datetime.today() + Timedelta(days=1)).date(), (Datetime.today() + Timedelta(weeks=26)).date()])
     sysParameters = {"size": None, "interest": None, "volume": None}
-    main(sysTickers, expires=sysExpires, parameters=sysParameters)
+    main(tickers=sysTickers, expires=sysExpires, parameters=sysParameters)
 
 
 
