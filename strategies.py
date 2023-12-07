@@ -25,9 +25,9 @@ LOAD = os.path.join(ROOT, "Library", "repository", "security")
 SAVE = os.path.join(ROOT, "Library", "repository", "strategy")
 
 from support.synchronize import Consumer, FIFOQueue
-from finance.securities import DateRange, Securities, SecurityLoader, SecurityProcessor, SecurityCalculator
-from finance.strategies import Strategies, StrategyCalculator
-from finance.valuations import Valuations, ValuationCalculator, ValuationProcessor, ValuationSaver
+from finance.securities import DateRange, Securities, SecurityLoader, SecurityFilter, SecurityCalculator
+from finance.strategies import Strategies, StrategyParser, StrategyCalculator
+from finance.valuations import Valuations, ValuationCalculator, ValuationFilter, ValuationSaver
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -51,13 +51,14 @@ def main(*args, tickers, expires, parameters, **kwargs):
     strategies = [Strategies.Vertical.Put, Strategies.Vertical.Call, Strategies.Strangle.Long]
     valuations = [Valuations.Arbitrage.Minimum]
     loader = SecurityLoader(repository=LOAD, name="SecurityLoader")
-    processor = SecurityProcessor(name="SecurityProcessor")
+    processor = SecurityFilter(name="SecurityFilter")
     securities = SecurityCalculator(calculations=securities, name="SecurityCalculator")
+    parser = StrategyParser(name="StrategyParser")
     strategies = StrategyCalculator(calculations=strategies, name="StrategyCalculator")
     valuations = ValuationCalculator(calculations=valuations, name="ValuationCalculator")
-    screener = ValuationProcessor(name="ValuationScreener")
+    screener = ValuationFilter(name="ValuationScreener")
     saver = ValuationSaver(repository=SAVE, name="ValuationSaver")
-    pipeline = loader + processor + securities + strategies + valuations + screener + saver
+    pipeline = loader + processor + securities + parser + strategies + valuations + screener + saver
     consumer = Consumer(pipeline, source=source, name="ETradeStrategies")
     consumer.setup(tickers=tickers, expires=expires, **parameters)
     consumer.start()

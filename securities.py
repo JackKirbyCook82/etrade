@@ -27,7 +27,7 @@ SAVE = os.path.join(ROOT, "Library", "repository", "security")
 
 from webscraping.webreaders import WebAuthorizer, WebReader
 from support.synchronize import Consumer, FIFOQueue
-from finance.securities import DateRange, SecurityProcessor, SecuritySaver
+from finance.securities import DateRange, SecurityFilter, SecuritySaver
 
 from market import ETradeSecurityDownloader
 
@@ -64,9 +64,9 @@ def main(*args, tickers, expires, parameters, **kwargs):
     authorizer = ETradeAuthorizer(apikey=api["key"], apicode=api["code"], name="ETradeAuthorizer")
     with ETradeReader(authorizer=authorizer, name="ETradeReader") as reader:
         downloader = ETradeSecurityDownloader(source=reader, name="SecurityDownloader")
-        screener = SecurityProcessor(name="SecurityProcessor")
+        processor = SecurityFilter(name="SecurityFilter")
         saver = SecuritySaver(repository=SAVE, name="SecuritySaver")
-        pipeline = downloader + screener + saver
+        pipeline = downloader + processor + saver
         consumer = Consumer(pipeline, source=source, name="ETradeSecurities")
         consumer.setup(expires=expires, **parameters)
         consumer.start()
