@@ -24,9 +24,9 @@ API = os.path.join(ROOT, "Library", "api.csv")
 LOAD = os.path.join(ROOT, "Library", "repository", "security")
 SAVE = os.path.join(ROOT, "Library", "repository", "strategy")
 
-from support.synchronize import Consumer, FIFOQueue
-from finance.securities import DateRange, Securities, SecurityLoader, SecurityFilter, SecurityCalculator
-from finance.strategies import Strategies, StrategyParser, StrategyCalculator
+from support.synchronize import Routine
+from finance.securities import DateRange, Securities, SecurityLoader, SecurityFilter, SecurityParser, SecurityCalculator
+from finance.strategies import Strategies, StrategyCalculator
 from finance.valuations import Valuations, ValuationCalculator, ValuationFilter, ValuationSaver
 
 __version__ = "1.0.0"
@@ -46,20 +46,19 @@ pd.set_option("display.max_columns", 25)
 
 
 def main(*args, tickers, expires, parameters, **kwargs):
-    source = FIFOQueue(tickers, size=None, name="TickerQueue")
     securities = list(Securities)
-    strategies = [Strategies.Vertical.Put, Strategies.Vertical.Call, Strategies.Strangle.Long]
+    strategies = [Strategies.Vertical.Put, Strategies.Vertical.Call]
     valuations = [Valuations.Arbitrage.Minimum]
     loader = SecurityLoader(repository=LOAD, name="SecurityLoader")
     processor = SecurityFilter(name="SecurityFilter")
+    parser = SecurityParser(name="SecurityParser")
     securities = SecurityCalculator(calculations=securities, name="SecurityCalculator")
-    parser = StrategyParser(name="StrategyParser")
     strategies = StrategyCalculator(calculations=strategies, name="StrategyCalculator")
     valuations = ValuationCalculator(calculations=valuations, name="ValuationCalculator")
     screener = ValuationFilter(name="ValuationScreener")
     saver = ValuationSaver(repository=SAVE, name="ValuationSaver")
-    pipeline = loader + processor + securities + parser + strategies + valuations + screener + saver
-    consumer = Consumer(pipeline, source=source, name="ETradeStrategies")
+    pipeline = loader + processor + parser + securities + strategies + valuations + screener + saver
+    consumer = Routine(pipeline, name="ETradeStrategies")
     consumer.setup(tickers=tickers, expires=expires, **parameters)
     consumer.start()
     consumer.join()
@@ -69,7 +68,7 @@ if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
     sysTickers = ["NVDA", "AMD", "AMC", "TSLA", "AAPL", "IWM", "AMZN", "SPY", "QQQ", "MSFT", "BAC", "BABA", "GOOGL", "META", "ZIM", "XOM", "INTC", "OXY", "CSCO", "COIN", "NIO"]
     sysExpires = DateRange([(Datetime.today() + Timedelta(days=1)).date(), (Datetime.today() + Timedelta(weeks=26)).date()])
-    sysParameters = {"size": None, "interest": None, "volume": None, "apy": 0.0, "npv": 0.0, "fees": 0.0, "discount": 0.0}
+    sysParameters = {"interest": 100, "volume": 100, "size": 100, "apy": 0.0, "npv": 0.0, "cost": 0.0, "fees": 0.0, "discount": 0.0}
     main(tickers=sysTickers, expires=sysExpires, parameters=sysParameters)
 
 
