@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Created on Weds Jul 12 2023
-@name:   ETrade Strategies Calculation
+Created on Weds Dec 13 2023
+@name:   ETrade Valuation Calculation
 @author: Jack Kirby Cook
 
 """
@@ -24,9 +24,8 @@ REPOSITORY = os.path.join(ROOT, "Library", "repository")
 API = os.path.join(ROOT, "Library", "api.csv")
 
 from support.synchronize import Routine
-from finance.securities import DateRange, Securities, SecurityLoader, SecurityFilter, SecurityCalculator
-from finance.strategies import Strategies, StrategyCalculator
-from finance.valuations import Valuations, ValuationCalculator, ValuationFilter, ValuationSaver
+from finance.securities import DateRange
+from finance.valuations import ValuationLoader, ValuationFilter
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -45,20 +44,10 @@ pd.set_option("display.max_columns", 25)
 
 
 def main(*args, tickers, expires, parameters, **kwargs):
-    securities = list(Securities)
-    strategies = [Strategies.Vertical.Put, Strategies.Vertical.Call]
-    valuations = [Valuations.Arbitrage.Minimum]
-    security_loader = SecurityLoader(repository=REPOSITORY, name="SecurityLoader")
-    security_filter = SecurityFilter(name="SecurityFilter")
-    security_calculator = SecurityCalculator(calculations=securities, name="SecurityCalculator")
-    strategy_calculator = StrategyCalculator(calculations=strategies, name="StrategyCalculator")
-    valuation_calculator = ValuationCalculator(calculations=valuations, name="ValuationCalculator")
+    valuation_loader = ValuationLoader(repository=REPOSITORY, name="ValuationLoader")
     valuation_filter = ValuationFilter(name="ValuationFilter")
-    valuation_saver = ValuationSaver(repository=REPOSITORY, name="ValuationSaver")
-    pipeline = security_loader + security_filter
-    pipeline = pipeline + security_calculator + strategy_calculator + valuation_calculator
-    pipeline = pipeline + valuation_filter + valuation_saver
-    consumer = Routine(pipeline, name="ETradeStrategies")
+    pipeline = valuation_loader + valuation_filter
+    consumer = Routine(pipeline, name="ETradeValuation")
     consumer.setup(tickers=tickers, expires=expires, **parameters)
     consumer.start()
     consumer.join()
@@ -68,7 +57,7 @@ if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
     sysTickers = ["NVDA", "AMD", "AMC", "TSLA", "AAPL", "IWM", "AMZN", "SPY", "QQQ", "MSFT", "BAC", "BABA", "GOOGL", "META", "ZIM", "XOM", "INTC", "OXY", "CSCO", "COIN", "NIO"]
     sysExpires = DateRange([(Datetime.today() + Timedelta(days=1)).date(), (Datetime.today() + Timedelta(weeks=26)).date()])
-    sysParameters = {"volume": 100, "interest": 100, "size": 25, "apy": 0.0, "fees": 0.0, "discount": 0.0}
+    sysParameters = {}
     main(tickers=sysTickers, expires=sysExpires, parameters=sysParameters)
 
 

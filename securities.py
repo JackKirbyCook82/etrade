@@ -22,8 +22,8 @@ PROJECT = os.path.abspath(os.path.join(MAIN, os.pardir))
 ROOT = os.path.abspath(os.path.join(PROJECT, os.pardir))
 if ROOT not in sys.path:
     sys.path.append(ROOT)
+REPOSITORY = os.path.join(ROOT, "Library", "repository")
 API = os.path.join(ROOT, "Library", "api.csv")
-SAVE = os.path.join(ROOT, "Library", "repository", "security")
 
 from webscraping.webreaders import WebAuthorizer, WebReader
 from support.synchronize import Consumer, FIFOQueue
@@ -63,10 +63,10 @@ def main(*args, tickers, expires, parameters, **kwargs):
     source = FIFOQueue(tickers, size=None, name="TickerQueue")
     authorizer = ETradeAuthorizer(apikey=api["key"], apicode=api["code"], name="ETradeAuthorizer")
     with ETradeReader(authorizer=authorizer, name="ETradeReader") as reader:
-        downloader = ETradeSecurityDownloader(source=reader, name="SecurityDownloader")
-        processor = SecurityFilter(name="SecurityFilter")
-        saver = SecuritySaver(repository=SAVE, name="SecuritySaver")
-        pipeline = downloader + processor + saver
+        security_downloader = ETradeSecurityDownloader(source=reader, name="SecurityDownloader")
+        security_filter = SecurityFilter(name="SecurityFilter")
+        security_saver = SecuritySaver(repository=REPOSITORY, name="SecuritySaver")
+        pipeline = security_downloader + security_filter + security_saver
         consumer = Consumer(pipeline, source=source, name="ETradeSecurities")
         consumer.setup(expires=expires, **parameters)
         consumer.start()
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
     sysTickers = ["NVDA", "AMD", "AMC", "TSLA", "AAPL", "IWM", "AMZN", "SPY", "QQQ", "MSFT", "BAC", "BABA", "GOOGL", "META", "ZIM", "XOM", "INTC", "OXY", "CSCO", "COIN", "NIO"]
     sysExpires = DateRange([(Datetime.today() + Timedelta(days=1)).date(), (Datetime.today() + Timedelta(weeks=26)).date()])
-    sysParameters = {"size": None, "interest": None, "volume": None}
+    sysParameters = {"volume": None, "interest": None, "size": None}
     main(tickers=sysTickers, expires=sysExpires, parameters=sysParameters)
 
 

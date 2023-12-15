@@ -13,6 +13,7 @@ import pandas as pd
 from datetime import date as Date
 from datetime import datetime as Datetime
 from datetime import timezone as Timezone
+from collections import namedtuple as ntuple
 
 from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
@@ -156,6 +157,7 @@ class ETradeOptionPage(WebJsonPage):
 
 
 pages = {"stock": ETradeStockPage, "expire": ETradeExpirePage, "option": ETradeOptionPage}
+class ETradeSecurityQuery(ntuple("Query", "current ticker expire securities")): pass
 class ETradeSecurityDownloader(Downloader, pages=pages):
     def execute(self, ticker, *args, expires, **kwargs):
         underlying = self.pages["stock"](ticker, *args, **kwargs)
@@ -170,7 +172,7 @@ class ETradeSecurityDownloader(Downloader, pages=pages):
             current = Datetime.now()
             stocks = self.pages["stock"](ticker, *args, **kwargs)
             options = self.pages["option"](ticker, *args, expire=expire, strike=strike, **kwargs)
-            yield current, ticker, expire, stocks | options
+            yield ETradeSecurityQuery(current, ticker, expire, stocks | options)
 
 
 
