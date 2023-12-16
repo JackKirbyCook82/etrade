@@ -48,13 +48,13 @@ def main(*args, tickers, expires, parameters, **kwargs):
     securities = list(Securities)
     strategies = [Strategies.Vertical.Put, Strategies.Vertical.Call]
     valuations = [Valuations.Arbitrage.Minimum]
-    security_loader = SecurityLoader(repository=REPOSITORY, name="SecurityLoader")
+    security_loader = SecurityLoader(name="SecurityLoader", repository=REPOSITORY, securities=securities)
     security_filter = SecurityFilter(name="SecurityFilter")
-    security_calculator = SecurityCalculator(calculations=securities, name="SecurityCalculator")
-    strategy_calculator = StrategyCalculator(calculations=strategies, name="StrategyCalculator")
-    valuation_calculator = ValuationCalculator(calculations=valuations, name="ValuationCalculator")
+    security_calculator = SecurityCalculator(name="SecurityCalculator", calculations=securities)
+    strategy_calculator = StrategyCalculator(name="StrategyCalculator", calculations=strategies)
+    valuation_calculator = ValuationCalculator(name="ValuationCalculator", calculations=valuations)
     valuation_filter = ValuationFilter(name="ValuationFilter")
-    valuation_saver = ValuationSaver(repository=REPOSITORY, name="ValuationSaver")
+    valuation_saver = ValuationSaver(name="ValuationSaver", repository=REPOSITORY)
     pipeline = security_loader + security_filter
     pipeline = pipeline + security_calculator + strategy_calculator + valuation_calculator
     pipeline = pipeline + valuation_filter + valuation_saver

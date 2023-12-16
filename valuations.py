@@ -24,8 +24,8 @@ REPOSITORY = os.path.join(ROOT, "Library", "repository")
 API = os.path.join(ROOT, "Library", "api.csv")
 
 from support.synchronize import Routine
-from finance.securities import DateRange
-from finance.valuations import ValuationLoader, ValuationFilter
+from finance.securities import DateRange, Securities
+from finance.valuations import Valuations, ValuationLoader, ValuationFilter, ValuationMarket
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -44,9 +44,12 @@ pd.set_option("display.max_columns", 25)
 
 
 def main(*args, tickers, expires, parameters, **kwargs):
-    valuation_loader = ValuationLoader(repository=REPOSITORY, name="ValuationLoader")
+    securities = list(Securities)
+    valuations = [Valuations.Arbitrage.Minimum]
+    valuation_loader = ValuationLoader(name="ValuationLoader", repository=REPOSITORY, securities=securities, valuations=valuations)
     valuation_filter = ValuationFilter(name="ValuationFilter")
-    pipeline = valuation_loader + valuation_filter
+    valuation_market = ValuationMarket(name="ValuationAnalysis")
+    pipeline = valuation_loader + valuation_filter + valuation_market
     consumer = Routine(pipeline, name="ETradeValuation")
     consumer.setup(tickers=tickers, expires=expires, **parameters)
     consumer.start()
