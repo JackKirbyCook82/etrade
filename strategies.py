@@ -45,14 +45,11 @@ pd.set_option("display.max_columns", 25)
 
 
 def main(*args, tickers, expires, parameters, **kwargs):
-    securities = list(Securities)
-    strategies = [Strategies.Vertical.Put, Strategies.Vertical.Call]
-    valuations = [Valuations.Arbitrage.Minimum]
-    security_loader = SecurityLoader(name="SecurityLoader", repository=REPOSITORY, securities=securities)
+    security_loader = SecurityLoader(name="SecurityLoader", repository=REPOSITORY)
     security_filter = SecurityFilter(name="SecurityFilter")
-    security_calculator = SecurityCalculator(name="SecurityCalculator", calculations=securities)
-    strategy_calculator = StrategyCalculator(name="StrategyCalculator", calculations=strategies)
-    valuation_calculator = ValuationCalculator(name="ValuationCalculator", calculations=valuations)
+    security_calculator = SecurityCalculator(name="SecurityCalculator", calculations=list(Securities))
+    strategy_calculator = StrategyCalculator(name="StrategyCalculator", calculations=[Strategies.Vertical.Put, Strategies.Vertical.Call])
+    valuation_calculator = ValuationCalculator(name="ValuationCalculator", calculations=[Valuations.Arbitrage.Minimum])
     valuation_filter = ValuationFilter(name="ValuationFilter")
     valuation_saver = ValuationSaver(name="ValuationSaver", repository=REPOSITORY)
     pipeline = security_loader + security_filter
