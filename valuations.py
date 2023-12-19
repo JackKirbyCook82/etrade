@@ -12,8 +12,6 @@ import logging
 import warnings
 import xarray as xr
 import pandas as pd
-from datetime import datetime as Datetime
-from datetime import timedelta as Timedelta
 
 MAIN = os.path.dirname(os.path.realpath(__file__))
 PROJECT = os.path.abspath(os.path.join(MAIN, os.pardir))
@@ -24,8 +22,7 @@ REPOSITORY = os.path.join(ROOT, "Library", "repository")
 API = os.path.join(ROOT, "Library", "api.csv")
 
 from support.synchronize import Routine
-from finance.securities import DateRange
-from finance.valuations import Valuations, ValuationLoader, ValuationFilter, ValuationMarket
+from finance.valuations import Valuations, ValuationFilter, ValuationLoader
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -46,8 +43,7 @@ pd.set_option("display.max_columns", 25)
 def main(*args, tickers, expires, parameters, **kwargs):
     valuation_loader = ValuationLoader(name="ValuationLoader", valuations=[Valuations.Arbitrage.Minimum], repository=REPOSITORY)
     valuation_filter = ValuationFilter(name="ValuationFilter")
-    valuation_market = ValuationMarket(name="ValuationAnalysis")
-    pipeline = valuation_loader + valuation_filter + valuation_market
+    pipeline = valuation_loader + valuation_filter
     consumer = Routine(pipeline, name="ETradeValuation")
     consumer.setup(tickers=tickers, expires=expires, **parameters)
     consumer.start()
@@ -56,10 +52,4 @@ def main(*args, tickers, expires, parameters, **kwargs):
 
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
-    sysTickers = ["NVDA", "AMD", "AMC", "TSLA", "AAPL", "IWM", "AMZN", "SPY", "QQQ", "MSFT", "BAC", "BABA", "GOOGL", "META", "ZIM", "XOM", "INTC", "OXY", "CSCO", "COIN", "NIO"]
-    sysExpires = DateRange([(Datetime.today() + Timedelta(days=1)).date(), (Datetime.today() + Timedelta(weeks=26)).date()])
-    sysParameters = {}
-    main(tickers=sysTickers, expires=sysExpires, parameters=sysParameters)
-
-
-
+    main(tickers=None, expires=None, parameters={})
