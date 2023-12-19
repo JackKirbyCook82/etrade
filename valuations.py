@@ -22,7 +22,8 @@ REPOSITORY = os.path.join(ROOT, "Library", "repository")
 API = os.path.join(ROOT, "Library", "api.csv")
 
 from support.synchronize import Routine
-from finance.valuations import Valuations, ValuationFilter, ValuationLoader
+from finance.valuations import ValuationFilter, ValuationLoader
+from finance.markets import MarketCalculator
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -41,9 +42,10 @@ pd.set_option("display.max_columns", 25)
 
 
 def main(*args, tickers, expires, parameters, **kwargs):
-    valuation_loader = ValuationLoader(name="ValuationLoader", valuations=[Valuations.Arbitrage.Minimum], repository=REPOSITORY)
+    valuation_loader = ValuationLoader(name="ValuationLoader", repository=REPOSITORY)
     valuation_filter = ValuationFilter(name="ValuationFilter")
-    pipeline = valuation_loader + valuation_filter
+    market_calculator = MarketCalculator(name="MarketCalculator")
+    pipeline = valuation_loader + valuation_filter + market_calculator
     consumer = Routine(pipeline, name="ETradeValuation")
     consumer.setup(tickers=tickers, expires=expires, **parameters)
     consumer.start()
@@ -52,4 +54,5 @@ def main(*args, tickers, expires, parameters, **kwargs):
 
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
-    main(tickers=None, expires=None, parameters={})
+    sysParameters = {"apy": 0.05}
+    main(tickers=None, expires=None, parameters=sysParameters)

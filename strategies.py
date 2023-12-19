@@ -51,8 +51,7 @@ def main(*args, tickers, expires, parameters, **kwargs):
     valuation_calculator = ValuationCalculator(name="ValuationCalculator", calculations=[Valuations.Arbitrage.Minimum])
     valuation_filter = ValuationFilter(name="ValuationFilter")
     valuation_saver = ValuationSaver(name="ValuationSaver", repository=REPOSITORY)
-    pipeline = security_loader + security_filter + security_calculator
-    pipeline = pipeline + strategy_calculator
+    pipeline = security_loader + security_filter + security_calculator + strategy_calculator
     pipeline = pipeline + valuation_calculator + valuation_filter + valuation_saver
     consumer = Routine(pipeline, name="ETradeStrategies")
     consumer.setup(tickers=tickers, expires=expires, **parameters)
