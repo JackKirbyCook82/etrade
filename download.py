@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 """
 Created on Weds Jul 12 2023
@@ -22,7 +21,7 @@ PROJECT = os.path.abspath(os.path.join(MAIN, os.pardir))
 ROOT = os.path.abspath(os.path.join(PROJECT, os.pardir))
 if ROOT not in sys.path:
     sys.path.append(ROOT)
-REPOSITORY = os.path.join(ROOT, "Library", "repository")
+REPOSITORY = os.path.join(ROOT, "Library", "repository", "etrade")
 API = os.path.join(ROOT, "Library", "api.csv")
 
 from webscraping.webreaders import WebAuthorizer, WebReader
@@ -67,10 +66,10 @@ def main(*args, tickers, expires, parameters, **kwargs):
         security_filter = SecurityFilter(name="SecurityFilter")
         security_saver = SecuritySaver(name="SecuritySaver", repository=REPOSITORY)
         pipeline = security_downloader + security_filter + security_saver
-        consumer = Consumer(pipeline, name="ETradeSecurities", source=source)
-        consumer.setup(expires=expires, **parameters)
-        consumer.start()
-        consumer.join()
+        routine = Consumer(pipeline, name="ETradeDownloader", source=source)
+        routine.setup(expires=expires, **parameters)
+        routine.start()
+        routine.join()
 
 
 if __name__ == "__main__":

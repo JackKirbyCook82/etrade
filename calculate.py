@@ -18,7 +18,7 @@ PROJECT = os.path.abspath(os.path.join(MAIN, os.pardir))
 ROOT = os.path.abspath(os.path.join(PROJECT, os.pardir))
 if ROOT not in sys.path:
     sys.path.append(ROOT)
-REPOSITORY = os.path.join(ROOT, "Library", "repository")
+REPOSITORY = os.path.join(ROOT, "Library", "repository", "etrade")
 API = os.path.join(ROOT, "Library", "api.csv")
 
 from support.synchronize import Routine
@@ -53,10 +53,10 @@ def main(*args, tickers, expires, parameters, **kwargs):
     valuation_saver = ValuationSaver(name="ValuationSaver", repository=REPOSITORY)
     pipeline = security_loader + security_filter + security_calculator + strategy_calculator
     pipeline = pipeline + valuation_calculator + valuation_filter + valuation_saver
-    consumer = Routine(pipeline, name="ETradeStrategies")
-    consumer.setup(tickers=tickers, expires=expires, **parameters)
-    consumer.start()
-    consumer.join()
+    routine = Routine(pipeline, name="ETradeCalculation")
+    routine.setup(tickers=tickers, expires=expires, **parameters)
+    routine.start()
+    routine.join()
 
 
 if __name__ == "__main__":
