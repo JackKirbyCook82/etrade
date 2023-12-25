@@ -59,7 +59,7 @@ class ETradeReader(WebReader, delay=10): pass
 
 def main(*args, tickers, expires, parameters, **kwargs):
     api = pd.read_csv(API, header=0, index_col="website").loc["etrade"].to_dict()
-    source = FIFOQueue(tickers, name="TickerQueue", size=None)
+    source = FIFOQueue(tickers, name="TickerQueue", limit=None)
     authorizer = ETradeAuthorizer(name="ETradeAuthorizer", apikey=api["key"], apicode=api["code"])
     with ETradeReader(authorizer=authorizer, name="ETradeReader") as reader:
         security_downloader = ETradeSecurityDownloader(name="SecurityDownloader", source=reader)

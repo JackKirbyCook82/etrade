@@ -27,7 +27,7 @@ API = os.path.join(ROOT, "Library", "api.csv")
 from finance.securities import DateRange, Securities, SecurityLoader, SecurityFilter, SecurityCalculator
 from finance.strategies import Strategies, StrategyCalculator
 from finance.valuations import Valuations, ValuationFilter, ValuationCalculator
-from finance.targets import TargetTerminal
+from finance.targets import TargetCalculator
 from webscraping.webreaders import WebAuthorizer, WebReader
 from support.synchronize import Routine
 
@@ -60,33 +60,36 @@ class ETradeAuthorizer(WebAuthorizer, authorize=authorize, request=request, acce
 class ETradeReader(WebReader, delay=10): pass
 
 
-def downloader():
+def terminal():
+    frame = lambda title: gui.Frame(title, [[]])
+    layout = [[frame("Prospects"), frame("Pending"), frame("Portfolio")], [gui.Exit()]]
+    window = gui.Window("Title", layout)
+    while True:
+        event, values = window.read()
+        if event in (gui.WINDOW_CLOSED, "Exit"):
+            break
+
+
+def main(*args, tickers, expires, parameters, **kwargs):
     api = pd.read_csv(API, header=0, index_col="website").loc["etrade"].to_dict()
     authorizer = ETradeAuthorizer(name="ETradeAuthorizer", apikey=api["key"], apicode=api["code"])
     reader = ETradeReader(authorizer=authorizer, name="ETradeReader")
     security_downloader = ETradeSecurityDownloader(name="SecurityDownloader", source=reader)
     security_filter = SecurityFilter(name="SecurityFilter")
-    return security_downloader + security_filter
+    downloader_pipeline = security_downloader + security_filter
 
-def loader():
     security_loader = SecurityLoader(name="SecurityLoader", repository=REPOSITORY)
     security_filter = SecurityFilter(name="SecurityFilter")
-    return security_loader + security_filter
+    loader_pipeline = security_loader + security_filter
 
-def evaluator():
     security_calculator = SecurityCalculator(name="SecurityCalculator", calculations=list(Securities))
     strategy_calculator = StrategyCalculator(name="StrategyCalculator", calculations=list(Strategies))
     valuation_calculator = ValuationCalculator(name="ValuationCalculator", calculations=[Valuations.Arbitrage.Minimum])
     valuation_filter = ValuationFilter(name="ValuationFilter")
-    return security_calculator + strategy_calculator + valuation_calculator + valuation_filter
+    target_calculator = TargetCalculator(name="TargetCalculator")
+    calculator_pipeline = security_calculator + strategy_calculator + valuation_calculator + valuation_filter + target_calculator
 
-def targeting():
-    target_terminal = TargetTerminal(name="TargetCalculator", size=None, tenure=None)
-    return target_terminal
-
-
-def main(*args, tickers, expires, parameters, **kwargs):
-    pipeline = loader() + evaluator() + targeting()
+    pipeline = loader_pipeline + calculator_pipeline
     routine = Routine(pipeline, name="ETradeRoutine")
     routine.setup(tickers=tickers, expires=expires, **parameters)
     routine.start()
@@ -97,7 +100,7 @@ if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
     sysTickers = ["NVDA", "AMD", "AMC", "TSLA", "AAPL", "IWM", "AMZN", "SPY", "QQQ", "MSFT", "BAC", "BABA", "GOOGL", "META", "ZIM", "XOM", "INTC", "OXY", "CSCO", "COIN", "NIO"]
     sysExpires = DateRange([(Datetime.today() + Timedelta(days=1)).date(), (Datetime.today() + Timedelta(weeks=52)).date()])
-    sysParameters = {"volume": 100, "interest": 100, "size": 25, "apy": 0.50, "funds": None, "fees": 5.0, "discount": 0.0}
+    sysParameters = {"volume": 100, "interest": 100, "size": 25, "apy": 0.25, "funds": None, "fees": 5.0, "discount": 0.0}
     main(tickers=sysTickers, expires=sysExpires, parameters=sysParameters)
 
 
