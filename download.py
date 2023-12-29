@@ -19,13 +19,13 @@ from datetime import timedelta as Timedelta
 MAIN = os.path.dirname(os.path.realpath(__file__))
 PROJECT = os.path.abspath(os.path.join(MAIN, os.pardir))
 ROOT = os.path.abspath(os.path.join(PROJECT, os.pardir))
-if ROOT not in sys.path:
-    sys.path.append(ROOT)
 REPOSITORY = os.path.join(ROOT, "Library", "repository", "etrade")
 API = os.path.join(ROOT, "Library", "api.csv")
+if ROOT not in sys.path:
+    sys.path.append(ROOT)
 
+from support.synchronize import Routine, Locks
 from webscraping.webreaders import WebAuthorizer, WebReader
-from support.synchronize import Consumer, FIFOQueue
 from finance.securities import DateRange, SecurityFilter, SecuritySaver
 
 from market import ETradeSecurityDownloader
@@ -58,16 +58,16 @@ class ETradeReader(WebReader, delay=10): pass
 
 
 def main(*args, tickers, expires, parameters, **kwargs):
+    locks = Locks(name="SecurityLocks", timeout=None)
     api = pd.read_csv(API, header=0, index_col="website").loc["etrade"].to_dict()
-    source = FIFOQueue(tickers, name="TickerQueue", limit=None)
     authorizer = ETradeAuthorizer(name="ETradeAuthorizer", apikey=api["key"], apicode=api["code"])
     with ETradeReader(authorizer=authorizer, name="ETradeReader") as reader:
-        security_downloader = ETradeSecurityDownloader(name="SecurityDownloader", source=reader)
+        security_downloader = ETradeSecurityDownloader(name="SecurityDownloader", feed=reader)
         security_filter = SecurityFilter(name="SecurityFilter")
-        security_saver = SecuritySaver(name="SecuritySaver", repository=REPOSITORY)
+        security_saver = SecuritySaver(name="SecuritySaver", repository=REPOSITORY, locks=locks)
         pipeline = security_downloader + security_filter + security_saver
-        routine = Consumer(pipeline, name="ETradeDownloader", source=source)
-        routine.setup(expires=expires, **parameters)
+        routine = Routine(pipeline, name="SecurityThread")
+        routine.setup(tickers=tickers, expires=expires, **parameters)
         routine.start()
         routine.join()
 

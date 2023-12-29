@@ -16,15 +16,15 @@ import pandas as pd
 MAIN = os.path.dirname(os.path.realpath(__file__))
 PROJECT = os.path.abspath(os.path.join(MAIN, os.pardir))
 ROOT = os.path.abspath(os.path.join(PROJECT, os.pardir))
-if ROOT not in sys.path:
-    sys.path.append(ROOT)
 REPOSITORY = os.path.join(ROOT, "Library", "repository", "etrade")
 API = os.path.join(ROOT, "Library", "api.csv")
+if ROOT not in sys.path:
+    sys.path.append(ROOT)
 
-from support.synchronize import Routine
-from finance.securities import Securities, SecurityFilter, SecurityCalculator, SecurityLoader
+from support.synchronize import Routine, Locks
+from finance.securities import Securities, SecurityLoader, SecurityFilter, SecurityParser, SecurityCalculator
 from finance.strategies import Strategies, StrategyCalculator
-from finance.valuations import Valuations, ValuationFilter, ValuationCalculator, ValuationSaver
+from finance.valuations import Valuations, ValuationCalculator, ValuationFilter, ValuationSaver
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -43,17 +43,18 @@ pd.set_option("display.max_columns", 25)
 
 
 def main(*args, tickers, expires, parameters, **kwargs):
-    strategies = [Strategies.Strangle.Long, Strategies.Vertical.Put, Strategies.Vertical.Call, Strategies.Collar.Long, Strategies.Collar.Short]
-    security_loader = SecurityLoader(name="SecurityLoader", repository=REPOSITORY)
+    locks = Locks(name="ValuationLocks", timeout=None)
+    security_loader = SecurityLoader(name="SecurityLoader", repository=REPOSITORY, locks=locks)
     security_filter = SecurityFilter(name="SecurityFilter")
+    security_parser = SecurityParser(name="SecurityParser")
     security_calculator = SecurityCalculator(name="SecurityCalculator", calculations=list(Securities))
-    strategy_calculator = StrategyCalculator(name="StrategyCalculator", calculations=strategies)
+    strategy_calculator = StrategyCalculator(name="StrategyCalculator", calculations=list(Strategies))
     valuation_calculator = ValuationCalculator(name="ValuationCalculator", calculations=[Valuations.Arbitrage.Minimum])
     valuation_filter = ValuationFilter(name="ValuationFilter")
-    valuation_saver = ValuationSaver(name="ValuationSaver", repository=REPOSITORY)
-    pipeline = security_loader + security_filter + security_calculator + strategy_calculator
-    pipeline = pipeline + valuation_calculator + valuation_filter + valuation_saver
-    routine = Routine(pipeline, name="ETradeCalculation")
+    valuation_saver = ValuationSaver(name="ValuationSaver", repository=REPOSITORY, locks=locks)
+    pipeline = security_loader + security_filter + security_parser + security_calculator
+    pipeline = pipeline + strategy_calculator + valuation_calculator + valuation_filter + valuation_saver
+    routine = Routine(pipeline, name="ValuationThread")
     routine.setup(tickers=tickers, expires=expires, **parameters)
     routine.start()
     routine.join()
@@ -61,7 +62,7 @@ def main(*args, tickers, expires, parameters, **kwargs):
 
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
-    sysParameters = {"volume": 25, "interest": 25, "size": 5, "apy": 0.0, "fees": 0.0, "discount": 0.0}
+    sysParameters = {"volume": 100, "interest": 100, "size": 10, "apy": 0.0, "fees": 0.0, "discount": 0.0}
     main(tickers=None, expires=None, parameters=sysParameters)
 
 
