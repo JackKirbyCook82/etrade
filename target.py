@@ -56,7 +56,7 @@ def main(*args, tickers, expires, parameters, **kwargs):
 
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
-    sysParameters = {"size": 10, "apy": 0.25, "funds": None, "tenure": None, "limit": 15}
+    sysParameters = {"size": 25, "apy": 0.10, "funds": None, "liquidity": 0.10, "limit": None, "tenure": None}
     main(tickers=None, expires=None, parameters=sysParameters)
 
 

@@ -159,7 +159,7 @@ class ETradeOptionPage(WebJsonPage):
         return {longs[instrument]: long[columns], shorts[instrument]: short[columns]}
 
 
-class ETradeSecurityQuery(ntuple("Query", "current ticker expire securities")): pass
+class ETradeSecurityQuery(ntuple("Query", "current ticker expire stocks options")): pass
 class ETradeSecurityDownloader(Downloader):
     def __getitem__(self, key): return self.pages[key]
     def __init__(self, *args, name, **kwargs):
@@ -182,7 +182,7 @@ class ETradeSecurityDownloader(Downloader):
                 current = Datetime.now()
                 stocks = self.pages["stock"](ticker, *args, **kwargs)
                 options = self.pages["option"](ticker, *args, expire=expire, strike=strike, **kwargs)
-                yield ETradeSecurityQuery(current, ticker, expire, stocks | options)
+                yield ETradeSecurityQuery(current, ticker, expire, stocks, options)
 
     @property
     def pages(self): return self.__pages
