@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on Weds Jul 12 2023
-@name:   ETrade Target Calculation
+@name:   ETrade Equilibrium Calculation
 @author: Jack Kirby Cook
 
 """
@@ -22,8 +22,7 @@ if ROOT not in sys.path:
     sys.path.append(ROOT)
 
 from support.synchronize import Routine, Locks
-from finance.valuations import ValuationLoader, ValuationFilter
-from finance.targets import TargetCalculator, TargetTable
+from finance.equilibriums import SupplyDemandLoader, EquilibriumCalculator, EquilibriumTable
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -42,13 +41,12 @@ pd.set_option("display.max_columns", 25)
 
 
 def main(*args, tickers, expires, parameters, **kwargs):
-    locks = Locks(name="TargetLocks", timeout=None)
-    valuation_loader = ValuationLoader(name="ValuationLoader", repository=REPOSITORY, locks=locks)
-    valuation_filter = ValuationFilter(name="ValuationFilter")
-    target_calculator = TargetCalculator(name="TargetCalculator")
-    target_table = TargetTable(name="TargetTable")
-    pipeline = valuation_loader + valuation_filter + target_calculator + target_table
-    routine = Routine(pipeline, name="TargetThread")
+    locks = Locks(name="EquilibriumLocks", timeout=None)
+    equilibrium_loader = SupplyDemandLoader(name="EquilibriumLoader", repository=REPOSITORY, locks=locks)
+    equilibrium_calculator = EquilibriumCalculator(name="EquilibriumCalculator")
+    equilibrium_table = EquilibriumTable(name="EquilibriumTable")
+    pipeline = equilibrium_loader + equilibrium_calculator + equilibrium_table
+    routine = Routine(pipeline, name="EquilibriumThread")
     routine.setup(tickers=tickers, expires=expires, **parameters)
     routine.start()
     routine.join()
@@ -56,7 +54,7 @@ def main(*args, tickers, expires, parameters, **kwargs):
 
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
-    sysParameters = {"size": 25, "liquidity": 0.10, "apy": 0.10, "funds": 250000, "limit": None, "tenure": None}
+    sysParameters = {"size": 25, "liquidity": 0.10, "apy": 0.10}
     main(tickers=None, expires=None, parameters=sysParameters)
 
 
