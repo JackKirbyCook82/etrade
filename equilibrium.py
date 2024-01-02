@@ -23,7 +23,7 @@ if ROOT not in sys.path:
 
 from support.files import Files
 from support.synchronize import Routine
-from finance.equilibriums import SupplyDemandLoader, EquilibriumCalculator, EquilibriumWriter, EquilibriumTable
+from finance.equilibriums import SupplyDemandReader, EquilibriumCalculator, EquilibriumWriter, EquilibriumTable
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -43,11 +43,11 @@ pd.set_option("display.max_columns", 25)
 
 def main(*args, tickers, expires, parameters, **kwargs):
     files = Files(name="ETradeFiles", repository=REPOSITORY, timeout=None)
-    table = EquilibriumTable(name="EquilibriumTable", size=None, timeout=None)
-    equilibrium_loader = SupplyDemandLoader(name="EquilibriumLoader", source=files)
+    table = EquilibriumTable(name="EquilibriumTable", capacity=None, timeout=None)
+    equilibrium_reader = SupplyDemandReader(name="SupplyDemandReader", source=files)
     equilibrium_calculator = EquilibriumCalculator(name="EquilibriumCalculator")
     equilibrium_writer = EquilibriumWriter(name="EquilibriumWriter", destination=table)
-    pipeline = equilibrium_loader + equilibrium_calculator + equilibrium_writer
+    pipeline = equilibrium_reader + equilibrium_calculator + equilibrium_writer
     routine = Routine(pipeline, name="EquilibriumThread")
     routine.setup(tickers=tickers, expires=expires, **parameters)
     routine.start()

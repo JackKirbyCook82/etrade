@@ -27,7 +27,7 @@ if ROOT not in sys.path:
 from support.files import Files
 from support.synchronize import Routine
 from webscraping.webreaders import WebAuthorizer, WebReader
-from finance.securities import DateRange, SecurityFilter, SecuritySaver
+from finance.securities import DateRange, SecurityFilter, SecurityWriter
 
 from market import ETradeSecurityDownloader
 
@@ -65,8 +65,8 @@ def main(*args, tickers, expires, parameters, **kwargs):
     with ETradeReader(authorizer=authorizer, name="ETradeReader") as reader:
         security_downloader = ETradeSecurityDownloader(name="SecurityDownloader", feed=reader)
         security_filter = SecurityFilter(name="SecurityFilter")
-        security_saver = SecuritySaver(name="SecuritySaver", destination=files)
-        pipeline = security_downloader + security_filter + security_saver
+        security_writer = SecurityWriter(name="SecurityWriter", destination=files)
+        pipeline = security_downloader + security_filter + security_writer
         routine = Routine(pipeline, name="SecurityThread")
         routine.setup(tickers=tickers, expires=expires, **parameters)
         routine.start()

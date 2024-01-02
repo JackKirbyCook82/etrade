@@ -23,9 +23,9 @@ if ROOT not in sys.path:
 
 from support.files import Files
 from support.synchronize import Routine
-from finance.securities import Securities, SecurityLoader, SecurityFilter, SecurityParser, SecurityCalculator
+from finance.securities import Securities, SecurityReader, SecurityFilter, SecurityParser, SecurityCalculator
 from finance.strategies import Strategies, StrategyCalculator
-from finance.valuations import Valuations, ValuationCalculator, ValuationFilter, ValuationSaver
+from finance.valuations import Valuations, ValuationCalculator, ValuationFilter, ValuationWriter
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -45,16 +45,16 @@ pd.set_option("display.max_columns", 25)
 
 def main(*args, tickers, expires, parameters, **kwargs):
     files = Files(name="ETradeFiles", repository=REPOSITORY, timeout=None)
-    security_loader = SecurityLoader(name="SecurityLoader", source=files)
+    security_reader = SecurityReader(name="SecurityReader", source=files)
     security_filter = SecurityFilter(name="SecurityFilter")
     security_parser = SecurityParser(name="SecurityParser")
     security_calculator = SecurityCalculator(name="SecurityCalculator", calculations=list(Securities))
     strategy_calculator = StrategyCalculator(name="StrategyCalculator", calculations=list(Strategies))
     valuation_calculator = ValuationCalculator(name="ValuationCalculator", calculations=[Valuations.Arbitrage.Minimum])
     valuation_filter = ValuationFilter(name="ValuationFilter")
-    valuation_saver = ValuationSaver(name="ValuationSaver", destination=files)
-    pipeline = security_loader + security_filter + security_parser + security_calculator
-    pipeline = pipeline + strategy_calculator + valuation_calculator + valuation_filter + valuation_saver
+    valuation_writer = ValuationWriter(name="ValuationWriter", destination=files)
+    pipeline = security_reader + security_filter + security_parser + security_calculator
+    pipeline = pipeline + strategy_calculator + valuation_calculator + valuation_filter + valuation_writer
     routine = Routine(pipeline, name="ValuationThread")
     routine.setup(tickers=tickers, expires=expires, **parameters)
     routine.start()
