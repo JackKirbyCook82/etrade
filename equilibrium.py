@@ -21,8 +21,9 @@ API = os.path.join(ROOT, "Library", "api.csv")
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 
-from support.synchronize import Routine, Locks
-from finance.equilibriums import SupplyDemandLoader, EquilibriumCalculator, EquilibriumTable
+from support.files import Files
+from support.synchronize import Routine
+from finance.equilibriums import SupplyDemandLoader, EquilibriumCalculator, EquilibriumWriter, EquilibriumTable
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -41,11 +42,12 @@ pd.set_option("display.max_columns", 25)
 
 
 def main(*args, tickers, expires, parameters, **kwargs):
-    locks = Locks(name="EquilibriumLocks", timeout=None)
-    equilibrium_loader = SupplyDemandLoader(name="EquilibriumLoader", repository=REPOSITORY, locks=locks)
+    files = Files(name="ETradeFiles", repository=REPOSITORY, timeout=None)
+    table = EquilibriumTable(name="EquilibriumTable", size=None, timeout=None)
+    equilibrium_loader = SupplyDemandLoader(name="EquilibriumLoader", source=files)
     equilibrium_calculator = EquilibriumCalculator(name="EquilibriumCalculator")
-    equilibrium_table = EquilibriumTable(name="EquilibriumTable")
-    pipeline = equilibrium_loader + equilibrium_calculator + equilibrium_table
+    equilibrium_writer = EquilibriumWriter(name="EquilibriumWriter", destination=table)
+    pipeline = equilibrium_loader + equilibrium_calculator + equilibrium_writer
     routine = Routine(pipeline, name="EquilibriumThread")
     routine.setup(tickers=tickers, expires=expires, **parameters)
     routine.start()

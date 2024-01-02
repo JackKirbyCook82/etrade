@@ -21,9 +21,10 @@ API = os.path.join(ROOT, "Library", "api.csv")
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 
-from support.synchronize import Routine, Locks
+from support.files import Files
+from support.synchronize import Routine
 from finance.valuations import ValuationLoader, ValuationFilter
-from finance.targets import TargetCalculator, TargetTable
+from finance.targets import TargetCalculator, TargetWriter, TargetTable
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -42,12 +43,13 @@ pd.set_option("display.max_columns", 25)
 
 
 def main(*args, tickers, expires, parameters, **kwargs):
-    locks = Locks(name="TargetLocks", timeout=None)
-    valuation_loader = ValuationLoader(name="ValuationLoader", repository=REPOSITORY, locks=locks)
+    files = Files(name="ETradeFiles", repository=REPOSITORY, timeout=None)
+    table = TargetTable(name="TargetTable", size=None, timeout=None)
+    valuation_loader = ValuationLoader(name="ValuationLoader", source=files)
     valuation_filter = ValuationFilter(name="ValuationFilter")
     target_calculator = TargetCalculator(name="TargetCalculator")
-    target_table = TargetTable(name="TargetTable")
-    pipeline = valuation_loader + valuation_filter + target_calculator + target_table
+    target_writer = TargetWriter(name="TargetWriter", destination=table)
+    pipeline = valuation_loader + valuation_filter + target_calculator + target_writer
     routine = Routine(pipeline, name="TargetThread")
     routine.setup(tickers=tickers, expires=expires, **parameters)
     routine.start()
