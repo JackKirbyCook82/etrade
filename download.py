@@ -24,10 +24,9 @@ API = os.path.join(ROOT, "Library", "api.csv")
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 
-from support.files import Files
 from support.synchronize import Routine
 from webscraping.webreaders import WebAuthorizer, WebReader
-from finance.securities import DateRange, SecurityFilter, SecurityWriter
+from finance.securities import DateRange, SecurityFile, SecurityFilter, SecurityWriter
 
 from market import ETradeSecurityDownloader
 
@@ -59,13 +58,13 @@ class ETradeReader(WebReader, delay=10): pass
 
 
 def main(*args, tickers, expires, parameters, **kwargs):
-    files = Files(name="EtradeFiles", repository=REPOSITORY, timeout=None)
+    file = SecurityFile(name="ETradeFiles", repository=REPOSITORY, timeout=None)
     api = pd.read_csv(API, header=0, index_col="website").loc["etrade"].to_dict()
     authorizer = ETradeAuthorizer(name="ETradeAuthorizer", apikey=api["key"], apicode=api["code"])
     with ETradeReader(authorizer=authorizer, name="ETradeReader") as reader:
         security_downloader = ETradeSecurityDownloader(name="SecurityDownloader", feed=reader)
         security_filter = SecurityFilter(name="SecurityFilter")
-        security_writer = SecurityWriter(name="SecurityWriter", destination=files)
+        security_writer = SecurityWriter(name="SecurityWriter", destination=file)
         pipeline = security_downloader + security_filter + security_writer
         routine = Routine(pipeline, name="SecurityThread")
         routine.setup(tickers=tickers, expires=expires, **parameters)

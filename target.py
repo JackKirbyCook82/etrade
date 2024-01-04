@@ -21,9 +21,8 @@ API = os.path.join(ROOT, "Library", "api.csv")
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 
-from support.files import Files
 from support.synchronize import Routine
-from finance.valuations import ValuationReader, ValuationFilter
+from finance.valuations import ValuationFile, ValuationReader, ValuationFilter
 from finance.targets import TargetCalculator, TargetWriter, TargetTable
 
 __version__ = "1.0.0"
@@ -43,7 +42,7 @@ pd.set_option("display.max_columns", 25)
 
 
 def main(*args, tickers, expires, parameters, **kwargs):
-    files = Files(name="ETradeFiles", repository=REPOSITORY, timeout=None)
+    files = ValuationFile(name="ETradeFiles", repository=REPOSITORY, timeout=None)
     table = TargetTable(name="TargetTable", capacity=None, timeout=None)
     valuation_reader = ValuationReader(name="ValuationReader", source=files)
     valuation_filter = ValuationFilter(name="ValuationFilter")

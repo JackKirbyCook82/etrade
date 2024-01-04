@@ -21,9 +21,8 @@ API = os.path.join(ROOT, "Library", "api.csv")
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 
-from support.files import Files
 from support.synchronize import Routine
-from finance.securities import Securities, SecurityReader, SecurityFilter, SecurityParser, SecurityCalculator
+from finance.securities import Securities, SecurityFile, SecurityReader, SecurityFilter, SecurityParser, SecurityCalculator
 from finance.strategies import Strategies, StrategyCalculator
 from finance.valuations import Valuations, ValuationCalculator, ValuationFilter, ValuationWriter
 
@@ -44,7 +43,7 @@ pd.set_option("display.max_columns", 25)
 
 
 def main(*args, tickers, expires, parameters, **kwargs):
-    files = Files(name="ETradeFiles", repository=REPOSITORY, timeout=None)
+    files = SecurityFile(name="ETradeFiles", repository=REPOSITORY, timeout=None)
     security_reader = SecurityReader(name="SecurityReader", source=files)
     security_filter = SecurityFilter(name="SecurityFilter")
     security_parser = SecurityParser(name="SecurityParser")

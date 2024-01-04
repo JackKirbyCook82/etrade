@@ -15,10 +15,10 @@ from datetime import datetime as Datetime
 from datetime import timezone as Timezone
 from collections import namedtuple as ntuple
 
+from support.pipelines import Producer
 from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
-from support.pipelines import Downloader
 from finance.securities import Instruments, Securities
 
 __version__ = "1.0.0"
@@ -160,7 +160,7 @@ class ETradeOptionPage(WebJsonPage):
 
 
 class ETradeSecurityQuery(ntuple("Query", "current ticker expire stocks options")): pass
-class ETradeSecurityDownloader(Downloader):
+class ETradeSecurityDownloader(Producer):
     def __getitem__(self, key): return self.pages[key]
     def __init__(self, *args, name, **kwargs):
         super().__init__(*args, name=name, **kwargs)
