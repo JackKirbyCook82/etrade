@@ -42,9 +42,9 @@ pd.set_option("display.max_columns", 25)
 
 
 def main(*args, tickers, expires, parameters, **kwargs):
-    files = ValuationFile(name="ETradeFiles", repository=REPOSITORY, timeout=None)
-    table = TargetTable(name="TargetTable", capacity=None, timeout=None)
-    valuation_reader = ValuationReader(name="ValuationReader", source=files)
+    file = ValuationFile(name="ValuationFile", repository=REPOSITORY, timeout=None)
+    table = TargetTable(name="TargetTable", timeout=None)
+    valuation_reader = ValuationReader(name="ValuationReader", source=file)
     valuation_filter = ValuationFilter(name="ValuationFilter")
     target_calculator = TargetCalculator(name="TargetCalculator")
     target_writer = TargetWriter(name="TargetWriter", destination=table)
@@ -57,7 +57,7 @@ def main(*args, tickers, expires, parameters, **kwargs):
 
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
-    sysParameters = {"size": 25, "liquidity": 0.10, "apy": 0.10, "funds": 250000, "limit": None, "tenure": None}
+    sysParameters = {"size": 25, "liquidity": 0.10, "apy": 0.25, "funds": 500000, "limit": 25, "tenure": None}
     main(tickers=None, expires=None, parameters=sysParameters)
 
 

@@ -22,7 +22,7 @@ if ROOT not in sys.path:
     sys.path.append(ROOT)
 
 from support.synchronize import Routine
-from finance.equilibriums import SupplyDemandFile, SupplyDemandReader, EquilibriumCalculator, EquilibriumWriter, EquilibriumTable
+from finance.equilibriums import SupplyDemandFile, SupplyDemandReader, SupplyDemandFilter, EquilibriumCalculator, EquilibriumWriter, EquilibriumTable
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -41,12 +41,13 @@ pd.set_option("display.max_columns", 25)
 
 
 def main(*args, tickers, expires, parameters, **kwargs):
-    files = SupplyDemandFile(name="ETradeFiles", repository=REPOSITORY, timeout=None)
-    table = EquilibriumTable(name="EquilibriumTable", capacity=None, timeout=None)
+    files = SupplyDemandFile(name="SupplyDemandFiles", repository=REPOSITORY, timeout=None)
+    table = EquilibriumTable(name="EquilibriumTable", timeout=None)
     equilibrium_reader = SupplyDemandReader(name="SupplyDemandReader", source=files)
+    equilibrium_filter = SupplyDemandFilter(name="SupplyDemandFilter")
     equilibrium_calculator = EquilibriumCalculator(name="EquilibriumCalculator")
     equilibrium_writer = EquilibriumWriter(name="EquilibriumWriter", destination=table)
-    pipeline = equilibrium_reader + equilibrium_calculator + equilibrium_writer
+    pipeline = equilibrium_reader + equilibrium_filter + equilibrium_calculator + equilibrium_writer
     routine = Routine(pipeline, name="EquilibriumThread")
     routine.setup(tickers=tickers, expires=expires, **parameters)
     routine.start()
@@ -55,7 +56,7 @@ def main(*args, tickers, expires, parameters, **kwargs):
 
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
-    sysParameters = {"size": 25, "liquidity": 0.10, "apy": 0.10}
+    sysParameters = {"size": 25, "liquidity": 0.10, "apy": 0.25}
     main(tickers=None, expires=None, parameters=sysParameters)
 
 

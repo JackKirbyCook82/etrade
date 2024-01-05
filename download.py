@@ -58,7 +58,7 @@ class ETradeReader(WebReader, delay=10): pass
 
 
 def main(*args, tickers, expires, parameters, **kwargs):
-    file = SecurityFile(name="ETradeFiles", repository=REPOSITORY, timeout=None)
+    file = SecurityFile(name="SecurityFile", repository=REPOSITORY, timeout=None)
     api = pd.read_csv(API, header=0, index_col="website").loc["etrade"].to_dict()
     authorizer = ETradeAuthorizer(name="ETradeAuthorizer", apikey=api["key"], apicode=api["code"])
     with ETradeReader(authorizer=authorizer, name="ETradeReader") as reader:
