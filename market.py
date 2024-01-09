@@ -57,7 +57,7 @@ class ETradeOptionURL(ETradeMarketsURL):
         return {"symbol": str(ticker), **options, **expires, **strikes}
 
     @staticmethod
-    def expires(*args, expire, **kwargs): return {"expiryYear": "{:04.0f}".format(expire.year), "expiryMonth": "{:02.0f}".format(expire.month), "expiryDay": "{:02.0f}".format(expire.day), "expiryType": "ALL"}
+    def expires(*args, expire, **kwargs): return {"expiryYear": f"{expire.year:04.0f}", "expiryMonth": f"{expire.month:02.0f}", "expiryDay": f"{expire.day:02.0f}", "expiryType": "ALL"}
     @staticmethod
     def strikes(*args, strike, **kwargs): return {"strikePriceNear": str(int(strike)), "noOfStrikes": "1000", "priceType": "ALL"}
     @staticmethod

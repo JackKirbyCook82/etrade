@@ -53,12 +53,12 @@ def main(*args, tickers, expires, parameters, **kwargs):
     valuation_calculator = ValuationCalculator(name="ValuationCalculator", calculations=[Valuations.Arbitrage.Minimum])
     valuation_filter = ValuationFilter(name="ValuationFilter")
     valuation_writer = ValuationWriter(name="ValuationWriter", destination=valuation_file)
-    pipeline = security_reader + security_filter + security_parser + security_calculator
-    pipeline = pipeline + strategy_calculator + valuation_calculator + valuation_filter + valuation_writer
-    routine = Routine(pipeline, name="ValuationThread")
-    routine.setup(tickers=tickers, expires=expires, **parameters)
-    routine.start()
-    routine.join()
+    valuation_pipeline = security_reader + security_filter + security_parser + security_calculator
+    valuation_pipeline = valuation_pipeline + strategy_calculator + valuation_calculator + valuation_filter + valuation_writer
+    valuation_thread = Routine(valuation_pipeline, name="ValuationThread")
+    valuation_thread.setup(tickers=tickers, expires=expires, **parameters)
+    valuation_thread.start()
+    valuation_thread.join()
 
 
 if __name__ == "__main__":

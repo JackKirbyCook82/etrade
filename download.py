@@ -65,11 +65,11 @@ def main(*args, tickers, expires, parameters, **kwargs):
         security_downloader = ETradeSecurityDownloader(name="SecurityDownloader", feed=reader)
         security_filter = SecurityFilter(name="SecurityFilter")
         security_writer = SecurityWriter(name="SecurityWriter", destination=file)
-        pipeline = security_downloader + security_filter + security_writer
-        routine = Routine(pipeline, name="SecurityThread")
-        routine.setup(tickers=tickers, expires=expires, **parameters)
-        routine.start()
-        routine.join()
+        security_pipeline = security_downloader + security_filter + security_writer
+        security_thread = Routine(security_pipeline, name="SecurityThread")
+        security_thread.setup(tickers=tickers, expires=expires, **parameters)
+        security_thread.start()
+        security_thread.join()
 
 
 if __name__ == "__main__":

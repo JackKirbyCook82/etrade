@@ -23,7 +23,7 @@ if ROOT not in sys.path:
 
 from support.synchronize import Routine
 from finance.valuations import ValuationFile, ValuationReader, ValuationFilter
-from finance.targets import TargetCalculator, TargetWriter, TargetTable
+from finance.targets import TargetCalculator, TargetWriter, TargetTerminal, TargetTable
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -48,16 +48,21 @@ def main(*args, tickers, expires, parameters, **kwargs):
     valuation_filter = ValuationFilter(name="ValuationFilter")
     target_calculator = TargetCalculator(name="TargetCalculator")
     target_writer = TargetWriter(name="TargetWriter", destination=table)
-    pipeline = valuation_reader + valuation_filter + target_calculator + target_writer
-    routine = Routine(pipeline, name="TargetThread")
-    routine.setup(tickers=tickers, expires=expires, **parameters)
-    routine.start()
-    routine.join()
+    target_terminal = TargetTerminal(name="TargetTerminal", stack=table)
+    writer_pipeline = valuation_reader + valuation_filter + target_calculator + target_writer
+#    terminal_thread = Routine(target_terminal, name="TargetTerminalThread")
+    writer_thread = Routine(writer_pipeline, name="TargetWriterThread")
+    writer_thread.setup(tickers=tickers, expires=expires, **parameters)
+#    terminal_thread.setup(tickers=tickers, expires=expires, **parameters)
+#    terminal_thread.start()
+    writer_thread.start()
+    writer_thread.join()
+#    terminal_thread.join()
 
 
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
-    sysParameters = {"size": 5, "liquidity": 0.5, "apy": 0.05, "funds": 2500000, "limit": None, "tenure": None}
+    sysParameters = {"size": 5, "liquidity": 0.5, "apy": 0.05, "funds": 2500000, "tenure": None}
     main(tickers=None, expires=None, parameters=sysParameters)
 
 

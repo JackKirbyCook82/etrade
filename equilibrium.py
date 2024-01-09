@@ -47,11 +47,11 @@ def main(*args, tickers, expires, parameters, **kwargs):
     equilibrium_filter = SupplyDemandFilter(name="SupplyDemandFilter")
     equilibrium_calculator = EquilibriumCalculator(name="EquilibriumCalculator")
     equilibrium_writer = EquilibriumWriter(name="EquilibriumWriter", destination=table)
-    pipeline = equilibrium_reader + equilibrium_filter + equilibrium_calculator + equilibrium_writer
-    routine = Routine(pipeline, name="EquilibriumThread")
-    routine.setup(tickers=tickers, expires=expires, **parameters)
-    routine.start()
-    routine.join()
+    equilibrium_pipeline = equilibrium_reader + equilibrium_filter + equilibrium_calculator + equilibrium_writer
+    equilibrium_thread = Routine(equilibrium_pipeline, name="EquilibriumThread")
+    equilibrium_thread.setup(tickers=tickers, expires=expires, **parameters)
+    equilibrium_thread.start()
+    equilibrium_thread.join()
 
 
 if __name__ == "__main__":
