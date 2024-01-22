@@ -8,7 +8,7 @@ Created on Sun Dec 21 2023
 
 import PySimpleGUI as gui
 from abc import ABC
-from support.windows import Window, Table, Frame, Button, Text, Column, Justify
+from support.windows import Terminal, Window, Table, Frame, Button, Text, Column, Justify
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -18,7 +18,7 @@ __license__ = ""
 
 
 class ContentsTable(Table, ABC, justify=Justify.LEFT, height=40, events=True):
-    identity = Column("ID", 5, lambda target: f"{str(target.identity):.0f}")
+    identity = Column("ID", 5, lambda target: f"{target.identity:.0f}")
     strategy = Column("strategy", 15, lambda target: str(target.strategy))
     ticker = Column("ticker", 10, lambda target: str(target.product.ticker).upper())
     expire = Column("expire", 10, lambda target: target.product.expire.strftime("%Y-%m-%d"))
@@ -60,7 +60,7 @@ class FailureButton(Button): pass
 
 class TargetWindow(Window, ABC):
     def __init__(self, *args, name, target, **kwargs):
-        identity = gui.Text(f"#{str(target.identity):.0f}")
+        identity = gui.Text(f"#{target.identity:.0f}")
         detail = DetailFrame(name="Detail", index=target.identity, content=target)
         value = ValueFrame(name="Value", index=target.identity, content=target)
         elements = dict(identity=identity, detail=detail.element, value=value.element)
@@ -76,7 +76,7 @@ class TargetWindow(Window, ABC):
 
 class ProspectWindow(TargetWindow):
     def __init__(self, *args, name, target, **kwargs):
-        adopt = AdoptButton(name="Adopt", index=target.identitys)
+        adopt = AdoptButton(name="Adopt", index=target.identity)
         abandon = AbandonButton(name="Abandon", index=target.identity)
         elements = dict(positive=adopt.element, negative=abandon.element)
         super().__init__(*args, name=name, target=target, **elements, **kwargs)
@@ -89,22 +89,42 @@ class PendingWindow(TargetWindow):
         super().__init__(*args, name=name, target=target, **elements, **kwargs)
 
 
-class TargetsWindow(Window):
-    def __init__(self, *args, name, targets=[], **kwargs):
+class TargetsWindow(Terminal):
+    def __init__(self, *args, name, feed, **kwargs):
         prospect = ProspectTable(name="Prospect", index=0, content=[])
         pending = PendingTable(name="Pending", index=0, content=[])
         elements = dict(prospect=prospect.element, pending=pending.element)
         super().__init__(*args, name=name, index=0, **elements, **kwargs)
         self.__prospect = prospect
         self.__pending = pending
-        self.__targets = targets
+        self.__feed = feed
 
     def __call__(self, *args, **kwargs):
         with self:
+            targets = list(iter(self.feed))[:3]
+            targets = sorted(list(targets), reverse=True)
+            self.prospect.update(targets)
+
             while True:
-                window, event, values = gui.read_all_windows()
-                if event == gui.WINDOW_CLOSED:
+                window, event, values = gui.read_all_windows(timeout=2000)
+                print(window, event, values)
+
+                if event == gui.WINDOW_CLOSED and str(window.metadata) == str(self):
                     break
+                if event == gui.WINDOW_CLOSED and str(window.metadata) != str(self):
+                    window.metadata.stop()
+                    continue
+                if event == gui.TIMEOUT_EVENT:
+                    continue
+
+                if event == str(self.prospect):
+                    index = values[event][0]
+                    window = ProspectWindow(name="Target", target=targets[index])
+                    window.start()
+                if event == str(self.pending):
+                    index = values[event][0]
+                    window = PendingWindow(name="Target", target=targets[index])
+                    window.start()
 
     @staticmethod
     def layout(*args, prospect, pending, **kwargs):
@@ -113,12 +133,11 @@ class TargetsWindow(Window):
         return [[gui.TabGroup([tabs])]]
 
     @property
-    def targets(self): return self.__targets
-    @property
     def prospect(self): return self.__prospect
     @property
     def pending(self): return self.__pending
-
+    @property
+    def feed(self): return self.__feed
 
 
 

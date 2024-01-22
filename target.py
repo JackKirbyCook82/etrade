@@ -21,7 +21,7 @@ API = os.path.join(ROOT, "Library", "api.csv")
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 
-from support.synchronize import Routine
+from support.synchronize import Routine, Window
 from finance.valuations import ValuationFile, ValuationReader, ValuationFilter
 from finance.targets import TargetsCalculator, TargetsWriter, TargetsTable
 
@@ -53,14 +53,12 @@ def main(*args, tickers, expires, parameters, **kwargs):
     target_window = TargetsWindow(name="TargetsWindow", feed=table)
     writer_pipeline = valuation_reader + valuation_filter + target_calculator + target_writer
     writer_thread = Routine(writer_pipeline, name="TargetWriterThread")
-    window_thread = Routine(target_window, name="TargetWindowThread")
+    window_thread = Window(target_window, name="TargetWindowThread")
     writer_thread.setup(tickers=tickers, expires=expires, **parameters)
     window_thread.setup()
     writer_thread.start()
+    window_thread.run()
     writer_thread.join()
-    window_thread.start()
-    window_thread.join()
-
 
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
