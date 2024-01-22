@@ -23,7 +23,9 @@ if ROOT not in sys.path:
 
 from support.synchronize import Routine
 from finance.valuations import ValuationFile, ValuationReader, ValuationFilter
-from finance.targets import TargetCalculator, TargetWriter, TargetTable, TargetWindow
+from finance.targets import TargetsCalculator, TargetsWriter, TargetsTable
+
+from window import TargetsWindow
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -43,12 +45,12 @@ pd.set_option("display.max_columns", 25)
 
 def main(*args, tickers, expires, parameters, **kwargs):
     file = ValuationFile(name="ValuationFile", repository=REPOSITORY, timeout=None)
-    table = TargetTable(name="TargetTable", timeout=None)
+    table = TargetsTable(name="TargetTable", timeout=None)
     valuation_reader = ValuationReader(name="ValuationReader", source=file)
     valuation_filter = ValuationFilter(name="ValuationFilter")
-    target_calculator = TargetCalculator(name="TargetCalculator")
-    target_writer = TargetWriter(name="TargetWriter", destination=table)
-    target_window = TargetWindow(name="TargetWindow", feed=table)
+    target_calculator = TargetsCalculator(name="TargetCalculator")
+    target_writer = TargetsWriter(name="TargetWriter", destination=table)
+    target_window = TargetsWindow(name="TargetsWindow", feed=table)
     writer_pipeline = valuation_reader + valuation_filter + target_calculator + target_writer
     writer_thread = Routine(writer_pipeline, name="TargetWriterThread")
     window_thread = Routine(target_window, name="TargetWindowThread")
