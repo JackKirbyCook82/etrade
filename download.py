@@ -24,7 +24,7 @@ API = os.path.join(ROOT, "Library", "api.csv")
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 
-from support.synchronize import Routine
+from support.synchronize import SideThread
 from webscraping.webreaders import WebAuthorizer, WebReader
 from finance.securities import DateRange, SecurityFile, SecurityFilter, SecurityWriter
 
@@ -66,7 +66,7 @@ def main(*args, tickers, expires, parameters, **kwargs):
         security_filter = SecurityFilter(name="SecurityFilter")
         security_writer = SecurityWriter(name="SecurityWriter", destination=file)
         security_pipeline = security_downloader + security_filter + security_writer
-        security_thread = Routine(security_pipeline, name="SecurityThread")
+        security_thread = SideThread(security_pipeline, name="SecurityThread")
         security_thread.setup(tickers=tickers, expires=expires, **parameters)
         security_thread.start()
         security_thread.join()

@@ -21,7 +21,7 @@ API = os.path.join(ROOT, "Library", "api.csv")
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 
-from support.synchronize import Routine
+from support.synchronize import SideThread
 from finance.securities import Securities, SecurityFile, SecurityReader, SecurityFilter, SecurityParser, SecurityCalculator
 from finance.strategies import Strategies, StrategyCalculator
 from finance.valuations import Valuations, ValuationFile, ValuationCalculator, ValuationFilter, ValuationWriter
@@ -55,7 +55,7 @@ def main(*args, tickers, expires, parameters, **kwargs):
     valuation_writer = ValuationWriter(name="ValuationWriter", destination=valuation_file)
     valuation_pipeline = security_reader + security_filter + security_parser + security_calculator
     valuation_pipeline = valuation_pipeline + strategy_calculator + valuation_calculator + valuation_filter + valuation_writer
-    valuation_thread = Routine(valuation_pipeline, name="ValuationThread")
+    valuation_thread = SideThread(valuation_pipeline, name="ValuationThread")
     valuation_thread.setup(tickers=tickers, expires=expires, **parameters)
     valuation_thread.start()
     valuation_thread.join()

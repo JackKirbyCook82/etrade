@@ -21,7 +21,7 @@ API = os.path.join(ROOT, "Library", "api.csv")
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 
-from support.synchronize import Routine
+from support.synchronize import SideThread
 from finance.equilibriums import SupplyDemandFile, SupplyDemandReader, SupplyDemandFilter, EquilibriumCalculator, EquilibriumWriter, EquilibriumTable
 
 __version__ = "1.0.0"
@@ -48,7 +48,7 @@ def main(*args, tickers, expires, parameters, **kwargs):
     equilibrium_calculator = EquilibriumCalculator(name="EquilibriumCalculator")
     equilibrium_writer = EquilibriumWriter(name="EquilibriumWriter", destination=table)
     equilibrium_pipeline = equilibrium_reader + equilibrium_filter + equilibrium_calculator + equilibrium_writer
-    equilibrium_thread = Routine(equilibrium_pipeline, name="EquilibriumThread")
+    equilibrium_thread = SideThread(equilibrium_pipeline, name="EquilibriumThread")
     equilibrium_thread.setup(tickers=tickers, expires=expires, **parameters)
     equilibrium_thread.start()
     equilibrium_thread.join()
