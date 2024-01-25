@@ -10,6 +10,8 @@ import PySimpleGUI as gui
 from abc import ABC
 from support.windows import Terminal, Window, Table, Frame, Button, Text, Column, Justify
 
+from finance.targets import TargetStatus
+
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
 __all__ = ["TargetsWindow"]
@@ -18,13 +20,14 @@ __license__ = ""
 
 
 class ContentsTable(Table, ABC, justify=Justify.LEFT, height=40, events=True):
-    identity = Column("ID", 5, lambda target: f"{target.identity:.0f}")
+    index = Column("ID", 5, lambda target: f"{target.index:.0f}")
     strategy = Column("strategy", 15, lambda target: str(target.strategy))
     ticker = Column("ticker", 10, lambda target: str(target.product.ticker).upper())
     expire = Column("expire", 10, lambda target: target.product.expire.strftime("%Y-%m-%d"))
     options = Column("options", 20, lambda target: "\n".join(list(map(str, target.options))))
-    profit = Column("profit", 20, lambda target: f"{target.valuation.profit * 100:.0f}% / YR @ {target.valuation.tau:.0f} DAYS")
-    value = Column("value", 10, lambda target: f"${target.valuation.value:,.0f}")
+    apy = Column("apy", 10, lambda target: f"{target.profitability.apy * 100:.0f}% / YR")
+    tau = Column("tau", 10, lambda target: f"{target.profitability.tau:.0f} DAYS")
+    value = Column("value", 10, lambda target: f"${target.valuation.profit:,.0f}")
     cost = Column("cost", 10, lambda target: f"${target.valuation.cost:,.0f}")
     size = Column("size", 10, lambda target: f"{target.size:,.0f} CNT")
 
@@ -32,24 +35,9 @@ class ContentsTable(Table, ABC, justify=Justify.LEFT, height=40, events=True):
         super().__init__(*args, contents=contents, **kwargs)
         self.__targets = contents
 
-    def append(self, target):
-        targets = list(set(self.targets) | {target})
-        targets = sorted(targets, reverse=True, key=lambda x: x.valuation)
-        self.targets = targets
-        self.refresh(targets)
-
-    def remove(self, target):
-        targets = list(set(self.targets) - {target})
-        targets = sorted(targets, reverse=True, key=lambda x: x.valuation)
-        self.targets = targets
-        self.refresh(targets)
-
-    def extend(self, targets):
-        assert isinstance(targets, list)
-        targets = list(set(self.targets) | set(targets))
-        targets = sorted(targets, reverse=True, key=lambda x: x.valuation)
-        self.targets = targets
-        self.refresh(targets)
+    def refresh(self, contents=[]):
+        super().refresh(contents)
+        self.targets = contents
 
     @property
     def targets(self): return self.__targets
@@ -58,84 +46,93 @@ class ContentsTable(Table, ABC, justify=Justify.LEFT, height=40, events=True):
 
 
 class ProspectTable(ContentsTable):
-    def click(self, *args, indexes=[], **kwargs):
+    def click(self, indexes, *args, **kwargs):
         for index in indexes:
             target = self.targets[index]
-            window = ProspectWindow(name="Prospect", content=target)
+            window = ProspectWindow(name="Prospect", content=target, parent=self.window)
             window.start()
 
 class PendingTable(ContentsTable):
-    def click(self, *args, indexes=[], **kwargs):
+    def click(self, indexes, *args, **kwargs):
         for index in indexes:
             target = self.targets[index]
-            window = PendingWindow(name="Pending", content=target)
+            window = PendingWindow(name="Pending", content=target, parent=self.window)
             window.start()
 
+class PurchasedTable(ContentsTable):
+    pass
 
-class DetailFrame(Frame):
-    strategy = Text("strategy", "Arial 12 bold", lambda target: str(target.strategy))
+
+class StrategyFrame(Frame):
+    strategy = Text("strategy", "Arial 10 bold", lambda target: str(target.strategy))
+    size = Text("size", "Arial 10 bold", lambda target: f"{target.size:,.0f} CNT")
+
+    @staticmethod
+    def layout(*args, strategy, size, **kwargs): return [[strategy, gui.Push(), size]]
+
+class SecurityFrame(Frame):
     product = Text("product", "Arial 10", lambda target: str(target.product))
     options = Text("options", "Arial 10", lambda target: list(map(str, target.options)))
 
     @staticmethod
-    def layout(*args, strategy, product, options, **kwargs):
-        options = [[option] for option in options]
-        return [[strategy], [product], *options]
+    def layout(*args, product, options, **kwargs): return [[product], *[[text] for text in options]]
 
-class ValueFrame(Frame):
-    size = Text("size", "Arial 12 bold", lambda target: f"{target.size:,.0f} CNT")
-    valuations = Text("valuations", "Arial 10", lambda target: list(str(target.valuation).split(", ")))
+class ProfitabilityFrame(Frame):
+    profitability = Text("profitability", "Arial 10", lambda target: list(str(target.profitability).split(", ")))
 
     @staticmethod
-    def layout(*args, valuations, size, **kwargs):
-        valuations = [[valuation] for valuation in valuations]
-        return [[size], *valuations, [gui.Text("")]]
+    def layout(*args, profitability, **kwargs): return [[text] for text in profitability]
+
+class ValuationFrame(Frame):
+    valuation = Text("valuation", "Arial 10", lambda target: list(str(target.valuation).split(", ")))
+
+    @staticmethod
+    def layout(*args, valuation, **kwargs): return [[text] for text in valuation]
 
 
-class ActionButton(Button):
-    def __init__(self, *args, content, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.__target = content
-
-    @property
-    def target(self): return self.__target
-
-class AdoptButton(ActionButton):
+class AdoptButton(Button):
     def click(self, *args, **kwargs):
-#        windows[str(TargetsWindow)].prospect.remove(self.target)
-#        windows[str(TargetsWindow)].pending.append(self.target)
+        indx, col = (hash(self.window.target), "status")
+        self.window.parent.feed[indx, col] = TargetStatus.PENDING
+        self.window.parent.execute(*args, **kwargs)
         self.window.stop()
 
-class AbandonButton(ActionButton):
+class AbandonButton(Button):
     def click(self, *args, **kwargs):
-#        windows[str(TargetsWindow)].prospect.remove(self.target)
+        indx, col = (hash(self.window.target), "status")
+        self.window.parent.feed[indx, col] = TargetStatus.ABANDONED
+        self.window.parent.execute(*args, **kwargs)
         self.window.stop()
 
-class SuccessButton(ActionButton):
+class SuccessButton(Button):
     def click(self, *args, **kwargs):
-#        windows[str(TargetsWindow)].pending.remove(self.target)
+        indx, col = (hash(self.window.target), "status")
+        self.window.parent.feed[indx, col] = TargetStatus.PURCHASED
+        self.window.parent.execute(*args, **kwargs)
         self.window.stop()
 
-class FailureButton(ActionButton):
+class FailureButton(Button):
     def click(self, *args, **kwargs):
-#        windows[str(TargetsWindow)].pending.remove(self.target)
+        indx, col = (hash(self.window.target), "status")
+        self.window.parent.feed[indx, col] = TargetStatus.ABANDONED
+        self.window.parent.execute(*args, **kwargs)
         self.window.stop()
 
 
 class TargetWindow(Window, ABC):
     def __init__(self, *args, content, **kwargs):
-        identity = gui.Text(f"#{content.identity:.0f}")
-        detail = DetailFrame(name="Detail", tag=hash(content), content=content, window=self)
-        value = ValueFrame(name="Value", tag=hash(content), content=content, window=self)
-        elements = dict(identity=identity, detail=detail.element, value=value.element)
+        index = gui.Text(f"#{content.index:.0f}", font="Arial 10")
+        strategy = StrategyFrame(name="Strategy", tag=hash(content), content=content, window=self)
+        security = SecurityFrame(name="Security", tag=hash(content), content=content, window=self)
+        profitability = ProfitabilityFrame(name="Profitability", tag=hash(content), content=content, window=self)
+        valuation = ValuationFrame(name="Valuation", tag=hash(content), content=content, window=self)
+        elements = dict(index=index, strategy=strategy.element, security=security.element, profitability=profitability.element, valuation=valuation.element)
         super().__init__(*args, **elements, **kwargs)
         self.__target = content
 
     @staticmethod
-    def layout(*args, identity, detail, value, positive, negative, **kwargs):
-        top = [detail, gui.VerticalSeparator(), value]
-        bottom = [identity, gui.Push(), positive, negative]
-        return [top, bottom]
+    def layout(*args, index, strategy, security, profitability, valuation, positive, negative, **kwargs):
+        return [[strategy], [gui.HorizontalSeparator()], [security, profitability, valuation], [gui.HorizontalSeparator()], [index, gui.Push(), positive, negative]]
 
     @property
     def target(self): return self.__target
@@ -143,15 +140,15 @@ class TargetWindow(Window, ABC):
 
 class ProspectWindow(TargetWindow):
     def __init__(self, *args, name, content, **kwargs):
-        adopt = AdoptButton(name="Adopt", tag=hash(content), content=content, window=self)
-        abandon = AbandonButton(name="Abandon", tag=hash(content), content=content, window=self)
+        adopt = AdoptButton(name="Adopt", tag=hash(content), window=self)
+        abandon = AbandonButton(name="Abandon", tag=hash(content), window=self)
         elements = dict(positive=adopt.element, negative=abandon.element)
         super().__init__(*args, name=name, tag=hash(content), content=content, **elements, **kwargs)
 
 class PendingWindow(TargetWindow):
     def __init__(self, *args, name, content, **kwargs):
-        success = SuccessButton(name="Success", tag=hash(content), content=content, window=self)
-        failure = FailureButton(name="Failure", tag=hash(content), content=content, window=self)
+        success = SuccessButton(name="Success", tag=hash(content), window=self)
+        failure = FailureButton(name="Failure", tag=hash(content), window=self)
         elements = dict(positive=success.element, negative=failure.element)
         super().__init__(*args, name=name, tag=hash(content), content=content, **elements, **kwargs)
 
@@ -160,19 +157,25 @@ class TargetsWindow(Terminal):
     def __init__(self, *args, name, feed, **kwargs):
         prospect = ProspectTable(name="Prospect", tag=0, contents=[], window=self)
         pending = PendingTable(name="Pending", tag=0, contents=[], window=self)
-        elements = dict(prospect=prospect.element, pending=pending.element)
+        purchased = PurchasedTable(name="Purchased", tag=0, contents=[], window=self)
+        elements = dict(prospect=prospect.element, pending=pending.element, purchased=purchased.element)
         super().__init__(*args, name=name, tag=0, **elements, **kwargs)
         self.__prospect = prospect
         self.__pending = pending
+        self.__purchased = purchased
         self.__feed = feed
 
-#    def execute(self, *args, **kwargs):
-#        targets = list(iter(self.feed))
-#        self.prospect.update(targets)
+    def execute(self, *args, **kwargs):
+        prospect = [target for target in self.feed.read() if target.status == TargetStatus.PROSPECT]
+        pending = [target for target in self.feed.read() if target.status == TargetStatus.PENDING]
+        purchased = [target for target in self.feed.read() if target.status == TargetStatus.PURCHASED]
+        self.prospect.refresh(contents=prospect)
+        self.pending.refresh(contents=pending)
+        self.purchased.refresh(contents=purchased)
 
     @staticmethod
-    def layout(*args, prospect, pending, **kwargs):
-        tables = dict(prospect=prospect, pending=pending)
+    def layout(*args, prospect, pending, purchased, **kwargs):
+        tables = dict(prospect=prospect, pending=pending, purchased=purchased)
         tabs = [gui.Tab(name, [[table]]) for name, table in tables.items()]
         return [[gui.TabGroup([tabs])]]
 
@@ -180,6 +183,8 @@ class TargetsWindow(Terminal):
     def prospect(self): return self.__prospect
     @property
     def pending(self): return self.__pending
+    @property
+    def purchased(self): return self.__purchased
     @property
     def feed(self): return self.__feed
 

@@ -60,6 +60,7 @@ def main(*args, tickers, expires, parameters, **kwargs):
     window_thread.run()
     writer_thread.join()
 
+
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
     sysParameters = {"size": 10, "liquidity": 0.1, "apy": 0.1, "funds": 2500000, "tenure": None}
