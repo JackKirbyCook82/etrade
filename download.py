@@ -58,13 +58,13 @@ class ETradeReader(WebReader, delay=10): pass
 
 
 def main(*args, tickers, expires, parameters, **kwargs):
-    file = SecurityFile(name="SecurityFile", repository=REPOSITORY, timeout=None)
+    file = SecurityFile(name="SecurityFile", repository=os.path.join(REPOSITORY, "security"), timeout=None)
     api = pd.read_csv(API, header=0, index_col="website").loc["etrade"].to_dict()
     authorizer = ETradeAuthorizer(name="ETradeAuthorizer", apikey=api["key"], apicode=api["code"])
     with ETradeReader(authorizer=authorizer, name="ETradeReader") as reader:
         security_downloader = ETradeSecurityDownloader(name="SecurityDownloader", feed=reader)
         security_filter = SecurityFilter(name="SecurityFilter")
-        security_writer = SecurityWriter(name="SecurityWriter", destination=file)
+        security_writer = SecurityWriter(name="SecurityWriter", file=file)
         security_pipeline = security_downloader + security_filter + security_writer
         security_thread = SideThread(security_pipeline, name="SecurityThread")
         security_thread.setup(tickers=tickers, expires=expires, **parameters)
@@ -76,8 +76,8 @@ if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
     sysTickers = ["NVDA", "AMD", "AMC", "TSLA", "AAPL", "IWM", "AMZN", "SPY", "QQQ", "MSFT", "BAC", "BABA", "GOOGL", "META", "ZIM", "XOM", "INTC", "OXY", "CSCO", "COIN", "NIO"]
     sysExpires = DateRange([(Datetime.today() + Timedelta(days=1)).date(), (Datetime.today() + Timedelta(weeks=26)).date()])
-    sysParameters = {"volume": None, "interest": None, "size": None}
-    main(tickers=sysTickers, expires=sysExpires, parameters=sysParameters)
+    sysSecurity = {"volume": None, "interest": None, "size": None}
+    main(tickers=sysTickers, expires=sysExpires, parameters=sysSecurity)
 
 
 

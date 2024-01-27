@@ -23,9 +23,9 @@ if ROOT not in sys.path:
 
 from support.synchronize import SideThread, MainThread
 from finance.valuations import ValuationFile, ValuationReader, ValuationFilter
-from finance.targets import TargetsCalculator, TargetsWriter, TargetsTable
+from finance.targets import TargetsFile, TargetsCalculator, TargetsWriter, TargetsTable
 
-from window import TargetsWindow
+from window import ETradeTargetsWindow
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -44,27 +44,28 @@ pd.set_option("display.max_columns", 25)
 
 
 def main(*args, tickers, expires, parameters, **kwargs):
-    file = ValuationFile(name="ValuationFile", repository=REPOSITORY, timeout=None)
+    valuations = ValuationFile(name="ValuationFile", repository=os.path.join(REPOSITORY, "valuation"), timeout=None)
+    file = TargetsFile(name="TargetFile", repository=REPOSITORY, timeout=None)
     table = TargetsTable(name="TargetTable", timeout=None)
-    valuation_reader = ValuationReader(name="ValuationReader", source=file)
+    valuation_reader = ValuationReader(name="ValuationReader", file=valuations)
     valuation_filter = ValuationFilter(name="ValuationFilter")
     target_calculator = TargetsCalculator(name="TargetCalculator")
-    target_writer = TargetsWriter(name="TargetWriter", destination=table)
-    target_window = TargetsWindow(name="TargetsWindow", feed=table)
-    writer_pipeline = valuation_reader + valuation_filter + target_calculator + target_writer
-    writer_thread = SideThread(writer_pipeline, name="TargetWriterThread")
+    target_writer = TargetsWriter(name="TargetWriter", table=table, file=file)
+    target_feed = valuation_reader + valuation_filter + target_calculator + target_writer
+    target_window = ETradeTargetsWindow(name="TargetsWindow", feed=table)
+    feed_thread = SideThread(target_feed, name="TargetFeedThread")
     window_thread = MainThread(target_window, name="TargetWindowThread")
-    writer_thread.setup(tickers=tickers, expires=expires, **parameters)
+    feed_thread.setup(tickers=tickers, expires=expires, **parameters)
     window_thread.setup()
-    writer_thread.start()
+    feed_thread.start()
     window_thread.run()
-    writer_thread.join()
+    feed_thread.join()
 
 
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
-    sysParameters = {"size": 10, "liquidity": 0.1, "apy": 0.1, "funds": 2500000, "tenure": None}
-    main(tickers=None, expires=None, parameters=sysParameters)
+    sysSecurity, sysValuation, sysMarket, sysPortfolio = {"size": 10}, {"apy": 0.25}, {"liquidity": 0.1, "tenure": None}, {"funds": None}
+    main(tickers=None, expires=None, parameters=sysSecurity | sysValuation | sysMarket | sysPortfolio)
 
 
 

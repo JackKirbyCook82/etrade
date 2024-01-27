@@ -14,12 +14,12 @@ from finance.targets import TargetStatus
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["TargetsWindow"]
+__all__ = ["ETradeTargetsWindow"]
 __copyright__ = "Copyright 2023, Jack Kirby Cook"
 __license__ = ""
 
 
-class ContentsTable(Table, ABC, justify=Justify.LEFT, height=40, events=True):
+class ETradeContentsTable(Table, ABC, justify=Justify.LEFT, height=40, events=True):
     index = Column("ID", 5, lambda target: f"{target.index:.0f}")
     strategy = Column("strategy", 15, lambda target: str(target.strategy))
     ticker = Column("ticker", 10, lambda target: str(target.product.ticker).upper())
@@ -45,73 +45,73 @@ class ContentsTable(Table, ABC, justify=Justify.LEFT, height=40, events=True):
     def targets(self, targets): self.__targets = targets
 
 
-class ProspectTable(ContentsTable):
+class ETradeProspectTable(ETradeContentsTable):
     def click(self, indexes, *args, **kwargs):
         for index in indexes:
             target = self.targets[index]
-            window = ProspectWindow(name="Prospect", content=target, parent=self.window)
+            window = ETradeProspectWindow(name="Prospect", content=target, parent=self.window)
             window.start()
 
-class PendingTable(ContentsTable):
+class ETradePendingTable(ETradeContentsTable):
     def click(self, indexes, *args, **kwargs):
         for index in indexes:
             target = self.targets[index]
-            window = PendingWindow(name="Pending", content=target, parent=self.window)
+            window = ETradePendingWindow(name="Pending", content=target, parent=self.window)
             window.start()
 
-class PurchasedTable(ContentsTable):
+class ETradePurchasedTable(ETradeContentsTable):
     pass
 
 
-class StrategyFrame(Frame):
+class ETradeStrategyFrame(Frame):
     strategy = Text("strategy", "Arial 10 bold", lambda target: str(target.strategy))
     size = Text("size", "Arial 10 bold", lambda target: f"{target.size:,.0f} CNT")
 
     @staticmethod
     def layout(*args, strategy, size, **kwargs): return [[strategy, gui.Push(), size]]
 
-class SecurityFrame(Frame):
+class ETradeSecurityFrame(Frame):
     product = Text("product", "Arial 10", lambda target: str(target.product))
     options = Text("options", "Arial 10", lambda target: list(map(str, target.options)))
 
     @staticmethod
     def layout(*args, product, options, **kwargs): return [[product], *[[text] for text in options]]
 
-class ProfitabilityFrame(Frame):
+class ETradeProfitabilityFrame(Frame):
     profitability = Text("profitability", "Arial 10", lambda target: list(str(target.profitability).split(", ")))
 
     @staticmethod
     def layout(*args, profitability, **kwargs): return [[text] for text in profitability]
 
-class ValuationFrame(Frame):
+class ETradeValuationFrame(Frame):
     valuation = Text("valuation", "Arial 10", lambda target: list(str(target.valuation).split(", ")))
 
     @staticmethod
     def layout(*args, valuation, **kwargs): return [[text] for text in valuation]
 
 
-class AdoptButton(Button):
+class ETradeAdoptButton(Button):
     def click(self, *args, **kwargs):
         indx, col = (hash(self.window.target), "status")
         self.window.parent.feed[indx, col] = TargetStatus.PENDING
         self.window.parent.execute(*args, **kwargs)
         self.window.stop()
 
-class AbandonButton(Button):
+class ETradeAbandonButton(Button):
     def click(self, *args, **kwargs):
         indx, col = (hash(self.window.target), "status")
         self.window.parent.feed[indx, col] = TargetStatus.ABANDONED
         self.window.parent.execute(*args, **kwargs)
         self.window.stop()
 
-class SuccessButton(Button):
+class ETradeSuccessButton(Button):
     def click(self, *args, **kwargs):
         indx, col = (hash(self.window.target), "status")
         self.window.parent.feed[indx, col] = TargetStatus.PURCHASED
         self.window.parent.execute(*args, **kwargs)
         self.window.stop()
 
-class FailureButton(Button):
+class ETradeFailureButton(Button):
     def click(self, *args, **kwargs):
         indx, col = (hash(self.window.target), "status")
         self.window.parent.feed[indx, col] = TargetStatus.ABANDONED
@@ -119,13 +119,13 @@ class FailureButton(Button):
         self.window.stop()
 
 
-class TargetWindow(Window, ABC):
+class ETradeTargetWindow(Window, ABC):
     def __init__(self, *args, content, **kwargs):
         index = gui.Text(f"#{content.index:.0f}", font="Arial 10")
-        strategy = StrategyFrame(name="Strategy", tag=hash(content), content=content, window=self)
-        security = SecurityFrame(name="Security", tag=hash(content), content=content, window=self)
-        profitability = ProfitabilityFrame(name="Profitability", tag=hash(content), content=content, window=self)
-        valuation = ValuationFrame(name="Valuation", tag=hash(content), content=content, window=self)
+        strategy = ETradeStrategyFrame(name="Strategy", tag=hash(content), content=content, window=self)
+        security = ETradeSecurityFrame(name="Security", tag=hash(content), content=content, window=self)
+        profitability = ETradeProfitabilityFrame(name="Profitability", tag=hash(content), content=content, window=self)
+        valuation = ETradeValuationFrame(name="Valuation", tag=hash(content), content=content, window=self)
         elements = dict(index=index, strategy=strategy.element, security=security.element, profitability=profitability.element, valuation=valuation.element)
         super().__init__(*args, **elements, **kwargs)
         self.__target = content
@@ -138,26 +138,26 @@ class TargetWindow(Window, ABC):
     def target(self): return self.__target
 
 
-class ProspectWindow(TargetWindow):
+class ETradeProspectWindow(ETradeTargetWindow):
     def __init__(self, *args, name, content, **kwargs):
-        adopt = AdoptButton(name="Adopt", tag=hash(content), window=self)
-        abandon = AbandonButton(name="Abandon", tag=hash(content), window=self)
+        adopt = ETradeAdoptButton(name="Adopt", tag=hash(content), window=self)
+        abandon = ETradeAbandonButton(name="Abandon", tag=hash(content), window=self)
         elements = dict(positive=adopt.element, negative=abandon.element)
         super().__init__(*args, name=name, tag=hash(content), content=content, **elements, **kwargs)
 
-class PendingWindow(TargetWindow):
+class ETradePendingWindow(ETradeTargetWindow):
     def __init__(self, *args, name, content, **kwargs):
-        success = SuccessButton(name="Success", tag=hash(content), window=self)
-        failure = FailureButton(name="Failure", tag=hash(content), window=self)
+        success = ETradeSuccessButton(name="Success", tag=hash(content), window=self)
+        failure = ETradeFailureButton(name="Failure", tag=hash(content), window=self)
         elements = dict(positive=success.element, negative=failure.element)
         super().__init__(*args, name=name, tag=hash(content), content=content, **elements, **kwargs)
 
 
-class TargetsWindow(Terminal):
+class ETradeTargetsWindow(Terminal):
     def __init__(self, *args, name, feed, **kwargs):
-        prospect = ProspectTable(name="Prospect", tag=0, contents=[], window=self)
-        pending = PendingTable(name="Pending", tag=0, contents=[], window=self)
-        purchased = PurchasedTable(name="Purchased", tag=0, contents=[], window=self)
+        prospect = ETradeProspectTable(name="Prospect", tag=0, contents=[], window=self)
+        pending = ETradePendingTable(name="Pending", tag=0, contents=[], window=self)
+        purchased = ETradePurchasedTable(name="Purchased", tag=0, contents=[], window=self)
         elements = dict(prospect=prospect.element, pending=pending.element, purchased=purchased.element)
         super().__init__(*args, name=name, tag=0, **elements, **kwargs)
         self.__prospect = prospect
@@ -166,9 +166,9 @@ class TargetsWindow(Terminal):
         self.__feed = feed
 
     def execute(self, *args, **kwargs):
-        prospect = [target for target in self.feed.read() if target.status == TargetStatus.PROSPECT]
-        pending = [target for target in self.feed.read() if target.status == TargetStatus.PENDING]
-        purchased = [target for target in self.feed.read() if target.status == TargetStatus.PURCHASED]
+        prospect = [target for target in iter(self.feed) if target.status == TargetStatus.PROSPECT]
+        pending = [target for target in iter(self.feed) if target.status == TargetStatus.PENDING]
+        purchased = [target for target in iter(self.feed) if target.status == TargetStatus.PURCHASED]
         self.prospect.refresh(contents=prospect)
         self.pending.refresh(contents=pending)
         self.purchased.refresh(contents=purchased)

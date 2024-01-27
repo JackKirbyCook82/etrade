@@ -22,9 +22,9 @@ if ROOT not in sys.path:
     sys.path.append(ROOT)
 
 from support.synchronize import SideThread
-from finance.securities import Securities, SecurityFile, SecurityReader, SecurityFilter, SecurityParser, SecurityCalculator
-from finance.strategies import Strategies, StrategyCalculator
-from finance.valuations import Valuations, ValuationFile, ValuationCalculator, ValuationFilter, ValuationWriter
+from finance.securities import SecurityFile, SecurityReader, SecurityFilter, SecurityCalculator
+from finance.strategies import StrategyCalculator
+from finance.valuations import ValuationFile, ValuationCalculator, ValuationFilter, ValuationWriter
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -43,18 +43,17 @@ pd.set_option("display.max_columns", 25)
 
 
 def main(*args, tickers, expires, parameters, **kwargs):
-    security_file = SecurityFile(name="SecurityFile", repository=REPOSITORY, timeout=None)
-    valuation_file = ValuationFile(name="ValuationFile", repository=REPOSITORY, timeout=None)
-    security_reader = SecurityReader(name="SecurityReader", source=security_file)
+    security_file = SecurityFile(name="SecurityFile", repository=os.path.join(REPOSITORY, "security"), timeout=None)
+    valuation_file = ValuationFile(name="ValuationFile", repository=os.path.join(REPOSITORY, "valuation"), timeout=None)
+    security_reader = SecurityReader(name="SecurityReader", file=security_file)
     security_filter = SecurityFilter(name="SecurityFilter")
-    security_parser = SecurityParser(name="SecurityParser")
-    security_calculator = SecurityCalculator(name="SecurityCalculator", calculations=list(Securities))
-    strategy_calculator = StrategyCalculator(name="StrategyCalculator", calculations=list(Strategies))
-    valuation_calculator = ValuationCalculator(name="ValuationCalculator", calculations=[Valuations.Arbitrage.Minimum])
+    security_calculator = SecurityCalculator(name="SecurityCalculator")
+    strategy_calculator = StrategyCalculator(name="StrategyCalculator")
+    valuation_calculator = ValuationCalculator(name="ValuationCalculator")
     valuation_filter = ValuationFilter(name="ValuationFilter")
-    valuation_writer = ValuationWriter(name="ValuationWriter", destination=valuation_file)
-    valuation_pipeline = security_reader + security_filter + security_parser + security_calculator
-    valuation_pipeline = valuation_pipeline + strategy_calculator + valuation_calculator + valuation_filter + valuation_writer
+    valuation_writer = ValuationWriter(name="ValuationWriter", file=valuation_file)
+    valuation_pipeline = security_reader + security_filter + security_calculator + strategy_calculator
+    valuation_pipeline = valuation_pipeline + valuation_calculator + valuation_filter + valuation_writer
     valuation_thread = SideThread(valuation_pipeline, name="ValuationThread")
     valuation_thread.setup(tickers=tickers, expires=expires, **parameters)
     valuation_thread.start()
@@ -63,8 +62,8 @@ def main(*args, tickers, expires, parameters, **kwargs):
 
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
-    sysParameters = {"volume": 100, "interest": 100, "size": 10, "apy": 0.0, "fees": 0.0, "discount": 0.0}
-    main(tickers=None, expires=None, parameters=sysParameters)
+    sysSecurity, sysValuation, sysMarket = {"volume": 100, "interest": 100, "size": 10}, {"apy": 0.0, "discount": 0.0}, {"fees": 5.0}
+    main(tickers=None, expires=None, parameters=sysSecurity | sysValuation | sysMarket)
 
 
 

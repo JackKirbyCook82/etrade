@@ -13,6 +13,8 @@ import warnings
 import xarray as xr
 import pandas as pd
 import PySimpleGUI as gui
+from datetime import datetime as Datetime
+from datetime import timedelta as Timedelta
 
 MAIN = os.path.dirname(os.path.realpath(__file__))
 PROJECT = os.path.abspath(os.path.join(MAIN, os.pardir))
@@ -24,13 +26,13 @@ if ROOT not in sys.path:
 
 from webscraping.webreaders import WebAuthorizer, WebReader
 from support.synchronize import MainThread, SideThread
-from finance.securities import Securities, SecurityFilter, SecurityParser, SecurityCalculator
-from finance.strategies import Strategies, StrategyCalculator
-from finance.valuations import Valuations, ValuationCalculator, ValuationFilter
-from finance.targets import TargetsCalculator, TargetsWriter, TargetsTable
+from finance.securities import DateRange, SecurityFilter, SecurityCalculator
+from finance.strategies import StrategyCalculator
+from finance.valuations import ValuationCalculator, ValuationFilter
+from finance.targets import TargetsCalculator, TargetsWriter, TargetsFile, TargetsTable
 
 from market import ETradeSecurityDownloader
-from window import TargetsWindow
+from window import ETradeTargetsWindow
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -61,34 +63,37 @@ class ETradeReader(WebReader, delay=10): pass
 
 def main(*args, tickers, expires, parameters, **kwargs):
     table = TargetsTable(name="TargetTable", timeout=None)
+    file = TargetsFile(name="TargetFile", repository=REPOSITORY, timeout=None)
     api = pd.read_csv(API, header=0, index_col="website").loc["etrade"].to_dict()
     authorizer = ETradeAuthorizer(name="ETradeAuthorizer", apikey=api["key"], apicode=api["code"])
     with ETradeReader(authorizer=authorizer, name="ETradeReader") as reader:
         security_downloader = ETradeSecurityDownloader(name="SecurityDownloader", feed=reader)
         security_filter = SecurityFilter(name="SecurityFilter")
-        security_parser = SecurityParser(name="SecurityParser")
-        security_calculator = SecurityCalculator(name="SecurityCalculator", calculations=list(Securities))
-        strategy_calculator = StrategyCalculator(name="StrategyCalculator", calculations=list(Strategies))
-        valuation_calculator = ValuationCalculator(name="ValuationCalculator", calculations=[Valuations.Arbitrage.Minimum])
+        security_calculator = SecurityCalculator(name="SecurityCalculator")
+        strategy_calculator = StrategyCalculator(name="StrategyCalculator")
+        valuation_calculator = ValuationCalculator(name="ValuationCalculator")
         valuation_filter = ValuationFilter(name="ValuationFilter")
         target_calculator = TargetsCalculator(name="TargetCalculator")
-        target_writer = TargetsWriter(name="TargetWriter", destination=table)
-        pipeline = security_downloader + security_filter + security_parser + security_calculator + strategy_calculator + valuation_calculator
-        pipeline = pipeline + valuation_filter + target_calculator + target_writer
-        window = TargetsWindow(name="TargetsWindow", feed=table)
-        writer = SideThread(pipeline, name="TargetWriterThread")
-        terminal = MainThread(window, name="TargetWindowThread")
-        writer.setup(tickers=tickers, expires=expires, **parameters)
-        terminal.setup()
-        writer.start()
-        window.run()
-        writer.join()
+        target_writer = TargetsWriter(name="TargetWriter", table=table, file=file)
+        feed_pipeline = security_downloader + security_filter + security_calculator + strategy_calculator
+        feed_pipeline = feed_pipeline + valuation_calculator + valuation_filter + target_calculator + target_writer
+        target_window = ETradeTargetsWindow(name="TargetsWindow", feed=table)
+        feed_writer = SideThread(feed_pipeline, name="TargetFeedThread")
+        window_thread = MainThread(target_window, name="TargetWindowThread")
+        feed_writer.setup(tickers=tickers, expires=expires, **parameters)
+        window_thread.setup()
+        feed_writer.start()
+        window_thread.run()
+        feed_writer.join()
 
 
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
-    sysParameters = {"volume": 25, "interest": 25, "size": 5, "liquidity": 0.1, "tenure": None, "apy": 0.5, "funds": 100000, "fees": 5.0, "discount": 0.0}
-    main(tickers=None, expires=None, parameters=sysParameters)
+    sysTickers = ["NVDA", "AMD", "AMC", "TSLA", "AAPL", "IWM", "AMZN", "SPY", "QQQ", "MSFT", "BAC", "BABA", "GOOGL", "META", "ZIM", "XOM", "INTC", "OXY", "CSCO", "COIN", "NIO"]
+    sysExpires = DateRange([(Datetime.today() + Timedelta(days=1)).date(), (Datetime.today() + Timedelta(weeks=52)).date()])
+    sysSecurity, sysValuation = {"volume": 100, "interest": 100, "size": 10}, {"apy": 0.25, "discount": 0.0}
+    sysMarket, sysPortfolio = {"liquidity": 0.1, "tenure": None, "fees": 5.0}, {"funds": None}
+    main(tickers=logging, expires=sysExpires, parameters=sysSecurity | sysValuation | sysMarket | sysPortfolio)
 
 
 
