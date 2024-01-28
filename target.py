@@ -64,7 +64,7 @@ def main(*args, tickers, expires, parameters, **kwargs):
 
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
-    sysSecurity, sysValuation, sysMarket, sysPortfolio = {"size": 10}, {"apy": 0.25}, {"liquidity": 0.1, "tenure": None}, {"funds": None}
+    sysSecurity, sysValuation, sysMarket, sysPortfolio = {"size": 5}, {"apy": 0.15}, {"liquidity": 0.1, "tenure": None}, {"funds": None}
     main(tickers=None, expires=None, parameters=sysSecurity | sysValuation | sysMarket | sysPortfolio)
 
 

@@ -42,7 +42,7 @@ class ETradeMarketsURL(WebURL):
 class ETradeStockURL(ETradeMarketsURL):
     def path(cls, *args, ticker=None, tickers=[], **kwargs):
         tickers = ",".join([ticker] if bool(ticker) else [] + tickers)
-        return "/v1/market/quote/{tickers}.json".format(tickers=tickers)
+        return f"/v1/market/quote/{tickers}.json"
 
 class ETradeExpireURL(ETradeMarketsURL):
     def path(cls, *args, **kwargs): return "/v1/market/optionexpiredate.json"
@@ -167,7 +167,7 @@ class ETradeSecurityDownloader(Producer):
         super().__init__(*args, name=name, **kwargs)
         pages = {"stock": ETradeStockPage, "expire": ETradeExpirePage, "option": ETradeOptionPage}
         pages = {key: page(*args, **kwargs) for key, page in pages.items()}
-        self.__pages = pages
+        self.pages = pages
 
     def execute(self, *args, tickers, expires, **kwargs):
         for ticker in tickers:
@@ -185,8 +185,6 @@ class ETradeSecurityDownloader(Producer):
                 options = self.pages["option"](ticker, *args, expire=expire, strike=strike, **kwargs)
                 yield ETradeSecurityQuery(current, ticker, expire, stocks, options)
 
-    @property
-    def pages(self): return self.__pages
 
 
 
