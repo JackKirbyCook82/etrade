@@ -43,7 +43,7 @@ pd.set_option('display.max_rows', 20)
 pd.set_option("display.max_columns", 25)
 
 
-def main(*args, tickers, expires, parameters, **kwargs):
+def main(*args, parameters, **kwargs):
     valuations = ValuationFile(name="ValuationFile", repository=os.path.join(REPOSITORY, "valuation"), timeout=None)
     file = TargetsFile(name="TargetFile", repository=REPOSITORY, timeout=None)
     table = TargetsTable(name="TargetTable", timeout=None)
@@ -55,7 +55,7 @@ def main(*args, tickers, expires, parameters, **kwargs):
     target_window = ETradeTargetsWindow(name="TargetsWindow", feed=table)
     feed_thread = SideThread(target_feed, name="TargetFeedThread")
     window_thread = MainThread(target_window, name="TargetWindowThread")
-    feed_thread.setup(tickers=tickers, expires=expires, **parameters)
+    feed_thread.setup(**parameters)
     window_thread.setup()
     feed_thread.start()
     window_thread.run()
@@ -64,8 +64,8 @@ def main(*args, tickers, expires, parameters, **kwargs):
 
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
-    sysSecurity, sysValuation, sysMarket, sysPortfolio = {"size": 5}, {"apy": 0.15}, {"liquidity": 0.1, "tenure": None}, {"funds": None}
-    main(tickers=None, expires=None, parameters=sysSecurity | sysValuation | sysMarket | sysPortfolio)
+    security, valuation, market, portfolio = {"size": 5}, {"apy": 0.15}, {"liquidity": 0.1, "tenure": None}, {"funds": None}
+    main(parameters=security | valuation | market | portfolio)
 
 
 

@@ -42,7 +42,7 @@ pd.set_option('display.max_rows', 20)
 pd.set_option("display.max_columns", 25)
 
 
-def main(*args, tickers, expires, parameters, **kwargs):
+def main(*args, parameters, **kwargs):
     security_file = SecurityFile(name="SecurityFile", repository=os.path.join(REPOSITORY, "security"), timeout=None)
     valuation_file = ValuationFile(name="ValuationFile", repository=os.path.join(REPOSITORY, "valuation"), timeout=None)
     security_reader = SecurityLoader(name="SecurityReader", file=security_file)
@@ -55,15 +55,15 @@ def main(*args, tickers, expires, parameters, **kwargs):
     valuation_pipeline = security_reader + security_filter + security_calculator + strategy_calculator
     valuation_pipeline = valuation_pipeline + valuation_calculator + valuation_filter + valuation_writer
     valuation_thread = SideThread(valuation_pipeline, name="ValuationThread")
-    valuation_thread.setup(tickers=tickers, expires=expires, **parameters)
+    valuation_thread.setup(**parameters)
     valuation_thread.start()
     valuation_thread.join()
 
 
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
-    sysSecurity, sysValuation, sysMarket = {"volume": 50, "interest": 50, "size": 5}, {"apy": 0.0, "discount": 0.0}, {"fees": 1.0}
-    main(tickers=None, expires=None, parameters=sysSecurity | sysValuation | sysMarket)
+    security, valuation, market = {"volume": 50, "interest": 50, "size": 5}, {"apy": 0.0, "discount": 0.0}, {"fees": 1.0}
+    main(parameters=security | valuation | market)
 
 
 

@@ -21,6 +21,7 @@ PROJECT = os.path.abspath(os.path.join(MAIN, os.pardir))
 ROOT = os.path.abspath(os.path.join(PROJECT, os.pardir))
 REPOSITORY = os.path.join(ROOT, "Library", "repository", "etrade")
 API = os.path.join(ROOT, "Library", "api.csv")
+TICKERS = os.path.join(ROOT, "ETrade", "tickers.txt")
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 
@@ -59,6 +60,9 @@ class ETradeReader(WebReader, delay=10): pass
 
 
 def main(*args, tickers, expires, parameters, **kwargs):
+    with open(TICKERS, "r") as tickerfile:
+        tickers = [str(string).strip().upper() for string in tickerfile.read().split("\n")]
+        expires = DateRange([(Datetime.today() + Timedelta(days=1)).date(), (Datetime.today() + Timedelta(weeks=52)).date()])
     api = pd.read_csv(API, header=0, index_col="website").loc["etrade"].to_dict()
     file = SecurityFile(name="SecurityFile", repository=os.path.join(REPOSITORY, "security"), timeout=None)
     authorizer = ETradeAuthorizer(name="ETradeAuthorizer", apikey=api["key"], apicode=api["code"])
@@ -75,10 +79,8 @@ def main(*args, tickers, expires, parameters, **kwargs):
 
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
-    sysTickers = ["NVDA", "AMD", "AMC", "TSLA", "AAPL", "IWM", "AMZN", "SPY", "QQQ", "MSFT", "BAC", "BABA", "GOOGL", "META", "ZIM", "XOM", "INTC", "OXY", "CSCO", "COIN", "NIO"]
-    sysExpires = DateRange([(Datetime.today() + Timedelta(days=1)).date(), (Datetime.today() + Timedelta(weeks=26)).date()])
-    sysSecurity = {"volume": None, "interest": None, "size": None}
-    main(tickers=sysTickers, expires=sysExpires, parameters=sysSecurity)
+    security = {"volume": None, "interest": None, "size": None}
+    main(parameters=security)
 
 
 

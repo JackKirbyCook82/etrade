@@ -21,6 +21,7 @@ PROJECT = os.path.abspath(os.path.join(MAIN, os.pardir))
 ROOT = os.path.abspath(os.path.join(PROJECT, os.pardir))
 REPOSITORY = os.path.join(ROOT, "Library", "repository", "etrade")
 API = os.path.join(ROOT, "Library", "api.csv")
+TICKERS = os.path.join(ROOT, "ETrade", "tickers.txt")
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 
@@ -64,7 +65,10 @@ class ETradeReader(WebReader, delay=10): pass
 class ETradeBreaker(CycleBreaker): pass
 
 
-def main(*args, tickers, expires, parameters, **kwargs):
+def main(*args, parameters, **kwargs):
+    with open(TICKERS, "r") as tickerfile:
+        tickers = [str(string).strip().upper() for string in tickerfile.read().split("\n")]
+        expires = DateRange([(Datetime.today() + Timedelta(days=1)).date(), (Datetime.today() + Timedelta(weeks=52)).date()])
     api = pd.read_csv(API, header=0, index_col="website").loc["etrade"].to_dict()
     file = TargetsFile(name="TargetFile", repository=REPOSITORY, timeout=None)
     table = TargetsTable(name="TargetTable", timeout=None)
@@ -93,11 +97,9 @@ def main(*args, tickers, expires, parameters, **kwargs):
 
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
-    sysTickers = ["NVDA", "AMD", "AMC", "TSLA", "AAPL", "IWM", "AMZN", "SPY", "QQQ", "MSFT", "BAC", "BABA", "GOOGL", "META", "ZIM", "XOM", "INTC", "OXY", "CSCO", "COIN", "NIO"]
-    sysExpires = DateRange([(Datetime.today() + Timedelta(days=1)).date(), (Datetime.today() + Timedelta(weeks=52)).date()])
-    sysSecurity, sysValuation = {"volume": 100, "interest": 100, "size": 10}, {"apy": 0.25, "discount": 0.0}
-    sysMarket, sysPortfolio = {"liquidity": 0.1, "tenure": None, "fees": 5.0}, {"funds": None}
-    main(tickers=logging, expires=sysExpires, parameters=sysSecurity | sysValuation | sysMarket | sysPortfolio)
+    security, valuation = {"volume": 100, "interest": 100, "size": 10}, {"apy": 0.25, "discount": 0.0}
+    market, portfolio = {"liquidity": 0.1, "tenure": None, "fees": 5.0}, {"funds": None}
+    main(parameters=security | valuation | market | portfolio)
 
 
 
