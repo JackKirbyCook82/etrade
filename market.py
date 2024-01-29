@@ -15,11 +15,11 @@ from datetime import datetime as Datetime
 from datetime import timezone as Timezone
 from collections import namedtuple as ntuple
 
-from support.pipelines import Producer
 from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
-from finance.securities import Instruments, Securities
+from support.pipelines import Producer
+from finance.variables import Securities, Instruments, Contract
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -160,30 +160,41 @@ class ETradeOptionPage(WebJsonPage):
         return {longs[instrument]: long[columns], shorts[instrument]: short[columns]}
 
 
-class ETradeSecurityQuery(ntuple("Query", "current ticker expire stocks options")): pass
-class ETradeSecurityDownloader(Producer):
-    def __getitem__(self, key): return self.pages[key]
+class ETradeSecurityQuery(ntuple("Query", "current contract stocks options")): pass
+class ETradeSecurityDownloader(Producer, title="Downloaded"):
     def __init__(self, *args, name, **kwargs):
         super().__init__(*args, name=name, **kwargs)
         pages = {"stock": ETradeStockPage, "expire": ETradeExpirePage, "option": ETradeOptionPage}
         pages = {key: page(*args, **kwargs) for key, page in pages.items()}
         self.pages = pages
 
-    def execute(self, *args, tickers, expires, **kwargs):
-        for ticker in tickers:
-            underlying = self.pages["stock"](ticker, *args, **kwargs)
-            bid = underlying[Securities.Stock.Long].set_index(["date", "ticker"], inplace=False, drop=True)
-            ask = underlying[Securities.Stock.Short].set_index(["date", "ticker"], inplace=False, drop=True)
-            bid = np.float32(bid["price"].values[0])
-            ask = np.float32(ask["price"].values[0])
-            strike = (bid + ask) / 2
-            for expire in self.pages["expire"](ticker, *args, **kwargs):
-                if expire not in expires:
-                    continue
+    def prepare(self, *args, tickers, **kwargs):
+        strikes = [self.stock(ticker, *args, **kwargs) for ticker in tickers]
+        chains = [self.expires(ticker, *args, **kwargs) for ticker in tickers]
+        return {"strikes": strikes, "chains": chains}
+
+    def stock(self, ticker, *args, **kwargs):
+        underlying = self.pages["stock"](ticker, *args, **kwargs)
+        bid = underlying[Securities.Stock.Long].set_index(["date", "ticker"], inplace=False, drop=True)
+        ask = underlying[Securities.Stock.Short].set_index(["date", "ticker"], inplace=False, drop=True)
+        bid = np.float32(bid["price"].values[0])
+        ask = np.float32(ask["price"].values[0])
+        return (bid + ask) / 2
+
+    def expires(self, ticker, *args, expires, **kwargs):
+        expires = [expire for expire in self.pages["expire"](ticker, *args, **kwargs) if expire in expires]
+        return expires
+
+    def execute(self, *args, tickers, strikes, chains, **kwargs):
+        assert all([isinstance(values, list) for values in (tickers, strikes, chains)])
+        assert len(tickers) == len(strikes) == len(chains)
+        for ticker, strike, expires in zip(tickers, strikes, chains):
+            for expire in expires:
                 current = Datetime.now()
+                contract = Contract(ticker, expire)
                 stocks = self.pages["stock"](ticker, *args, **kwargs)
                 options = self.pages["option"](ticker, *args, expire=expire, strike=strike, **kwargs)
-                yield ETradeSecurityQuery(current, ticker, expire, stocks, options)
+                yield ETradeSecurityQuery(current, contract, stocks, options)
 
 
 

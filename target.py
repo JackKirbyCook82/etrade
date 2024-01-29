@@ -22,8 +22,8 @@ if ROOT not in sys.path:
     sys.path.append(ROOT)
 
 from support.synchronize import SideThread, MainThread
-from finance.valuations import ValuationFile, ValuationReader, ValuationFilter
-from finance.targets import TargetsFile, TargetsCalculator, TargetsWriter, TargetsTable
+from finance.valuations import ValuationFile, ValuationLoader, ValuationFilter
+from finance.targets import TargetsFile, TargetsCalculator, TargetsSaver, TargetsTable
 
 from window import ETradeTargetsWindow
 
@@ -47,10 +47,10 @@ def main(*args, tickers, expires, parameters, **kwargs):
     valuations = ValuationFile(name="ValuationFile", repository=os.path.join(REPOSITORY, "valuation"), timeout=None)
     file = TargetsFile(name="TargetFile", repository=REPOSITORY, timeout=None)
     table = TargetsTable(name="TargetTable", timeout=None)
-    valuation_reader = ValuationReader(name="ValuationReader", file=valuations)
+    valuation_reader = ValuationLoader(name="ValuationReader", file=valuations)
     valuation_filter = ValuationFilter(name="ValuationFilter")
     target_calculator = TargetsCalculator(name="TargetCalculator")
-    target_writer = TargetsWriter(name="TargetWriter", table=table, file=file)
+    target_writer = TargetsSaver(name="TargetWriter", table=table, file=file)
     target_feed = valuation_reader + valuation_filter + target_calculator + target_writer
     target_window = ETradeTargetsWindow(name="TargetsWindow", feed=table)
     feed_thread = SideThread(target_feed, name="TargetFeedThread")

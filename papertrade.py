@@ -26,10 +26,12 @@ if ROOT not in sys.path:
 
 from webscraping.webreaders import WebAuthorizer, WebReader
 from support.synchronize import MainThread, SideThread
-from finance.securities import DateRange, SecurityFilter, SecurityCalculator
+from support.pipelines import CycleBreaker
+from finance.securities import SecurityFilter, SecurityCalculator
 from finance.strategies import StrategyCalculator
 from finance.valuations import ValuationCalculator, ValuationFilter
-from finance.targets import TargetsCalculator, TargetsWriter, TargetsFile, TargetsTable
+from finance.targets import TargetsCalculator, TargetsSaver, TargetsFile, TargetsTable
+from finance.variables import DateRange
 
 from market import ETradeSecurityDownloader
 from window import ETradeTargetsWindow
@@ -59,22 +61,24 @@ base = "https://api.etrade.com"
 
 class ETradeAuthorizer(WebAuthorizer, authorize=authorize, request=request, access=access, base=base): pass
 class ETradeReader(WebReader, delay=10): pass
+class ETradeBreaker(CycleBreaker): pass
 
 
 def main(*args, tickers, expires, parameters, **kwargs):
-    table = TargetsTable(name="TargetTable", timeout=None)
-    file = TargetsFile(name="TargetFile", repository=REPOSITORY, timeout=None)
     api = pd.read_csv(API, header=0, index_col="website").loc["etrade"].to_dict()
+    file = TargetsFile(name="TargetFile", repository=REPOSITORY, timeout=None)
+    table = TargetsTable(name="TargetTable", timeout=None)
     authorizer = ETradeAuthorizer(name="ETradeAuthorizer", apikey=api["key"], apicode=api["code"])
+    breaker = ETradeBreaker(name="ETradeBreaker")
     with ETradeReader(authorizer=authorizer, name="ETradeReader") as reader:
-        security_downloader = ETradeSecurityDownloader(name="SecurityDownloader", feed=reader)
+        security_downloader = ETradeSecurityDownloader(name="SecurityDownloader", feed=reader, breaker=breaker)
         security_filter = SecurityFilter(name="SecurityFilter")
         security_calculator = SecurityCalculator(name="SecurityCalculator")
         strategy_calculator = StrategyCalculator(name="StrategyCalculator")
         valuation_calculator = ValuationCalculator(name="ValuationCalculator")
         valuation_filter = ValuationFilter(name="ValuationFilter")
         target_calculator = TargetsCalculator(name="TargetCalculator")
-        target_writer = TargetsWriter(name="TargetWriter", table=table, file=file)
+        target_writer = TargetsSaver(name="TargetWriter", table=table, file=file)
         feed_pipeline = security_downloader + security_filter + security_calculator + strategy_calculator
         feed_pipeline = feed_pipeline + valuation_calculator + valuation_filter + target_calculator + target_writer
         target_window = ETradeTargetsWindow(name="TargetsWindow", feed=table)

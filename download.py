@@ -25,8 +25,10 @@ if ROOT not in sys.path:
     sys.path.append(ROOT)
 
 from support.synchronize import SideThread
+from support.pipelines import CycleBreaker
 from webscraping.webreaders import WebAuthorizer, WebReader
-from finance.securities import DateRange, SecurityFile, SecurityFilter, SecurityWriter
+from finance.securities import SecurityFile, SecurityFilter, SecuritySaver
+from finance.variables import DateRange
 
 from market import ETradeSecurityDownloader
 
@@ -55,16 +57,18 @@ base = "https://api.etrade.com"
 
 class ETradeAuthorizer(WebAuthorizer, authorize=authorize, request=request, access=access, base=base): pass
 class ETradeReader(WebReader, delay=10): pass
+class ETradeBreaker(CycleBreaker): pass
 
 
 def main(*args, tickers, expires, parameters, **kwargs):
-    file = SecurityFile(name="SecurityFile", repository=os.path.join(REPOSITORY, "security"), timeout=None)
     api = pd.read_csv(API, header=0, index_col="website").loc["etrade"].to_dict()
+    file = SecurityFile(name="SecurityFile", repository=os.path.join(REPOSITORY, "security"), timeout=None)
     authorizer = ETradeAuthorizer(name="ETradeAuthorizer", apikey=api["key"], apicode=api["code"])
+    breaker = ETradeBreaker(name="ETradeBreaker")
     with ETradeReader(authorizer=authorizer, name="ETradeReader") as reader:
-        security_downloader = ETradeSecurityDownloader(name="SecurityDownloader", feed=reader)
+        security_downloader = ETradeSecurityDownloader(name="SecurityDownloader", feed=reader, breaker=breaker)
         security_filter = SecurityFilter(name="SecurityFilter")
-        security_writer = SecurityWriter(name="SecurityWriter", file=file)
+        security_writer = SecuritySaver(name="SecurityWriter", file=file)
         security_pipeline = security_downloader + security_filter + security_writer
         security_thread = SideThread(security_pipeline, name="SecurityThread")
         security_thread.setup(tickers=tickers, expires=expires, **parameters)

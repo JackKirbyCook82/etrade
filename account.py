@@ -15,11 +15,11 @@ from datetime import datetime as Datetime
 from datetime import timezone as Timezone
 from collections import namedtuple as ntuple
 
-from support.pipelines import Producer
 from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
-from finance.securities import Instruments, Positions, Securities
+from support.pipelines import CycleProducer
+from finance.variables import Securities, Instruments, Positions
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -129,19 +129,21 @@ class ETradePortfolioPage(WebJsonPage):
 
 
 class ETradeAccountQuery(ntuple("Query", "current balance portfolio")): pass
-class ETradeAccountDownloader(Producer):
-    def __getitem__(self, key): return self.pages[key]
+class ETradeAccountDownloader(CycleProducer, title="Downloaded"):
     def __init__(self, *args, name, **kwargs):
         super().__init__(*args, name=name, **kwargs)
         pages = {"account": ETradeAccountPage, "balance": ETradeBalancePage, "portfolio": ETradePortfolioPage}
         pages = {key: page(*args, **kwargs) for key, page in pages.items()}
         self.pages = pages
 
-    def execute(self, *args, account, **kwargs):
+    def prepare(self, *args, account, **kwargs):
         account = self.pages["account"](*args, **kwargs)[account]
+        return {"account": account}
+
+    def execute(self, *args, account, **kwargs):
+        current = Datetime.now()
         balances = self.pages["balance"](*args, account=account, **kwargs)
         portfolio = self.pages["portfolio"](*args, acccount=account, **kwargs)
-        current = Datetime.now()
         yield ETradeAccountQuery(current, balances, portfolio)
 
 
