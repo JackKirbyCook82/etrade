@@ -10,7 +10,7 @@ import PySimpleGUI as gui
 from abc import ABC
 from support.windows import Terminal, Window, Table, Frame, Button, Text, Column, Justify
 
-from finance.targets import TargetStatus
+from finance.targets import Status
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -60,7 +60,11 @@ class ETradePendingTable(ETradeContentsTable):
             window.start()
 
 class ETradePurchasedTable(ETradeContentsTable):
-    pass
+    def click(self, indexes, *args, **kwargs):
+        for index in indexes:
+            target = self.targets[index]
+            window = ETradePurchasedWindow(name="Purchased", content=target, parent=self.window)
+            window.start()
 
 
 class ETradeStrategyFrame(Frame):
@@ -93,28 +97,28 @@ class ETradeValuationFrame(Frame):
 class ETradeAdoptButton(Button):
     def click(self, *args, **kwargs):
         indx, col = (hash(self.window.target), "status")
-        self.window.parent.feed[indx, col] = TargetStatus.PENDING
+        self.window.parent.feed[indx, col] = Status.PENDING
         self.window.parent.execute(*args, **kwargs)
         self.window.stop()
 
 class ETradeAbandonButton(Button):
     def click(self, *args, **kwargs):
         indx, col = (hash(self.window.target), "status")
-        self.window.parent.feed[indx, col] = TargetStatus.ABANDONED
+        self.window.parent.feed[indx, col] = Status.ABANDONED
         self.window.parent.execute(*args, **kwargs)
         self.window.stop()
 
 class ETradeSuccessButton(Button):
     def click(self, *args, **kwargs):
         indx, col = (hash(self.window.target), "status")
-        self.window.parent.feed[indx, col] = TargetStatus.PURCHASED
+        self.window.parent.feed[indx, col] = Status.PURCHASED
         self.window.parent.execute(*args, **kwargs)
         self.window.stop()
 
 class ETradeFailureButton(Button):
     def click(self, *args, **kwargs):
         indx, col = (hash(self.window.target), "status")
-        self.window.parent.feed[indx, col] = TargetStatus.ABANDONED
+        self.window.parent.feed[indx, col] = Status.ABANDONED
         self.window.parent.execute(*args, **kwargs)
         self.window.stop()
 
@@ -152,6 +156,11 @@ class ETradePendingWindow(ETradeTargetWindow):
         elements = dict(positive=success.element, negative=failure.element)
         super().__init__(*args, name=name, tag=hash(content), content=content, **elements, **kwargs)
 
+class ETradePurchasedWindow(ETradeTargetWindow):
+    def __init__(self, *args, name, content, **kwargs):
+        elements = dict(positive=gui.Text(""), negative=gui.Text(""))
+        super().__init__(*args, name=name, tag=hash(content), content=content, **elements, **kwargs)
+
 
 class ETradeTargetsWindow(Terminal):
     def __init__(self, *args, name, feed, **kwargs):
@@ -166,9 +175,9 @@ class ETradeTargetsWindow(Terminal):
         self.__feed = feed
 
     def execute(self, *args, **kwargs):
-        prospect = [target for target in iter(self.feed) if target.status == TargetStatus.PROSPECT]
-        pending = [target for target in iter(self.feed) if target.status == TargetStatus.PENDING]
-        purchased = [target for target in iter(self.feed) if target.status == TargetStatus.PURCHASED]
+        prospect = [target for target in iter(self.feed) if target.status == Status.PROSPECT]
+        pending = [target for target in iter(self.feed) if target.status == Status.PENDING]
+        purchased = [target for target in iter(self.feed) if target.status == Status.PURCHASED]
         self.prospect.refresh(contents=prospect)
         self.pending.refresh(contents=pending)
         self.purchased.refresh(contents=purchased)
