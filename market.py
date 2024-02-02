@@ -19,7 +19,7 @@ from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
 from support.pipelines import Producer
-from finance.variables import Securities, Instruments, Contract
+from finance.variables import Contract, Securities
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -65,9 +65,8 @@ class ETradeOptionURL(ETradeMarketsURL):
 
 
 class ETradeStockData(WebJSON, locator="//QuoteResponse/QuoteData[]", collection=True):
-    class Ticker(WebJSON.Text, locator="//Product/symbol", key="ticker", parser=str): pass
     class Date(WebJSON.Text, locator="//dateTimeUTC", key="date", parser=date_parser): pass
-    class DateTime(WebJSON.Text, locator="//dateTimeUTC", key="time", parser=datetime_parser): pass
+    class Ticker(WebJSON.Text, locator="//Product/symbol", key="ticker", parser=str): pass
     class Bid(WebJSON.Text, locator="//All/bid", key="bid", parser=np.float32): pass
     class Demand(WebJSON.Text, locator="//All/bidSize", key="demand", parser=np.int32): pass
     class Ask(WebJSON.Text, locator="//All/ask", key="ask", parser=np.float32): pass
@@ -79,11 +78,14 @@ class ETradeExpireData(WebJSON, locator="//OptionExpireDateResponse/ExpirationDa
     class Month(WebJSON.Text, locator="//month", key="month", parser=np.int16): pass
     class Day(WebJSON.Text, locator="//day", key="day", parser=np.int16): pass
 
+    def execute(self, *args, **kwargs):
+        return Date(year=self["year"].data, month=self["month"].data, day=self["day"].data)
+
+
 class ETradeOptionData(WebJSON, locator="//OptionChainResponse/OptionPair[]", collection=True, optional=True):
     class Call(WebJSON, locator="//Call", key="call"):
-        class Ticker(WebJSON.Text, locator="//symbol", key="ticker", parser=str): pass
         class Date(WebJSON.Text, locator="//timeStamp", key="date", parser=date_parser): pass
-        class DateTime(WebJSON.Text, locator="//timeStamp", key="time", parser=datetime_parser): pass
+        class Ticker(WebJSON.Text, locator="//symbol", key="ticker", parser=str): pass
         class Expire(WebJSON.Text, locator="//quoteDetail", key="expire", parser=expire_parser): pass
         class Strike(WebJSON.Text, locator="//strikePrice", key="strike", parser=strike_parser): pass
         class Bid(WebJSON.Text, locator="//bid", key="bid", parser=np.float32): pass
@@ -94,9 +96,8 @@ class ETradeOptionData(WebJSON, locator="//OptionChainResponse/OptionPair[]", co
         class Interest(WebJSON.Text, locator="//openInterest", key="interest", parser=np.int32): pass
 
     class Put(WebJSON, locator="//Put", key="put"):
-        class Ticker(WebJSON.Text, locator="//symbol", key="ticker", parser=str): pass
         class Date(WebJSON.Text, locator="//timeStamp", key="date", parser=date_parser): pass
-        class DateTime(WebJSON.Text, locator="//timeStamp", key="time", parser=datetime_parser): pass
+        class Ticker(WebJSON.Text, locator="//symbol", key="ticker", parser=str): pass
         class Expire(WebJSON.Text, locator="//quoteDetail", key="expire", parser=expire_parser): pass
         class Strike(WebJSON.Text, locator="//strikePrice", key="strike", parser=strike_parser): pass
         class Bid(WebJSON.Text, locator="//bid", key="bid", parser=np.float32): pass
@@ -111,13 +112,13 @@ class ETradeStockPage(WebJsonPage):
     def __call__(self, ticker, *args, **kwargs):
         curl = ETradeStockURL(ticker=ticker)
         self.load(str(curl.address), params=dict(curl.query))
-        stocks = ETradeStockData(self.source)
-        return self.stocks(stocks)
+        contents = ETradeStockData(self.source)
+        return self.stocks(contents, *args, **kwargs)
 
     @staticmethod
-    def stocks(contents):
+    def stocks(contents, *args, **kwargs):
         columns = ["date", "ticker", "price", "size", "volume"]
-        stocks = [{key: value.data for key, value in iter(content)} for content in iter(contents)]
+        stocks = [{key: value(*args, **kwargs) for key, value in iter(content)} for content in iter(contents)]
         dataframe = pd.DataFrame.from_records(stocks)
         long = dataframe.drop(["bid", "demand"], axis=1, inplace=False).rename(columns={"ask": "price", "supply": "size"})
         short = dataframe.drop(["ask", "supply"], axis=1, inplace=False).rename(columns={"bid": "price", "demand": "size"})
@@ -129,38 +130,44 @@ class ETradeExpirePage(WebJsonPage):
     def __call__(self, ticker, *args, **kwargs):
         curl = ETradeExpireURL(ticker=ticker)
         self.load(str(curl.address), params=dict(curl.query))
-        expires = ETradeExpireData(self.source)
-        return list(self.expires(expires))
+        contents = ETradeExpireData(self.source)
+        return list(self.expires(contents))
 
     @staticmethod
-    def expires(contents):
+    def expires(contents, *args, **kwargs):
         for content in contents:
-            yield Date(year=content["year"].data, month=content["month"].data, day=content["day"].data)
+            yield content(*args, **kwargs)
 
 
 class ETradeOptionPage(WebJsonPage):
     def __call__(self, ticker, *args, expire, strike, **kwargs):
         curl = ETradeOptionURL(ticker=ticker, expire=expire, strike=strike)
         self.load(str(curl.address), params=dict(curl.query))
-        options = ETradeOptionData(self.source)
-        puts = self.options(Instruments.PUT, options)
-        calls = self.options(Instruments.CALL, options)
+        contents = ETradeOptionData(self.source)
+        puts = self.puts(contents, *args, **kwargs)
+        calls = self.calls(contents, *args, **kwargs)
         return puts | calls
 
     @staticmethod
-    def options(instrument, contents):
-        name = str(instrument.name).lower()
-        longs = {Instruments.PUT: Securities.Option.Put.Long, Instruments.CALL: Securities.Option.Call.Long}
-        shorts = {Instruments.PUT: Securities.Option.Put.Short, Instruments.CALL: Securities.Option.Call.Short}
+    def puts(contents, *args, **kwargs):
         columns = ["date", "ticker", "expire", "strike", "price", "size", "volume", "interest"]
-        contents = [{key: value.data for key, value in iter(content[name])} for content in iter(contents)]
+        contents = [{key: value(*args, **kwargs) for key, value in iter(content["put"])} for content in iter(contents)]
         dataframe = pd.DataFrame.from_records(contents)
         long = dataframe.drop(["bid", "demand"], axis=1, inplace=False).rename(columns={"ask": "price", "supply": "size"})
         short = dataframe.drop(["ask", "supply"], axis=1, inplace=False).rename(columns={"bid": "price", "demand": "size"})
-        return {longs[instrument]: long[columns], shorts[instrument]: short[columns]}
+        return {Securities.Option.Put.Long: long[columns], Securities.Option.Put.Short: short[columns]}
+
+    @staticmethod
+    def calls(contents, *args, **kwargs):
+        columns = ["date", "ticker", "expire", "strike", "price", "size", "volume", "interest"]
+        contents = [{key: value(*args, **kwargs) for key, value in iter(content["call"])} for content in iter(contents)]
+        dataframe = pd.DataFrame.from_records(contents)
+        long = dataframe.drop(["bid", "demand"], axis=1, inplace=False).rename(columns={"ask": "price", "supply": "size"})
+        short = dataframe.drop(["ask", "supply"], axis=1, inplace=False).rename(columns={"bid": "price", "demand": "size"})
+        return {Securities.Option.Call.Long: long[columns], Securities.Option.Call.Short: short[columns]}
 
 
-class ETradeSecurityQuery(ntuple("Query", "current contract stocks options")): pass
+class ETradeSecurityQuery(ntuple("Query", "inquiry contract stocks options")): pass
 class ETradeSecurityDownloader(Producer, title="Downloaded"):
     def __init__(self, *args, name, **kwargs):
         super().__init__(*args, name=name, **kwargs)
@@ -190,11 +197,11 @@ class ETradeSecurityDownloader(Producer, title="Downloaded"):
         assert len(tickers) == len(strikes) == len(chains)
         for ticker, strike, expires in zip(tickers, strikes, chains):
             for expire in expires:
-                current = Datetime.now()
+                inquiry = Datetime.now()
                 contract = Contract(ticker, expire)
                 stocks = self.pages["stock"](ticker, *args, **kwargs)
                 options = self.pages["option"](ticker, *args, expire=expire, strike=strike, **kwargs)
-                yield ETradeSecurityQuery(current, contract, stocks, options)
+                yield ETradeSecurityQuery(inquiry, contract, stocks, options)
 
 
 

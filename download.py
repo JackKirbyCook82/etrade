@@ -20,8 +20,8 @@ MAIN = os.path.dirname(os.path.realpath(__file__))
 PROJECT = os.path.abspath(os.path.join(MAIN, os.pardir))
 ROOT = os.path.abspath(os.path.join(PROJECT, os.pardir))
 REPOSITORY = os.path.join(ROOT, "Library", "repository", "etrade")
-API = os.path.join(ROOT, "Library", "api.csv")
-TICKERS = os.path.join(ROOT, "ETrade", "tickers.txt")
+ETRADE = os.path.join(ROOT, "Library", "etrade.txt")
+TICKERS = os.path.join(ROOT, "Library", "tickers.txt")
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 
@@ -59,17 +59,13 @@ class ETradeAuthorizer(WebAuthorizer, authorize=authorize, request=request, acce
 class ETradeReader(WebReader, delay=10): pass
 
 
-def main(*args, tickers, expires, parameters, **kwargs):
-    with open(TICKERS, "r") as tickerfile:
-        tickers = [str(string).strip().upper() for string in tickerfile.read().split("\n")]
-        expires = DateRange([(Datetime.today() + Timedelta(days=1)).date(), (Datetime.today() + Timedelta(weeks=52)).date()])
-    api = pd.read_csv(API, header=0, index_col="website").loc["etrade"].to_dict()
-    file = SecurityFile(name="SecurityFile", repository=os.path.join(REPOSITORY, "security"), timeout=None)
-    authorizer = ETradeAuthorizer(name="ETradeAuthorizer", apikey=api["key"], apicode=api["code"])
+def main(*args, apikey, apicode, tickers, expires, parameters, **kwargs):
+    security_file = SecurityFile(name="SecurityFile", repository=os.path.join(REPOSITORY, "security"), timeout=None)
+    authorizer = ETradeAuthorizer(name="ETradeAuthorizer", apikey=apikey, apicode=apicode)
     with ETradeReader(authorizer=authorizer, name="ETradeReader") as reader:
         security_downloader = ETradeSecurityDownloader(name="SecurityDownloader", feed=reader)
         security_filter = SecurityFilter(name="SecurityFilter")
-        security_writer = SecuritySaver(name="SecurityWriter", file=file)
+        security_writer = SecuritySaver(name="SecurityWriter", file=security_file)
         security_pipeline = security_downloader + security_filter + security_writer
         security_thread = SideThread(security_pipeline, name="SecurityThread")
         security_thread.setup(tickers=tickers, expires=expires, **parameters)
@@ -79,8 +75,13 @@ def main(*args, tickers, expires, parameters, **kwargs):
 
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
-    security = {"volume": None, "interest": None, "size": None}
-    main(parameters=security)
+    with open(ETRADE, "r") as apifile:
+        sysApiKey, sysApiCode = [str(string).strip() for string in str(apifile.read()).split("\n")]
+    with open(TICKERS, "r") as tickerfile:
+        sysTickers = [str(string).strip().upper() for string in tickerfile.read().split("\n")]
+    sysExpires = DateRange([(Datetime.today() + Timedelta(days=1)).date(), (Datetime.today() + Timedelta(weeks=52)).date()])
+    sysSecurity = {"volume": None, "interest": None, "size": None}
+    main(apikey=sysApiKey, apicode=sysApiCode, tickers=sysTickers, expires=sysExpires, parameters=sysSecurity)
 
 
 

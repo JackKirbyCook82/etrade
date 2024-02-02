@@ -10,11 +10,9 @@ import PySimpleGUI as gui
 from abc import ABC
 from support.windows import Terminal, Window, Table, Frame, Button, Text, Column, Justify
 
-from finance.targets import Status
-
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["ETradeTargetsWindow"]
+__all__ = []
 __copyright__ = "Copyright 2023, Jack Kirby Cook"
 __license__ = ""
 
@@ -22,13 +20,12 @@ __license__ = ""
 class ETradeContentsTable(Table, ABC, justify=Justify.LEFT, height=40, events=True):
     index = Column("ID", 5, lambda target: f"{target.index:.0f}")
     strategy = Column("strategy", 15, lambda target: str(target.strategy))
-    ticker = Column("ticker", 10, lambda target: str(target.product.ticker).upper())
-    expire = Column("expire", 10, lambda target: target.product.expire.strftime("%Y-%m-%d"))
+    contract = Column("contract", 10, lambda target: "\n".join(list(map(str, target.contract))))
     options = Column("options", 20, lambda target: "\n".join(list(map(str, target.options))))
-    apy = Column("apy", 10, lambda target: f"{target.profitability.apy * 100:.0f}% / YR")
-    tau = Column("tau", 10, lambda target: f"{target.profitability.tau:.0f} DAYS")
-    value = Column("value", 10, lambda target: f"${target.valuation.profit:,.0f}")
-    cost = Column("cost", 10, lambda target: f"${target.valuation.cost:,.0f}")
+    apy = Column("apy", 10, lambda target: f"{target.profit.apy * 100:.0f}% / YR")
+    tau = Column("tau", 10, lambda target: f"{target.profit.tau:.0f} DAYS")
+    npv = Column("npv", 10, lambda target: f"${target.value.profit:,.0f}")
+    cost = Column("cost", 10, lambda target: f"${target.value.cost:,.0f}")
     size = Column("size", 10, lambda target: f"{target.size:,.0f} CNT")
 
     def __init__(self, *args, contents=[], **kwargs):
@@ -52,14 +49,16 @@ class ETradeProspectTable(ETradeContentsTable):
             window = ETradeProspectWindow(name="Prospect", content=target, parent=self.window)
             window.start()
 
-class ETradePendingTable(ETradeContentsTable):
+
+class ETradeAcquiringTable(ETradeContentsTable):
     def click(self, indexes, *args, **kwargs):
         for index in indexes:
             target = self.targets[index]
             window = ETradePendingWindow(name="Pending", content=target, parent=self.window)
             window.start()
 
-class ETradePurchasedTable(ETradeContentsTable):
+
+class ETradePortfolioTable(ETradeContentsTable):
     def click(self, indexes, *args, **kwargs):
         for index in indexes:
             target = self.targets[index]
@@ -75,7 +74,7 @@ class ETradeStrategyFrame(Frame):
     def layout(*args, strategy, size, **kwargs): return [[strategy, gui.Push(), size]]
 
 class ETradeSecurityFrame(Frame):
-    product = Text("product", "Arial 10", lambda target: str(target.product))
+    contract = Text("product", "Arial 10", lambda target: str(target.contract))
     options = Text("options", "Arial 10", lambda target: list(map(str, target.options)))
 
     @staticmethod
@@ -95,32 +94,32 @@ class ETradeValuationFrame(Frame):
 
 
 class ETradeAdoptButton(Button):
-    def click(self, *args, **kwargs):
-        indx, col = (hash(self.window.target), "status")
-        self.window.parent.feed[indx, col] = Status.PENDING
-        self.window.parent.execute(*args, **kwargs)
-        self.window.stop()
+    def click(self, *args, **kwargs): pass
+#        indx, col = (hash(self.window.target), "status")
+#        self.window.parent.feed[indx, col] = Status.PENDING
+#        self.window.parent.execute(*args, **kwargs)
+#        self.window.stop()
 
 class ETradeAbandonButton(Button):
-    def click(self, *args, **kwargs):
-        indx, col = (hash(self.window.target), "status")
-        self.window.parent.feed[indx, col] = Status.ABANDONED
-        self.window.parent.execute(*args, **kwargs)
-        self.window.stop()
+    def click(self, *args, **kwargs): pass
+#        indx, col = (hash(self.window.target), "status")
+#        self.window.parent.feed[indx, col] = Status.ABANDONED
+#        self.window.parent.execute(*args, **kwargs)
+#        self.window.stop()
 
 class ETradeSuccessButton(Button):
-    def click(self, *args, **kwargs):
-        indx, col = (hash(self.window.target), "status")
-        self.window.parent.feed[indx, col] = Status.PURCHASED
-        self.window.parent.execute(*args, **kwargs)
-        self.window.stop()
+    def click(self, *args, **kwargs): pass
+#        indx, col = (hash(self.window.target), "status")
+#        self.window.parent.feed[indx, col] = Status.PURCHASED
+#        self.window.parent.execute(*args, **kwargs)
+#        self.window.stop()
 
 class ETradeFailureButton(Button):
-    def click(self, *args, **kwargs):
-        indx, col = (hash(self.window.target), "status")
-        self.window.parent.feed[indx, col] = Status.ABANDONED
-        self.window.parent.execute(*args, **kwargs)
-        self.window.stop()
+    def click(self, *args, **kwargs): pass
+#        indx, col = (hash(self.window.target), "status")
+#        self.window.parent.feed[indx, col] = Status.ABANDONED
+#        self.window.parent.execute(*args, **kwargs)
+#        self.window.stop()
 
 
 class ETradeTargetWindow(Window, ABC):

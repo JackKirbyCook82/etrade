@@ -20,22 +20,13 @@ MAIN = os.path.dirname(os.path.realpath(__file__))
 PROJECT = os.path.abspath(os.path.join(MAIN, os.pardir))
 ROOT = os.path.abspath(os.path.join(PROJECT, os.pardir))
 REPOSITORY = os.path.join(ROOT, "Library", "repository", "etrade")
-API = os.path.join(ROOT, "Library", "api.csv")
-TICKERS = os.path.join(ROOT, "ETrade", "tickers.txt")
+ETRADE = os.path.join(ROOT, "Library", "etrade.txt")
+TICKERS = os.path.join(ROOT, "Library", "tickers.txt")
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 
 from webscraping.webreaders import WebAuthorizer, WebReader
-from support.synchronize import MainThread, SideThread
-from support.pipelines import CycleBreaker
-from finance.securities import SecurityFilter, SecurityCalculator
-from finance.strategies import StrategyCalculator
-from finance.valuations import ValuationCalculator, ValuationFilter
-from finance.targets import TargetsCalculator, TargetsSaver, TargetsFile, TargetsTable
 from finance.variables import DateRange
-
-from market import ETradeSecurityDownloader
-from window import ETradeTargetsWindow
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -62,46 +53,25 @@ base = "https://api.etrade.com"
 
 class ETradeAuthorizer(WebAuthorizer, authorize=authorize, request=request, access=access, base=base): pass
 class ETradeReader(WebReader, delay=10): pass
-class ETradeBreaker(CycleBreaker): pass
 
 
-def main(*args, parameters, **kwargs):
-    with open(TICKERS, "r") as tickerfile:
-        tickers = [str(string).strip().upper() for string in tickerfile.read().split("\n")]
-        expires = DateRange([(Datetime.today() + Timedelta(days=1)).date(), (Datetime.today() + Timedelta(weeks=52)).date()])
-    api = pd.read_csv(API, header=0, index_col="website").loc["etrade"].to_dict()
-    file = TargetsFile(name="TargetFile", repository=REPOSITORY, timeout=None)
-    table = TargetsTable(name="TargetTable", timeout=None)
-    authorizer = ETradeAuthorizer(name="ETradeAuthorizer", apikey=api["key"], apicode=api["code"])
-    breaker = ETradeBreaker(name="ETradeBreaker")
+def main(*args, apikey, apicode, tickers, expires, parameters, **kwargs):
+    authorizer = ETradeAuthorizer(name="ETradeAuthorizer", apikey=apikey, apicode=apicode)
     with ETradeReader(authorizer=authorizer, name="ETradeReader") as reader:
-        security_downloader = ETradeSecurityDownloader(name="SecurityDownloader", feed=reader, breaker=breaker)
-        security_filter = SecurityFilter(name="SecurityFilter")
-        security_calculator = SecurityCalculator(name="SecurityCalculator")
-        strategy_calculator = StrategyCalculator(name="StrategyCalculator")
-        valuation_calculator = ValuationCalculator(name="ValuationCalculator")
-        valuation_filter = ValuationFilter(name="ValuationFilter")
-        target_calculator = TargetsCalculator(name="TargetCalculator")
-        target_writer = TargetsSaver(name="TargetWriter", table=table, file=file)
-        feed_pipeline = security_downloader + security_filter + security_calculator + strategy_calculator
-        feed_pipeline = feed_pipeline + valuation_calculator + valuation_filter + target_calculator + target_writer
-        target_window = ETradeTargetsWindow(name="TargetsWindow", feed=table)
-        feed_writer = SideThread(feed_pipeline, name="TargetFeedThread")
-        window_thread = MainThread(target_window, name="TargetWindowThread")
-        feed_writer.setup(tickers=tickers, expires=expires, **parameters)
-        window_thread.setup()
-        feed_writer.start()
-        window_thread.run()
-        feed_writer.join()
+        pass
 
 
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
-    security, valuation = {"volume": 100, "interest": 100, "size": 10}, {"apy": 0.25, "discount": 0.0}
-    market, portfolio = {"liquidity": 0.1, "tenure": None, "fees": 5.0}, {"funds": None}
-    main(parameters=security | valuation | market | portfolio)
-
-
+    with open(ETRADE, "r") as apifile:
+        sysApiKey, sysApiCode = [str(string).strip() for string in str(apifile.read()).split("\n")]
+    with open(TICKERS, "r") as tickerfile:
+        sysTickers = [str(string).strip().upper() for string in tickerfile.read().split("\n")]
+    sysExpires = DateRange([(Datetime.today() + Timedelta(days=1)).date(), (Datetime.today() + Timedelta(weeks=52)).date()])
+    sysSecurity, sysValuation = {"volume": 100, "interest": 100, "size": 10}, {"apy": 0.25, "discount": 0.0}
+    sysMarket, sysPortfolio = {"liquidity": 0.1, "tenure": None, "fees": 5.0}, {"funds": None}
+    sysParameters = sysSecurity | sysValuation | sysMarket | sysPortfolio
+    main(apikey=sysApiKey, apicode=sysApiCode, tickers=sysTickers, expires=sysExpires, parameters=sysParameters)
 
 
 

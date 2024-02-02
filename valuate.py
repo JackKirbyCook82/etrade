@@ -17,12 +17,11 @@ MAIN = os.path.dirname(os.path.realpath(__file__))
 PROJECT = os.path.abspath(os.path.join(MAIN, os.pardir))
 ROOT = os.path.abspath(os.path.join(PROJECT, os.pardir))
 REPOSITORY = os.path.join(ROOT, "Library", "repository", "etrade")
-API = os.path.join(ROOT, "Library", "api.csv")
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 
 from support.synchronize import SideThread
-from finance.securities import SecurityFile, SecurityLoader, SecurityFilter, SecurityCalculator
+from finance.securities import SecurityFile, SecurityLoader, SecurityFilter, SecurityParser
 from finance.strategies import StrategyCalculator
 from finance.valuations import ValuationFile, ValuationCalculator, ValuationFilter, ValuationSaver
 
@@ -47,13 +46,12 @@ def main(*args, parameters, **kwargs):
     valuation_file = ValuationFile(name="ValuationFile", repository=os.path.join(REPOSITORY, "valuation"), timeout=None)
     security_reader = SecurityLoader(name="SecurityReader", file=security_file)
     security_filter = SecurityFilter(name="SecurityFilter")
-    security_calculator = SecurityCalculator(name="SecurityCalculator")
+    security_parser = SecurityParser(name="SecurityParser")
     strategy_calculator = StrategyCalculator(name="StrategyCalculator")
     valuation_calculator = ValuationCalculator(name="ValuationCalculator")
     valuation_filter = ValuationFilter(name="ValuationFilter")
     valuation_writer = ValuationSaver(name="ValuationWriter", file=valuation_file)
-    valuation_pipeline = security_reader + security_filter + security_calculator + strategy_calculator
-    valuation_pipeline = valuation_pipeline + valuation_calculator + valuation_filter + valuation_writer
+    valuation_pipeline = security_reader + security_filter + security_parser + strategy_calculator + valuation_calculator + valuation_filter + valuation_writer
     valuation_thread = SideThread(valuation_pipeline, name="ValuationThread")
     valuation_thread.setup(**parameters)
     valuation_thread.start()
@@ -62,8 +60,9 @@ def main(*args, parameters, **kwargs):
 
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
-    security, valuation, market = {"volume": 50, "interest": 50, "size": 5}, {"apy": 0.0, "discount": 0.0}, {"fees": 1.0}
-    main(parameters=security | valuation | market)
+    sysSecurity, sysValuation, sysMarket = {"volume": 50, "interest": 50, "size": 5}, {"apy": 0.0, "discount": 0.0}, {"fees": 1.0}
+    sysParameters = sysSecurity | sysValuation | sysMarket
+    main(parameters=sysParameters)
 
 
 

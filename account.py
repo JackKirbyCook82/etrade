@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on Sat Jan 27 2024
-@name:   ETrade Portfolio Objects
+@name:   ETrade Account Objects
 @author: Jack Kirby Cook
 
 """
@@ -19,7 +19,7 @@ from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
 from support.pipelines import CycleProducer
-from finance.variables import Securities, Instruments, Positions
+from finance.variables import Instruments, Options, Positions, Securities
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -33,8 +33,9 @@ timestamp_parser = lambda x: Datetime.fromtimestamp(int(x), Timezone.utc).astime
 date_parser = lambda x: np.datetime64(timestamp_parser(x).date(), "D")
 datetime_parser = lambda x: np.datetime64(timestamp_parser(x))
 strike_parser = lambda x: np.round(x, 2).astype(np.float32)
-position_parser = lambda string: Positions[string]
-option_parser = lambda string: Instruments[string]
+stock_parser = lambda string: Instruments.STOCK if str(string).upper() == "EQ" else None
+option_parser = lambda string: Options[str(string).upper()]
+position_parser = lambda string: Positions[str(string).upper()]
 status_parser = lambda string: Status[string]
 
 
@@ -50,14 +51,13 @@ class ETradeBalanceURL(WebURL):
 class ETradePortfolioURL(WebURL):
     def domain(cls, *args, **kwargs): return "https://api.etrade.com"
     def path(cls, *args, account, **kwargs): return f"/v1/accounts/{str(account)}/portfolio.json"
-    def parms(cls, *args, **kwargs): return {"count": "1000", "view": "QUICK"}
+    def parms(cls, *args, **kwargs): return {"count": "1000", "view": "COMPLETE"}
 
 
 class ETradeAccountData(WebJSON, locator="//AccountListResponse/Accounts/Account[]", collections=True):
     class AccountID(WebJSON.Text, locator="//accountId", key="id", parser=np.int32): pass
     class AccountKey(WebJSON.Text, locator="//accountIdKey", key="key", parser=str): pass
     class Status(WebJSON.Text, locator="//accountStatus", key="status", parser=status_parser): pass
-
 
 class ETradeBalanceData(WebJSON, locator="//BalanceResponse"):
     class AccountID(WebJSON.Text, locator="//accountId", key="id", parser=np.int32): pass
@@ -66,27 +66,38 @@ class ETradeBalanceData(WebJSON, locator="//BalanceResponse"):
     class Value(WebJSON.Text, locator="//Computed/RealTimeValues/totalAccountValue", key="value", parser=np.float32): pass
     class Market(WebJSON.Text, locator="//Computed/RealTimeValues/netMv", key="market", parser=np.float32): pass
 
-
 class ETradePortfolioData(WebJSON, locator="//PortfolioResponse/AccountPortfolio/Position[]", collections=True):
-    class Current(WebJSON.Text, locator="//dateTimeUTC", key="current", parser=datetime_parser): pass
+    class Date(WebJSON.Text, locator="//dateTimeUTC", key="date", parser=date_parser): pass
     class Acquired(WebJSON.Text, locator="//dateAcquired", key="acquired", parser=datetime_parser): pass
     class Quantity(WebJSON.Text, locator="//quantity", key="quantity", parser=np.int32): pass
+    class Cost(WebJSON.Text, locator="//totalCost", key="cost", parser=np.float32): pass
     class Paid(WebJSON.Text, locator="//pricePaid", key="paid", parser=np.float32): pass
-    class Price(WebJSON.Text, locator="//price", key="price", parser=np.float32): pass
-    class Cost(WebJSON.Text, locator="//totalCost", key="cost", parser=np.float): pass
-    class Value(WebJSON.Text, locator="//marketValue", key="value", parser=np.float): pass
-    class Yield(WebJSON.Text, locator="//totalGainPct", key="yield", parser=np.float): pass
-
     class Ticker(WebJSON.Text, locator="//Product/symbol", key="ticker", parser=str): pass
+    class Strike(WebJSON.Text, locator="//Product/strikePrice", key="strike", parser=strike_parser, optional=True): pass
+    class Bid(WebJSON.Text, locator="//bid", key="bid", parser=np.float32): pass
+    class Demand(WebJSON.Text, locator="//bidSize", key="demand", parser=np.int32): pass
+    class Ask(WebJSON.Text, locator="//ask", key="ask", parser=np.float32): pass
+    class Supply(WebJSON.Text, locator="//askSize", key="supply", parser=np.int32): pass
+    class Volume(WebJSON.Text, locator="//volume", key="volume", parser=np.int64): pass
+    class Interest(WebJSON.Text, locator="//openInterest", key="interest", parser=np.int32, optional=True): pass
+
     class Security(WebJSON, key="security"):
+        class Stock(WebJSON.Text, locator="//Product/securityType", key="stock", parser=stock_parser): pass
         class Option(WebJSON.Text, locator="//Product/callPut", key="option", parser=option_parser, optional=True): pass
         class Position(WebJSON.Text, locator="//positionType", key="position", parser=position_parser): pass
 
-    class Strike(WebJSON.Text, locator="//Product/strikePrice", key="strike", parser=strike_parser, optional=True): pass
-    class Expire(WebJSON, key="expire", optional=True):
+        def execute(self, *args, **kwargs):
+            instrument = self["security"]["option"].data if "option" in self["security"] else self["security"]["stock"].data
+            position = self["security"]["position"].data
+            return Securities[hash(tuple([instrument, position]))]
+
+    class Expire(WebJSON, key="expire"):
         class Year(WebJSON.Text, locator="//Product/expiryYear", key="year", parser=np.int16, optional=True): pass
         class Month(WebJSON.Text, locator="//Product/expiryMonth", key="month", parser=np.int16, optional=True): pass
         class Day(WebJSON.Text, locator="//Product/expiryDay", key="day", parser=np.int16, optional=True): pass
+
+        def execute(self, *args, **kwargs):
+            return Date(year=self["year"].data, month=self["month"].data, day=self["day"].data)
 
 
 class ETradeAccountPage(WebJsonPage):
@@ -104,7 +115,7 @@ class ETradeBalancePage(WebJsonPage):
         curl = ETradeAccountURL(account=account)
         self.load(str(curl.address), params=dict(curl.query))
         contents = ETradeAccountData(self.source)
-        balances = {key: value.data for key, value in iter(contents)}
+        balances = {key: value(*args, **kwargs) for key, value in iter(contents)}
         return balances
 
 
@@ -113,22 +124,23 @@ class ETradePortfolioPage(WebJsonPage):
         curl = ETradePortfolioURL(account=account)
         self.load(str(curl.address), params=dict(curl.query))
         contents = ETradePortfolioData(self.source)
-        columns = ["current", "acquired", "quantity", "ticker", "security", "strike", "expire", "paid", "price", "value", "cost", "yield"]
-        portfolio = [self.transaction(content) for content in iter(contents)]
-        portfolio = pd.DataFrame.from_records(portfolio)
-        return portfolio[columns]
+        portfolio = self.portfolio(contents, *args, **kwargs)
+        return portfolio
 
     @staticmethod
-    def transaction(content):
-        expire = {"expire": Date(year=content["year"].data, month=content["month"].data, day=content["day"].data) if "expire" in content else np.NaT}
-        instrument = Instruments.STOCK if ("option" not in content["security"]) else content["security"]["option"].data
-        position = content["security"]["position"].data
-        security = {"security": Securities[(instrument, position)]}
-        contents = {key: value.data for key, value in iter(content)}
-        return contents | security | expire
+    def portfolio(contents, *args, **kwargs):
+        columns = ["security", "date", "ticker", "expire", "strike", "price", "size", "volume", "interest", "acquired", "quantity", "paid", "cost"]
+        contents = [{key: value(*args, **kwargs) for key, value in iter(content)} for content in iter(contents)]
+        dataframe = pd.DataFrame.from_records(contents)
+        price_function = lambda cols: cols["ask"] if cols.security.position == Positions.LONG else cols["bid"]
+        size_function = lambda cols: cols["supply"] if cols.security.position == Positions.LONG else cols["demand"]
+        dataframe["price"] = dataframe.apply(price_function)
+        dataframe["size"] = dataframe.apply(size_function)
+        dataframe["security"] = dataframe["security"].apply(str)
+        return dataframe[columns]
 
 
-class ETradeAccountQuery(ntuple("Query", "current balance portfolio")): pass
+class ETradeAccountQuery(ntuple("Query", "inquiry balance portfolio")): pass
 class ETradeAccountDownloader(CycleProducer, title="Downloaded"):
     def __init__(self, *args, name, **kwargs):
         super().__init__(*args, name=name, **kwargs)
@@ -141,10 +153,10 @@ class ETradeAccountDownloader(CycleProducer, title="Downloaded"):
         return {"account": account}
 
     def execute(self, *args, account, **kwargs):
-        current = Datetime.now()
+        inquiry = Datetime.now()
         balances = self.pages["balance"](*args, account=account, **kwargs)
         portfolio = self.pages["portfolio"](*args, acccount=account, **kwargs)
-        yield ETradeAccountQuery(current, balances, portfolio)
+        yield ETradeAccountQuery(inquiry, balances, portfolio)
 
 
 
