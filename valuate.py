@@ -17,6 +17,8 @@ MAIN = os.path.dirname(os.path.realpath(__file__))
 PROJECT = os.path.abspath(os.path.join(MAIN, os.pardir))
 ROOT = os.path.abspath(os.path.join(PROJECT, os.pardir))
 REPOSITORY = os.path.join(ROOT, "Library", "repository", "etrade")
+SECURITY = os.path.join(REPOSITORY, "security")
+VALUATION = os.path.join(REPOSITORY, "valuation")
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 
@@ -42,8 +44,8 @@ pd.set_option("display.max_columns", 25)
 
 
 def main(*args, parameters, **kwargs):
-    security_file = SecurityFile(name="SecurityFile", repository=os.path.join(REPOSITORY, "security"), timeout=None)
-    valuation_file = ValuationFile(name="ValuationFile", repository=os.path.join(REPOSITORY, "valuation"), timeout=None)
+    security_file = SecurityFile(name="SecurityFile", repository=SECURITY, timeout=None)
+    valuation_file = ValuationFile(name="ValuationFile", repository=VALUATION, timeout=None)
     security_reader = SecurityLoader(name="SecurityReader", file=security_file)
     security_filter = SecurityFilter(name="SecurityFilter")
     security_parser = SecurityParser(name="SecurityParser")

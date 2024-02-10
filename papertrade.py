@@ -20,6 +20,8 @@ MAIN = os.path.dirname(os.path.realpath(__file__))
 PROJECT = os.path.abspath(os.path.join(MAIN, os.pardir))
 ROOT = os.path.abspath(os.path.join(PROJECT, os.pardir))
 REPOSITORY = os.path.join(ROOT, "Library", "repository", "etrade")
+SECURITY = os.path.join(REPOSITORY, "security")
+PORTFOLIO = os.path.join(REPOSITORY, "portfolio")
 ETRADE = os.path.join(ROOT, "Library", "etrade.txt")
 TICKERS = os.path.join(ROOT, "Library", "tickers.txt")
 if ROOT not in sys.path:

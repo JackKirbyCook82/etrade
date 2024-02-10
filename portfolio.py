@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on Sat Jan 27 2024
-@name:   ETrade Account Objects
+@name:   ETrade Portfolio Objects
 @author: Jack Kirby Cook
 
 """
@@ -19,11 +19,11 @@ from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
 from support.pipelines import CycleProducer
-from finance.variables import Instruments, Options, Positions, Securities
+from finance.variables import Query, Contract, Instruments, Options, Positions, Securities
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["ETradeAccountDownloader"]
+__all__ = ["ETradeBalanceDownloader", "ETradePortfolioDownloader"]
 __copyright__ = "Copyright 2023, Jack Kirby Cook"
 __license__ = ""
 
@@ -68,12 +68,11 @@ class ETradeBalanceData(WebJSON, locator="//BalanceResponse"):
 
 class ETradePortfolioData(WebJSON, locator="//PortfolioResponse/AccountPortfolio/Position[]", collections=True):
     class Date(WebJSON.Text, locator="//dateTimeUTC", key="date", parser=date_parser): pass
-    class Acquired(WebJSON.Text, locator="//dateAcquired", key="acquired", parser=datetime_parser): pass
-    class Quantity(WebJSON.Text, locator="//quantity", key="quantity", parser=np.int32): pass
-    class Cost(WebJSON.Text, locator="//totalCost", key="cost", parser=np.float32): pass
-    class Paid(WebJSON.Text, locator="//pricePaid", key="paid", parser=np.float32): pass
     class Ticker(WebJSON.Text, locator="//Product/symbol", key="ticker", parser=str): pass
     class Strike(WebJSON.Text, locator="//Product/strikePrice", key="strike", parser=strike_parser, optional=True): pass
+    class Underlying(WebJSON.Text, locator="//baseSymbolAndPrice", key="underlying", parser=np.float32, optional=True): pass
+    class Quantity(WebJSON.Text, locator="//quantity", key="quantity", parser=np.int32): pass
+    class Entry(WebJSON.Text, locator="//totalCost", key="entry", parser=np.float32): pass
     class Bid(WebJSON.Text, locator="//bid", key="bid", parser=np.float32): pass
     class Demand(WebJSON.Text, locator="//bidSize", key="demand", parser=np.int32): pass
     class Ask(WebJSON.Text, locator="//ask", key="ask", parser=np.float32): pass
@@ -112,9 +111,9 @@ class ETradeAccountPage(WebJsonPage):
 
 class ETradeBalancePage(WebJsonPage):
     def __call__(self, ticker, *args, account, **kwargs):
-        curl = ETradeAccountURL(account=account)
+        curl = ETradeBalanceURL(account=account)
         self.load(str(curl.address), params=dict(curl.query))
-        contents = ETradeAccountData(self.source)
+        contents = ETradeBalanceData(self.source)
         balances = {key: value(*args, **kwargs) for key, value in iter(contents)}
         return balances
 
@@ -124,27 +123,30 @@ class ETradePortfolioPage(WebJsonPage):
         curl = ETradePortfolioURL(account=account)
         self.load(str(curl.address), params=dict(curl.query))
         contents = ETradePortfolioData(self.source)
-        portfolio = self.portfolio(contents, *args, **kwargs)
-        return portfolio
+        return self.options(contents, *args, **kwargs)
 
     @staticmethod
-    def portfolio(contents, *args, **kwargs):
-        columns = ["security", "date", "ticker", "expire", "strike", "price", "size", "volume", "interest", "acquired", "quantity", "paid", "cost"]
+    def options(contents, *args, **kwargs):
+        columns = ["security", "ticker", "expire", "strike", "date", "quantity", "price", "underlying", "entry", "size", "volume", "interest"]
         contents = [{key: value(*args, **kwargs) for key, value in iter(content)} for content in iter(contents)]
-        dataframe = pd.DataFrame.from_records(contents)
-        price_function = lambda cols: cols["ask"] if cols.security.position == Positions.LONG else cols["bid"]
-        size_function = lambda cols: cols["supply"] if cols.security.position == Positions.LONG else cols["demand"]
-        dataframe["price"] = dataframe.apply(price_function)
-        dataframe["size"] = dataframe.apply(size_function)
-        dataframe["security"] = dataframe["security"].apply(str)
-        return dataframe[columns]
+        portfolio = pd.DataFrame.from_records(contents)
+        options = portfolio.where(portfolio.isin(list(Securities.Options)))
+        options = options.dropna(axis=0, how="all")
+        price_function = lambda cols: cols["bid"] if cols["security"].position == Positions.LONG else cols["ask"]
+        size_function = lambda cols: cols["demand"] if cols["security"].position == Positions.LONG else cols["supply"]
+        security_function = lambda cols: Securities[(cols["security"].instrument, Positions.SHORT if cols["security"].position == Positions.LONG else Positions.LONG)]
+        options["price"] = options.apply(price_function)
+        options["size"] = options.apply(size_function)
+        options["security"] = options.apply(security_function)
+        options = options.drop(["ask", "bid", "supply", "demand"], axis=1, inplace=False)
+        return options[columns]
 
 
-class ETradeAccountQuery(ntuple("Query", "inquiry balance portfolio")): pass
-class ETradeAccountDownloader(CycleProducer, title="Downloaded"):
+class ETradeBalanceQuery(ntuple("Query", "inquiry balance")): pass
+class ETradeBalanceDownloader(CycleProducer, title="Downloaded"):
     def __init__(self, *args, name, **kwargs):
         super().__init__(*args, name=name, **kwargs)
-        pages = {"account": ETradeAccountPage, "balance": ETradeBalancePage, "portfolio": ETradePortfolioPage}
+        pages = {"account": ETradeAccountPage, "balance": ETradeBalancePage}
         pages = {key: page(*args, **kwargs) for key, page in pages.items()}
         self.pages = pages
 
@@ -155,8 +157,28 @@ class ETradeAccountDownloader(CycleProducer, title="Downloaded"):
     def execute(self, *args, account, **kwargs):
         inquiry = Datetime.now()
         balances = self.pages["balance"](*args, account=account, **kwargs)
+        yield ETradeBalanceQuery(inquiry, balances)
+
+
+class ETradePortfolioQuery(Query): pass
+class ETradePortfolioDownloader(CycleProducer, title="Downloaded"):
+    def __init__(self, *args, name, **kwargs):
+        super().__init__(*args, name=name, **kwargs)
+        pages = {"account": ETradeAccountPage, "portfolio": ETradePortfolioPage}
+        pages = {key: page(*args, **kwargs) for key, page in pages.items()}
+        self.pages = pages
+
+    def prepare(self, *args, account, **kwargs):
+        account = self.pages["account"](*args, **kwargs)[account]
+        return {"account": account}
+
+    def execute(self, *args, account, **kwargs):
+        inquiry = Datetime.now()
         portfolio = self.pages["portfolio"](*args, acccount=account, **kwargs)
-        yield ETradeAccountQuery(inquiry, balances, portfolio)
+        for (ticker, expire), dataframe in iter(portfolio.groupby(["ticker", "expire"])):
+            contract = Contract(ticker, expire)
+            options = self.options(dataframe, *args, **kwargs)
+            yield ETradePortfolioQuery(inquiry, contract, options)
 
 
 
