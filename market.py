@@ -24,7 +24,7 @@ __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
 __all__ = ["ETradeSecurityDownloader"]
 __copyright__ = "Copyright 2023, Jack Kirby Cook"
-__license__ = ""
+__license__ = "MIT License"
 
 
 timestamp_parser = lambda x: Datetime.fromtimestamp(int(x), Timezone.utc).astimezone(pytz.timezone("US/Central"))
@@ -158,7 +158,7 @@ class ETradeOptionPage(WebJsonPage):
         return options[columns]
 
 
-class ETradeSecurityQuery(Query): pass
+class ETradeSecurityQuery(Query, fields=["securities"]): pass
 class ETradeSecurityDownloader(Producer, title="Downloaded"):
     def __init__(self, *args, name, **kwargs):
         super().__init__(*args, name=name, **kwargs)
@@ -178,11 +178,11 @@ class ETradeSecurityDownloader(Producer, title="Downloaded"):
             for expire in expires:
                 inquiry = Datetime.now()
                 contract = Contract(ticker, expire)
-                options = self.pages["option"](ticker, *args, expire=expire, strike=strike, **kwargs)
-                options["underlying"] = self.pages["stock"](ticker, *args, **kwargs).loc[("ticker", "price")]
-                options["quantity"] = np.NaN
-                options["entry"] = np.NaN
-                yield ETradeSecurityQuery(inquiry, contract, options)
+                market = self.pages["option"](ticker, *args, expire=expire, strike=strike, **kwargs)
+                market["underlying"] = self.pages["stock"](ticker, *args, **kwargs).loc[("ticker", "price")]
+                market["entry"] = np.NaN
+                market["quantity"] = np.NaN
+                yield ETradeSecurityQuery(inquiry, contract, securities=market)
 
 
 

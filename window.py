@@ -14,7 +14,7 @@ __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
 __all__ = []
 __copyright__ = "Copyright 2023, Jack Kirby Cook"
-__license__ = ""
+__license__ = "MIT License"
 
 
 class ETradeContentsTable(Table, ABC, justify=Justify.LEFT, height=40, events=True):

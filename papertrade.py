@@ -34,10 +34,9 @@ __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
 __all__ = []
 __copyright__ = "Copyright 2023, Jack Kirby Cook"
-__license__ = ""
+__license__ = "MIT License"
 
 
-LOGGER = logging.getLogger(__name__)
 warnings.filterwarnings("ignore")
 xr.set_options(**{"display_width": 200})
 xr.set_options(**{"display_max_rows": 35})

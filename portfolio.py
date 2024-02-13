@@ -13,7 +13,6 @@ from enum import IntEnum
 from datetime import date as Date
 from datetime import datetime as Datetime
 from datetime import timezone as Timezone
-from collections import namedtuple as ntuple
 
 from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
@@ -23,9 +22,9 @@ from finance.variables import Query, Contract, Instruments, Options, Positions, 
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["ETradeBalanceDownloader", "ETradePortfolioDownloader"]
+__all__ = ["ETradePortfolioDownloader"]
 __copyright__ = "Copyright 2023, Jack Kirby Cook"
-__license__ = ""
+__license__ = "MIT License"
 
 
 Status = IntEnum("Status", ["CLOSED", "ACTIVE"], start=0)
@@ -123,44 +122,23 @@ class ETradePortfolioPage(WebJsonPage):
         curl = ETradePortfolioURL(account=account)
         self.load(str(curl.address), params=dict(curl.query))
         contents = ETradePortfolioData(self.source)
-        return self.options(contents, *args, **kwargs)
+        portfolio = self.portfolio(contents, *args, **kwargs)
+        return portfolio
 
     @staticmethod
-    def options(contents, *args, **kwargs):
-        columns = ["security", "ticker", "expire", "strike", "date", "quantity", "price", "underlying", "entry", "size", "volume", "interest"]
+    def portfolio(contents, *args, **kwargs):
+        columns = ["security", "ticker", "expire", "strike", "date", "price", "size", "volume", "interest", "underlying", "quantity", "entry"]
+        size = lambda cols: cols["demand"] if cols["security"].position == Positions.LONG else cols["supply"]
+        price = lambda cols: cols["bid"] if cols["security"].position == Positions.LONG else cols["ask"]
         contents = [{key: value(*args, **kwargs) for key, value in iter(content)} for content in iter(contents)]
         portfolio = pd.DataFrame.from_records(contents)
-        options = portfolio.where(portfolio.isin(list(Securities.Options)))
-        options = options.dropna(axis=0, how="all")
-        price_function = lambda cols: cols["bid"] if cols["security"].position == Positions.LONG else cols["ask"]
-        size_function = lambda cols: cols["demand"] if cols["security"].position == Positions.LONG else cols["supply"]
-        security_function = lambda cols: Securities[(cols["security"].instrument, Positions.SHORT if cols["security"].position == Positions.LONG else Positions.LONG)]
-        options["price"] = options.apply(price_function)
-        options["size"] = options.apply(size_function)
-        options["security"] = options.apply(security_function)
-        options = options.drop(["ask", "bid", "supply", "demand"], axis=1, inplace=False)
-        return options[columns]
+        portfolio = portfolio.where(portfolio["security"].isin(list(Securities.Options))).dropna(axis=0, how="all")
+        portfolio["price"] = portfolio.apply(price)
+        portfolio["size"] = portfolio.apply(size)
+        return portfolio[columns]
 
 
-class ETradeBalanceQuery(ntuple("Query", "inquiry balance")): pass
-class ETradeBalanceDownloader(CycleProducer, title="Downloaded"):
-    def __init__(self, *args, name, **kwargs):
-        super().__init__(*args, name=name, **kwargs)
-        pages = {"account": ETradeAccountPage, "balance": ETradeBalancePage}
-        pages = {key: page(*args, **kwargs) for key, page in pages.items()}
-        self.pages = pages
-
-    def prepare(self, *args, account, **kwargs):
-        account = self.pages["account"](*args, **kwargs)[account]
-        return {"account": account}
-
-    def execute(self, *args, account, **kwargs):
-        inquiry = Datetime.now()
-        balances = self.pages["balance"](*args, account=account, **kwargs)
-        yield ETradeBalanceQuery(inquiry, balances)
-
-
-class ETradePortfolioQuery(Query): pass
+class ETradePortfolioQuery(Query, fields=["balances", "securities"]): pass
 class ETradePortfolioDownloader(CycleProducer, title="Downloaded"):
     def __init__(self, *args, name, **kwargs):
         super().__init__(*args, name=name, **kwargs)
@@ -174,11 +152,12 @@ class ETradePortfolioDownloader(CycleProducer, title="Downloaded"):
 
     def execute(self, *args, account, **kwargs):
         inquiry = Datetime.now()
+        balances = self.pages["balance"](*args, account=account, **kwargs)
         portfolio = self.pages["portfolio"](*args, acccount=account, **kwargs)
         for (ticker, expire), dataframe in iter(portfolio.groupby(["ticker", "expire"])):
             contract = Contract(ticker, expire)
-            options = self.options(dataframe, *args, **kwargs)
-            yield ETradePortfolioQuery(inquiry, contract, options)
+            yield ETradePortfolioQuery(inquiry, contract, balances=balances, securities=portfolio)
+
 
 
 
