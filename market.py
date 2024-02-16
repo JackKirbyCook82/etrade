@@ -150,10 +150,11 @@ class ETradeOptionPage(WebJsonPage):
         columns = ["security", "ticker", "expire", "strike", "date", "price", "size", "volume", "interest"]
         string = str(instrument.name).lower()
         options = [{key: value(*args, **kwargs) for key, value in iter(content[string])} for content in iter(contents)]
+        options = pd.DataFrame.from_records(options)
         long = options.drop(["bid", "demand"], axis=1, inplace=False).rename(columns={"ask": "price", "supply": "size"})
-        long["security"] = Securities[(instrument, Positions.LONG)]
+        long["security"] = str(Securities[(instrument, Positions.LONG)])
         short = options.drop(["ask", "supply"], axis=1, inplace=False).rename(columns={"bid": "price", "demand": "size"})
-        short["security"] = Securities[(instrument, Positions.SHORT)]
+        short["security"] = str(Securities[(instrument, Positions.SHORT)])
         options = pd.concat([long, short], axis=0)
         return options[columns]
 
@@ -167,7 +168,7 @@ class ETradeSecurityDownloader(Producer, title="Downloaded"):
         self.pages = pages
 
     def prepare(self, *args, tickers, expires, **kwargs):
-        strikes = [self.pages["stock"](ticker, *args, **kwargs) for ticker in tickers]
+        strikes = [self.pages["stock"](ticker, *args, **kwargs).loc[0, "price"] for ticker in tickers]
         chains = [[expire for expire in self.pages["expire"](ticker, *args, **kwargs) if expire in expires] for ticker in tickers]
         return {"strikes": strikes, "chains": chains}
 
@@ -179,9 +180,7 @@ class ETradeSecurityDownloader(Producer, title="Downloaded"):
                 inquiry = Datetime.now()
                 contract = Contract(ticker, expire)
                 market = self.pages["option"](ticker, *args, expire=expire, strike=strike, **kwargs)
-                market["underlying"] = self.pages["stock"](ticker, *args, **kwargs).loc[("ticker", "price")]
-                market["entry"] = np.NaN
-                market["quantity"] = np.NaN
+                market["underlying"] = self.pages["stock"](ticker, *args, **kwargs).loc[0, "price"]
                 yield ETradeSecurityQuery(inquiry, contract, securities=market)
 
 

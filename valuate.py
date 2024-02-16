@@ -25,7 +25,7 @@ if ROOT not in sys.path:
 from support.synchronize import SideThread
 from finance.securities import SecurityFile, SecurityLoader, SecurityFilter, SecurityParser
 from finance.strategies import StrategyCalculator
-from finance.valuations import ValuationFile, ValuationCalculator, ValuationFilter, ValuationSaver
+from finance.valuations import ValuationFile, ValuationCalculator, ValuationFilter, ValuationParser, ValuationSaver
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -51,8 +51,9 @@ def main(*args, parameters, **kwargs):
     strategy_calculator = StrategyCalculator(name="StrategyCalculator")
     valuation_calculator = ValuationCalculator(name="ValuationCalculator")
     valuation_filter = ValuationFilter(name="ValuationFilter")
+    valuation_parser = ValuationParser(name="ValuationParser")
     valuation_writer = ValuationSaver(name="ValuationWriter", file=valuation_file)
-    valuation_pipeline = security_reader + security_filter + security_parser + strategy_calculator + valuation_calculator + valuation_filter + valuation_writer
+    valuation_pipeline = security_reader + security_filter + security_parser + strategy_calculator + valuation_calculator + valuation_filter + valuation_parser + valuation_writer
     valuation_thread = SideThread(valuation_pipeline, name="ValuationThread")
     valuation_thread.setup(**parameters)
     valuation_thread.start()
@@ -61,7 +62,7 @@ def main(*args, parameters, **kwargs):
 
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
-    sysSecurity, sysValuation, sysMarket = {"volume": 50, "interest": 50, "size": 5}, {"apy": 0.0, "discount": 0.0}, {"fees": 1.0}
+    sysSecurity, sysValuation, sysMarket = {"volume": 50, "interest": 50, "size": 10}, {"apy": 0.0, "discount": 0.0}, {"fees": 0.0}
     sysParameters = sysSecurity | sysValuation | sysMarket
     main(parameters=sysParameters)
 

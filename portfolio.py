@@ -71,7 +71,7 @@ class ETradePortfolioData(WebJSON, locator="//PortfolioResponse/AccountPortfolio
     class Strike(WebJSON.Text, locator="//Product/strikePrice", key="strike", parser=strike_parser, optional=True): pass
     class Underlying(WebJSON.Text, locator="//baseSymbolAndPrice", key="underlying", parser=np.float32, optional=True): pass
     class Quantity(WebJSON.Text, locator="//quantity", key="quantity", parser=np.int32): pass
-    class Entry(WebJSON.Text, locator="//totalCost", key="entry", parser=np.float32): pass
+    class Cashflow(WebJSON.Text, locator="//totalCost", key="cashflow", parser=np.float32): pass
     class Bid(WebJSON.Text, locator="//bid", key="bid", parser=np.float32): pass
     class Demand(WebJSON.Text, locator="//bidSize", key="demand", parser=np.int32): pass
     class Ask(WebJSON.Text, locator="//ask", key="ask", parser=np.float32): pass
@@ -127,7 +127,7 @@ class ETradePortfolioPage(WebJsonPage):
 
     @staticmethod
     def portfolio(contents, *args, **kwargs):
-        columns = ["security", "ticker", "expire", "strike", "date", "price", "size", "volume", "interest", "underlying", "quantity", "entry"]
+        columns = ["security", "ticker", "expire", "strike", "date", "price", "size", "volume", "interest", "underlying", "cashflow", "quantity"]
         size = lambda cols: cols["demand"] if cols["security"].position == Positions.LONG else cols["supply"]
         price = lambda cols: cols["bid"] if cols["security"].position == Positions.LONG else cols["ask"]
         contents = [{key: value(*args, **kwargs) for key, value in iter(content)} for content in iter(contents)]
