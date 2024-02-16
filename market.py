@@ -179,9 +179,10 @@ class ETradeSecurityDownloader(Producer, title="Downloaded"):
             for expire in expires:
                 inquiry = Datetime.now()
                 contract = Contract(ticker, expire)
-                market = self.pages["option"](ticker, *args, expire=expire, strike=strike, **kwargs)
-                market["underlying"] = self.pages["stock"](ticker, *args, **kwargs).loc[0, "price"]
-                yield ETradeSecurityQuery(inquiry, contract, securities=market)
+                securities = self.pages["option"](ticker, *args, expire=expire, strike=strike, **kwargs)
+                securities["underlying"] = self.pages["stock"](ticker, *args, **kwargs).loc[0, "price"]
+                securities = {security: dataframe for security, dataframe in iter(securities.groupby("security"))}
+                yield ETradeSecurityQuery(inquiry, contract, securities=securities)
 
 
 

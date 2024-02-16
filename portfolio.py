@@ -131,11 +131,11 @@ class ETradePortfolioPage(WebJsonPage):
         size = lambda cols: cols["demand"] if cols["security"].position == Positions.LONG else cols["supply"]
         price = lambda cols: cols["bid"] if cols["security"].position == Positions.LONG else cols["ask"]
         contents = [{key: value(*args, **kwargs) for key, value in iter(content)} for content in iter(contents)]
-        portfolio = pd.DataFrame.from_records(contents)
-        portfolio = portfolio.where(portfolio["security"].isin(list(Securities.Options))).dropna(axis=0, how="all")
-        portfolio["price"] = portfolio.apply(price)
-        portfolio["size"] = portfolio.apply(size)
-        return portfolio[columns]
+        options = pd.DataFrame.from_records(contents)
+        options = options.where(options["security"].isin(list(Securities.Options))).dropna(axis=0, how="all")
+        options["price"] = options.apply(price)
+        options["size"] = options.apply(size)
+        return options[columns]
 
 
 class ETradePortfolioQuery(Query, fields=["balances", "securities"]): pass
@@ -156,7 +156,8 @@ class ETradePortfolioDownloader(CycleProducer, title="Downloaded"):
         portfolio = self.pages["portfolio"](*args, acccount=account, **kwargs)
         for (ticker, expire), dataframe in iter(portfolio.groupby(["ticker", "expire"])):
             contract = Contract(ticker, expire)
-            yield ETradePortfolioQuery(inquiry, contract, balances=balances, securities=portfolio)
+            securities = {security: dataframe for security, dataframe in iter(securities.groupby("security"))}
+            yield ETradePortfolioQuery(inquiry, contract, balances=balances, securities=securities)
 
 
 
