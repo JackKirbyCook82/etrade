@@ -18,7 +18,7 @@ from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
 from support.pipelines import CycleProducer
-from finance.variables import Query, Contract, Instruments, Options, Positions, Securities
+from finance.variables import Query, Contract, Instruments, Options, Positions
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -69,25 +69,25 @@ class ETradePortfolioData(WebJSON, locator="//PortfolioResponse/AccountPortfolio
     class Date(WebJSON.Text, locator="//dateTimeUTC", key="date", parser=date_parser): pass
     class Ticker(WebJSON.Text, locator="//Product/symbol", key="ticker", parser=str): pass
     class Strike(WebJSON.Text, locator="//Product/strikePrice", key="strike", parser=strike_parser, optional=True): pass
-    class Underlying(WebJSON.Text, locator="//baseSymbolAndPrice", key="underlying", parser=np.float32, optional=True): pass
-    class Quantity(WebJSON.Text, locator="//quantity", key="quantity", parser=np.int32): pass
-    class Cashflow(WebJSON.Text, locator="//totalCost", key="cashflow", parser=np.float32): pass
     class Bid(WebJSON.Text, locator="//bid", key="bid", parser=np.float32): pass
-    class Demand(WebJSON.Text, locator="//bidSize", key="demand", parser=np.int32): pass
     class Ask(WebJSON.Text, locator="//ask", key="ask", parser=np.float32): pass
+    class Underlying(WebJSON.Text, locator="//baseSymbolAndPrice", key="underlying", parser=np.float32, optional=True): pass
+    class Demand(WebJSON.Text, locator="//bidSize", key="demand", parser=np.int32): pass
     class Supply(WebJSON.Text, locator="//askSize", key="supply", parser=np.int32): pass
     class Volume(WebJSON.Text, locator="//volume", key="volume", parser=np.int64): pass
     class Interest(WebJSON.Text, locator="//openInterest", key="interest", parser=np.int32, optional=True): pass
+    class Acquired(WebJSON.Text, locator="//dateAcquired", key="acquired", parser=date_parser): pass
+    class Quantity(WebJSON.Text, locator="//quantity", key="quantity", parser=np.int32): pass
+    class Cost(WebJSON.Text, locator="//totalCost", key="cost", parser=np.float32): pass
 
-    class Security(WebJSON, key="security"):
+    class Position(WebJSON.Text, locator="//positionType", key="position", parser=position_parser): pass
+    class Instrument(WebJSON.Text, key="instrument"):
         class Stock(WebJSON.Text, locator="//Product/securityType", key="stock", parser=stock_parser): pass
         class Option(WebJSON.Text, locator="//Product/callPut", key="option", parser=option_parser, optional=True): pass
-        class Position(WebJSON.Text, locator="//positionType", key="position", parser=position_parser): pass
 
         def execute(self, *args, **kwargs):
-            instrument = self["security"]["option"].data if "option" in self["security"] else self["security"]["stock"].data
-            position = self["security"]["position"].data
-            return Securities[hash(tuple([instrument, position]))]
+            instrument = self["instrument"]["option"].data if "option" in self["instrument"] else self["instrument"]["stock"].data
+            return instrument
 
     class Expire(WebJSON, key="expire"):
         class Year(WebJSON.Text, locator="//Product/expiryYear", key="year", parser=np.int16, optional=True): pass
@@ -127,18 +127,19 @@ class ETradePortfolioPage(WebJsonPage):
 
     @staticmethod
     def portfolio(contents, *args, **kwargs):
-        columns = ["security", "ticker", "expire", "strike", "date", "price", "size", "volume", "interest", "underlying", "cashflow", "quantity"]
-        size = lambda cols: cols["demand"] if cols["security"].position == Positions.LONG else cols["supply"]
-        price = lambda cols: cols["bid"] if cols["security"].position == Positions.LONG else cols["ask"]
+        columns = ["instrument", "position", "ticker", "expire", "strike", "date", "price", "size", "volume", "interest", "acquired", "cost", "quantity"]
+
         contents = [{key: value(*args, **kwargs) for key, value in iter(content)} for content in iter(contents)]
-        options = pd.DataFrame.from_records(contents)
-        options = options.where(options["security"].isin(list(Securities.Options))).dropna(axis=0, how="all")
-        options["price"] = options.apply(price)
-        options["size"] = options.apply(size)
-        return options[columns]
+        portfolio = pd.DataFrame.from_records(contents)
+
+#        long = portfolio.where(portfolio["position"] == Positions.LONG).dropna(axis=0, how="all")
+#        short = portfolio.where(portfolio["position"] == Positions.SHORT).dropna(axis=0, how="all")
+#        long = long.drop(["bid", "demand"], axis=1, inplace=False).rename(columns={"ask": "price", "supply": "size"})
+#        short = short.drop(["ask", "supply"], axis=1, inplace=False).rename(columns={"bid": "price", "demand": "size"})
+
+        return portfolio[columns]
 
 
-class ETradePortfolioQuery(Query, fields=["balances", "securities"]): pass
 class ETradePortfolioDownloader(CycleProducer, title="Downloaded"):
     def __init__(self, *args, name, **kwargs):
         super().__init__(*args, name=name, **kwargs)
@@ -152,13 +153,12 @@ class ETradePortfolioDownloader(CycleProducer, title="Downloaded"):
 
     def execute(self, *args, account, **kwargs):
         inquiry = Datetime.now()
-        balances = self.pages["balance"](*args, account=account, **kwargs)
         portfolio = self.pages["portfolio"](*args, acccount=account, **kwargs)
-        for (ticker, expire), dataframe in iter(portfolio.groupby(["ticker", "expire"])):
+        for (ticker, expire), securities in iter(portfolio.groupby(["ticker", "expire"])):
             contract = Contract(ticker, expire)
-            securities = {security: dataframe for security, dataframe in iter(securities.groupby("security"))}
-            yield ETradePortfolioQuery(inquiry, contract, balances=balances, securities=securities)
-
+            stocks = securities.where(securities["instrument"] == Instruments.STOCK).dropna(axis=0, how="all")
+            options = securities.where(securities["instrument"].isin(Options)).dropna(axis=0, how="all")
+            yield Query(inquiry, contract, stocks=stocks, options=options)
 
 
 

@@ -31,7 +31,7 @@ from webscraping.webreaders import WebAuthorizer, WebReader
 from finance.securities import SecurityFile, SecurityFilter, SecuritySaver
 from finance.variables import DateRange
 
-from market import ETradeSecurityDownloader
+from market import ETradeMarketDownloader
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -63,7 +63,7 @@ def main(*args, apikey, apicode, tickers, expires, parameters, **kwargs):
     security_file = SecurityFile(name="SecurityFile", repository=SECURITY, timeout=None)
     authorizer = ETradeAuthorizer(name="ETradeAuthorizer", apikey=apikey, apicode=apicode)
     with ETradeReader(authorizer=authorizer, name="ETradeReader") as reader:
-        security_downloader = ETradeSecurityDownloader(name="SecurityDownloader", feed=reader)
+        security_downloader = ETradeMarketDownloader(name="SecurityDownloader", feed=reader)
         security_filter = SecurityFilter(name="SecurityFilter")
         security_writer = SecuritySaver(name="SecurityWriter", file=security_file)
         security_pipeline = security_downloader + security_filter + security_writer
@@ -79,6 +79,7 @@ if __name__ == "__main__":
         sysApiKey, sysApiCode = [str(string).strip() for string in str(apifile.read()).split("\n")]
     with open(TICKERS, "r") as tickerfile:
         sysTickers = [str(string).strip().upper() for string in tickerfile.read().split("\n")]
+        sysTickers = ["LLY"]
     sysExpires = DateRange([(Datetime.today() + Timedelta(days=1)).date(), (Datetime.today() + Timedelta(weeks=52)).date()])
     sysSecurity = {"volume": None, "interest": None, "size": None}
     main(apikey=sysApiKey, apicode=sysApiCode, tickers=sysTickers, expires=sysExpires, parameters=sysSecurity)
