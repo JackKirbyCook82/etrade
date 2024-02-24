@@ -22,8 +22,8 @@ VALUATION = os.path.join(REPOSITORY, "valuation")
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 
-from finance.variables import Actions
-from support.pipelines import Parsing, Filtering
+from finance.variables import Actions, Valuations, Scenarios
+from support.processes import Parsing, Filtering
 from support.synchronize import SideThread
 from finance.securities import SecurityFile, SecurityLoader, SecurityFilter, SecurityParser
 from finance.strategies import StrategyCalculator
@@ -51,8 +51,8 @@ def main(*args, parameters, **kwargs):
     security_filter = SecurityFilter(name="SecurityFilter", filtering={Filtering.LOWER: ["volume", "interest", "size"]})
     security_parser = SecurityParser(name="SecurityParser", parsing=Parsing.UNFLATTEN)
     strategy_calculator = StrategyCalculator(name="StrategyCalculator", action=Actions.OPEN)
-    valuation_calculator = ValuationCalculator(name="ValuationCalculator", action=Actions.OPEN)
-    valuation_filter = ValuationFilter(name="ValuationFilter", lower={Filtering.LOWER: ["apy", "size"]})
+    valuation_calculator = ValuationCalculator(name="ValuationCalculator", action=Actions.OPEN, valuation=Valuations.ARBITRAGE)
+    valuation_filter = ValuationFilter(name="ValuationFilter", filtering={Filtering.LOWER: ["apy", "size"]}, scenario=Scenarios.MINIMUM)
     valuation_parser = ValuationParser(name="ValuationParser", parsing=Parsing.FLATTEN)
     valuation_writer = ValuationSaver(name="ValuationWriter", file=valuation_file)
     valuation_pipeline = security_reader + security_filter + security_parser + strategy_calculator + valuation_calculator + valuation_filter + valuation_parser + valuation_writer
@@ -64,7 +64,7 @@ def main(*args, parameters, **kwargs):
 
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
-    sysSecurity, sysValuation, sysMarket = {"volume": 50, "interest": 50, "size": 10}, {"apy": 0.0}, {"fees": 0.0}
+    sysSecurity, sysValuation, sysMarket = {"volume": 50, "interest": 50, "size": 10}, {"apy": 0.05, "discount": 0.0}, {"fees": 0.0}
     sysParameters = sysSecurity | sysValuation | sysMarket
     main(parameters=sysParameters)
 

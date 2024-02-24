@@ -27,7 +27,7 @@ if ROOT not in sys.path:
     sys.path.append(ROOT)
 
 from support.synchronize import SideThread
-from support.pipelines import Filtering
+from support.processes import Filtering
 from webscraping.webreaders import WebAuthorizer, WebReader
 from finance.securities import SecurityFile, SecurityFilter, SecuritySaver
 from finance.variables import DateRange
