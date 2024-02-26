@@ -17,7 +17,6 @@ MAIN = os.path.dirname(os.path.realpath(__file__))
 PROJECT = os.path.abspath(os.path.join(MAIN, os.pardir))
 ROOT = os.path.abspath(os.path.join(PROJECT, os.pardir))
 REPOSITORY = os.path.join(ROOT, "Library", "repository", "etrade")
-MARKET = os.path.join(REPOSITORY, "market")
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 
@@ -38,14 +37,14 @@ __license__ = "MIT License"
 warnings.filterwarnings("ignore")
 xr.set_options(**{"display_width": 200})
 xr.set_options(**{"display_max_rows": 35})
-pd.set_option('display.width', 1000)
-pd.set_option('display.max_rows', 100)
+pd.set_option("display.width", 1000)
+pd.set_option("display.max_rows", 100)
 pd.set_option("display.max_columns", 25)
 
 
 def main(*args, parameters, **kwargs):
-    security_file = SecurityFile(name="SecurityFile", repository=MARKET, timeout=None)
-    valuation_file = ValuationFile(name="ValuationFile", repository=MARKET, timeout=None)
+    security_file = SecurityFile(name="SecurityFile", repository=REPOSITORY, timeout=None)
+    valuation_file = ValuationFile(name="ValuationFile", repository=REPOSITORY, timeout=None)
     security_reader = SecurityLoader(name="SecurityReader", file=security_file)
     security_filter = SecurityFilter(name="SecurityFilter", filtering={Filtering.FLOOR: ["volume", "interest", "size"]}, drop=True)
     security_parser = SecurityParser(name="SecurityParser", parsing=Parsing.UNFLATTEN)

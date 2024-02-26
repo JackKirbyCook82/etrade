@@ -20,7 +20,6 @@ MAIN = os.path.dirname(os.path.realpath(__file__))
 PROJECT = os.path.abspath(os.path.join(MAIN, os.pardir))
 ROOT = os.path.abspath(os.path.join(PROJECT, os.pardir))
 REPOSITORY = os.path.join(ROOT, "Library", "repository", "etrade")
-MARKET = os.path.join(REPOSITORY, "market")
 ETRADE = os.path.join(ROOT, "Library", "etrade.txt")
 TICKERS = os.path.join(ROOT, "Library", "tickers.txt")
 if ROOT not in sys.path:
@@ -42,12 +41,12 @@ __license__ = "MIT License"
 
 
 warnings.filterwarnings("ignore")
+gui.theme("DarkGrey11")
 xr.set_options(**{"display_width": 200})
 xr.set_options(**{"display_max_rows": 35})
-pd.set_option('display.width', 1000)
-pd.set_option('display.max_rows', 20)
+pd.set_option("display.width", 1000)
+pd.set_option("display.max_rows", 20)
 pd.set_option("display.max_columns", 25)
-gui.theme("DarkGrey11")
 
 
 authorize = "https://us.etrade.com/e/t/etws/authorize?key={}&token={}"
@@ -61,7 +60,7 @@ class ETradeReader(WebReader, delay=10): pass
 
 
 def main(*args, apikey, apicode, tickers, expires, parameters, **kwargs):
-    security_file = SecurityFile(name="SecurityFile", repository=MARKET, timeout=None)
+    security_file = SecurityFile(name="SecurityFile", repository=REPOSITORY, timeout=None)
     authorizer = ETradeAuthorizer(name="ETradeAuthorizer", apikey=apikey, apicode=apicode)
     with ETradeReader(authorizer=authorizer, name="ETradeReader") as reader:
         security_downloader = ETradeMarketDownloader(name="SecurityDownloader", feed=reader)
