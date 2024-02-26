@@ -20,7 +20,7 @@ MAIN = os.path.dirname(os.path.realpath(__file__))
 PROJECT = os.path.abspath(os.path.join(MAIN, os.pardir))
 ROOT = os.path.abspath(os.path.join(PROJECT, os.pardir))
 REPOSITORY = os.path.join(ROOT, "Library", "repository", "etrade")
-SECURITY = os.path.join(REPOSITORY, "security")
+MARKET = os.path.join(REPOSITORY, "market")
 ETRADE = os.path.join(ROOT, "Library", "etrade.txt")
 TICKERS = os.path.join(ROOT, "Library", "tickers.txt")
 if ROOT not in sys.path:
@@ -61,11 +61,11 @@ class ETradeReader(WebReader, delay=10): pass
 
 
 def main(*args, apikey, apicode, tickers, expires, parameters, **kwargs):
-    security_file = SecurityFile(name="SecurityFile", repository=SECURITY, timeout=None)
+    security_file = SecurityFile(name="SecurityFile", repository=MARKET, timeout=None)
     authorizer = ETradeAuthorizer(name="ETradeAuthorizer", apikey=apikey, apicode=apicode)
     with ETradeReader(authorizer=authorizer, name="ETradeReader") as reader:
         security_downloader = ETradeMarketDownloader(name="SecurityDownloader", feed=reader)
-        security_filter = SecurityFilter(name="SecurityFilter", lower={Filtering.LOWER: ["volume", "interest", "size"]})
+        security_filter = SecurityFilter(name="SecurityFilter", lower={Filtering.FLOOR: ["volume", "interest", "size"]})
         security_writer = SecuritySaver(name="SecurityWriter", file=security_file)
         security_pipeline = security_downloader + security_filter + security_writer
         security_thread = SideThread(security_pipeline, name="SecurityThread")
