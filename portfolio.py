@@ -122,7 +122,7 @@ class ETradePortfolioPage(WebJsonPage):
     def __init__(self, *args, **kwargs):
         Columns = ntuple("Columns", "markets holdings")
         securities = ["instrument", "position", "ticker", "expire", "strike", "date", "price", "size", "volume", "interest", "underlying"]
-        holdings = ["instrument", "position", "quantity"]
+        holdings = ["instrument", "position", "ticker", "expire", "strike", "date", "quantity"]
         self.columns = Columns(securities, holdings)
         super().__init__(*args, **kwargs)
 
