@@ -20,12 +20,12 @@ REPOSITORY = os.path.join(ROOT, "Library", "repository", "etrade")
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 
-from finance.variables import Actions, Valuations, Scenarios
+from finance.variables import Valuations, Scenarios
 from support.processes import Parsing, Filtering
 from support.synchronize import SideThread
-from finance.securities import SecurityFile, SecurityLoader, SecurityFilter, SecurityParser
+from finance.securities import SecurityFile, SecurityLoader, SecurityFilter, SecurityCleaner, SecurityParser, SecurityPivoter
 from finance.strategies import StrategyCalculator
-from finance.valuations import ValuationFile, ValuationCalculator, ValuationFilter, ValuationParser, ValuationSaver
+from finance.valuations import ValuationFile, ValuationCalculator, ValuationFilter, ValuationCleaner, ValuationParser, ValuationSaver
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -46,14 +46,19 @@ def main(*args, parameters, **kwargs):
     security_file = SecurityFile(name="SecurityFile", repository=REPOSITORY, timeout=None)
     valuation_file = ValuationFile(name="ValuationFile", repository=REPOSITORY, timeout=None)
     security_reader = SecurityLoader(name="SecurityReader", file=security_file)
-    security_filter = SecurityFilter(name="SecurityFilter", filtering={Filtering.FLOOR: ["volume", "interest", "size"]}, drop=True)
+    security_filter = SecurityFilter(name="SecurityFilter", filtering={Filtering.FLOOR: ["volume", "interest", "size"]})
+    security_cleaner = SecurityCleaner(name="SecurityCleaner")
     security_parser = SecurityParser(name="SecurityParser", parsing=Parsing.UNFLATTEN)
+    security_pivoter = SecurityPivoter(name="SecurityPivoter")
     strategy_calculator = StrategyCalculator(name="StrategyCalculator")
     valuation_calculator = ValuationCalculator(name="ValuationCalculator", valuation=Valuations.ARBITRAGE)
     valuation_filter = ValuationFilter(name="ValuationFilter", filtering={Filtering.FLOOR: ["apy", "size"]}, scenario=Scenarios.MINIMUM)
-    valuation_parser = ValuationParser(name="ValuationParser", parsing=Parsing.FLATTEN, drop=True)
+    valuation_parser = ValuationParser(name="ValuationParser", parsing=Parsing.FLATTEN)
+    valuation_cleaner = ValuationCleaner(name="ValuationCleaner")
     valuation_writer = ValuationSaver(name="ValuationWriter", file=valuation_file)
-    valuation_pipeline = security_reader + security_filter + security_parser + strategy_calculator + valuation_calculator + valuation_filter + valuation_parser + valuation_writer
+    valuation_pipeline = security_reader + security_filter + security_cleaner + security_parser + security_pivoter
+    valuation_pipeline = valuation_pipeline + strategy_calculator + valuation_calculator
+    valuation_pipeline = valuation_pipeline + valuation_filter + valuation_parser + valuation_cleaner + valuation_writer
     valuation_thread = SideThread(valuation_pipeline, name="ValuationThread")
     valuation_thread.setup(**parameters)
     valuation_thread.start()

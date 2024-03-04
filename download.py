@@ -28,7 +28,7 @@ if ROOT not in sys.path:
 from support.synchronize import SideThread
 from support.processes import Filtering
 from webscraping.webreaders import WebAuthorizer, WebReader
-from finance.securities import SecurityFile, SecurityFilter, SecuritySaver
+from finance.securities import SecurityFile, SecurityFilter, SecurityCleaner, SecuritySaver
 from finance.variables import DateRange
 
 from market import ETradeMarketDownloader
@@ -65,8 +65,9 @@ def main(*args, apikey, apicode, tickers, expires, parameters, **kwargs):
     with ETradeReader(authorizer=authorizer, name="ETradeReader") as reader:
         security_downloader = ETradeMarketDownloader(name="SecurityDownloader", feed=reader)
         security_filter = SecurityFilter(name="SecurityFilter", lower={Filtering.FLOOR: ["volume", "interest", "size"]})
+        security_cleaner = SecurityCleaner(name="SecurityCleaner")
         security_writer = SecuritySaver(name="SecurityWriter", file=security_file)
-        security_pipeline = security_downloader + security_filter + security_writer
+        security_pipeline = security_downloader + security_filter + security_cleaner + security_writer
         security_thread = SideThread(security_pipeline, name="SecurityThread")
         security_thread.setup(tickers=tickers, expires=expires, **parameters)
         security_thread.start()
