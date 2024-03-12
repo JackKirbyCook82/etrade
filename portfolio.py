@@ -18,7 +18,7 @@ from collections import namedtuple as ntuple
 from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
-from support.pipelines import CycleProducer
+from support.processes import CycleDownloader
 from finance.variables import Query, Contract, Instruments, Options, Positions
 
 __version__ = "1.0.0"
@@ -77,9 +77,7 @@ class ETradePortfolioData(WebJSON, locator="//PortfolioResponse/AccountPortfolio
     class Supply(WebJSON.Text, locator="//askSize", key="supply", parser=np.int32): pass
     class Volume(WebJSON.Text, locator="//volume", key="volume", parser=np.int64): pass
     class Interest(WebJSON.Text, locator="//openInterest", key="interest", parser=np.int32, optional=True): pass
-    class Acquired(WebJSON.Text, locator="//dateAcquired", key="acquired", parser=date_parser): pass
     class Quantity(WebJSON.Text, locator="//quantity", key="quantity", parser=np.int32): pass
-    class Spent(WebJSON.Text, locator="//totalCost", key="spent", parser=np.float32): pass
 
     class Position(WebJSON.Text, locator="//positionType", key="position", parser=position_parser): pass
     class Instrument(WebJSON.Text, key="instrument"):
@@ -157,23 +155,16 @@ class ETradePortfolioPage(WebJsonPage):
             yield (ticker, expire), (securities, holdings)
 
 
-class ETradePortfolioDownloader(CycleProducer, title="Downloaded"):
-    def __init__(self, *args, name, **kwargs):
-        super().__init__(*args, name=name, **kwargs)
-        pages = {"account": ETradeAccountPage, "portfolio": ETradePortfolioPage}
-        pages = {key: page(*args, **kwargs) for key, page in pages.items()}
-        self.pages = pages
-
+class ETradePortfolioDownloader(CycleDownloader, pages={"account": ETradeAccountPage, "portfolio": ETradePortfolioPage}):
     def prepare(self, *args, account, **kwargs):
         account = self.pages["account"](*args, **kwargs)[account]
         return {"account": account}
 
     def execute(self, *args, account, **kwargs):
-        inquiry = Datetime.now()
         portfolio = self.pages["portfolio"](*args, acccount=account, **kwargs)
         for (ticker, expire), (securities, holdings) in iter(portfolio):
             contract = Contract(ticker, expire)
-            yield Query(inquiry, contract, securities=securities, holdings=holdings)
+            yield Query(contract, securities=securities, holdings=holdings)
 
 
 

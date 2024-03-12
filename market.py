@@ -17,7 +17,7 @@ from datetime import timezone as Timezone
 from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
-from support.pipelines import Producer
+from support.processes import Downloader
 from finance.variables import Query, Contract, Instruments, Positions
 
 __version__ = "1.0.0"
@@ -182,13 +182,7 @@ class ETradeOptionPage(WebJsonPage):
         return options
 
 
-class ETradeMarketDownloader(Producer, title="Downloaded"):
-    def __init__(self, *args, name, **kwargs):
-        super().__init__(*args, name=name, **kwargs)
-        pages = {"stock": ETradeStockPage, "expire": ETradeExpirePage, "option": ETradeOptionPage}
-        pages = {key: page(*args, **kwargs) for key, page in pages.items()}
-        self.pages = pages
-
+class ETradeMarketDownloader(Downloader, pages={"stock": ETradeStockPage, "expire": ETradeExpirePage, "option": ETradeOptionPage}):
     def prepare(self, *args, tickers, expires, **kwargs):
         strikes = [self.pages["stock"].price(ticker, *args, **kwargs) for ticker in tickers]
         chains = [[expire for expire in self.pages["expire"](ticker, *args, **kwargs) if expire in expires] for ticker in tickers]
@@ -199,11 +193,10 @@ class ETradeMarketDownloader(Producer, title="Downloaded"):
         assert len(tickers) == len(strikes) == len(chains)
         for ticker, strike, expires in zip(tickers, strikes, chains):
             for expire in expires:
-                inquiry = Datetime.now()
                 contract = Contract(ticker, expire)
                 securities = self.pages["option"](ticker, *args, expire=expire, strike=strike, **kwargs)
                 securities["underlying"] = self.pages["stock"].price(ticker, *args, **kwargs)
-                yield Query(inquiry, contract, securities=securities)
+                yield Query(contract, securities=securities)
 
 
 

@@ -20,6 +20,7 @@ MAIN = os.path.dirname(os.path.realpath(__file__))
 PROJECT = os.path.abspath(os.path.join(MAIN, os.pardir))
 ROOT = os.path.abspath(os.path.join(PROJECT, os.pardir))
 REPOSITORY = os.path.join(ROOT, "Library", "repository", "etrade")
+MARKET = os.path.join(REPOSITORY, "market")
 ETRADE = os.path.join(ROOT, "Library", "etrade.txt")
 TICKERS = os.path.join(ROOT, "Library", "tickers.txt")
 if ROOT not in sys.path:
@@ -28,7 +29,7 @@ if ROOT not in sys.path:
 from support.synchronize import SideThread
 from support.processes import Filtering
 from webscraping.webreaders import WebAuthorizer, WebReader
-from finance.securities import SecurityFile, SecurityFilter, SecurityCleaner, SecuritySaver
+from finance.securities import SecurityFile, SecurityFilter, SecuritySaver
 from finance.variables import DateRange
 
 from market import ETradeMarketDownloader
@@ -60,14 +61,13 @@ class ETradeReader(WebReader, delay=10): pass
 
 
 def main(*args, apikey, apicode, tickers, expires, parameters, **kwargs):
-    security_file = SecurityFile(name="SecurityFile", repository=REPOSITORY, timeout=None)
+    security_file = SecurityFile(name="SecurityFile", repository=MARKET, timeout=None)
     authorizer = ETradeAuthorizer(name="ETradeAuthorizer", apikey=apikey, apicode=apicode)
     with ETradeReader(authorizer=authorizer, name="ETradeReader") as reader:
         security_downloader = ETradeMarketDownloader(name="SecurityDownloader", feed=reader)
         security_filter = SecurityFilter(name="SecurityFilter", lower={Filtering.FLOOR: ["volume", "interest", "size"]})
-        security_cleaner = SecurityCleaner(name="SecurityCleaner")
         security_writer = SecuritySaver(name="SecurityWriter", file=security_file)
-        security_pipeline = security_downloader + security_filter + security_cleaner + security_writer
+        security_pipeline = security_downloader + security_filter + security_writer
         security_thread = SideThread(security_pipeline, name="SecurityThread")
         security_thread.setup(tickers=tickers, expires=expires, **parameters)
         security_thread.start()
