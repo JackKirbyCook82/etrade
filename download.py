@@ -29,10 +29,10 @@ if ROOT not in sys.path:
 from support.synchronize import SideThread
 from support.processes import Filtering
 from webscraping.webreaders import WebAuthorizer, WebReader
-from finance.securities import SecurityFile, SecurityFilter, SecuritySaver
+from finance.securities import SecurityFile, SecurityScheduler, SecurityFilter, SecuritySaver
 from finance.variables import DateRange
 
-from market import ETradeMarketDownloader
+from market import ETradeExpireDownloader, ETradeOptionDownloader
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -61,15 +61,17 @@ class ETradeReader(WebReader, delay=10): pass
 
 
 def main(*args, apikey, apicode, tickers, expires, parameters, **kwargs):
-    security_file = SecurityFile(name="SecurityFile", repository=MARKET, timeout=None)
+    file = SecurityFile(name="SecurityFile", repository=MARKET, timeout=None)
     authorizer = ETradeAuthorizer(name="ETradeAuthorizer", apikey=apikey, apicode=apicode)
-    with ETradeReader(authorizer=authorizer, name="ETradeReader") as reader:
-        security_downloader = ETradeMarketDownloader(name="SecurityDownloader", feed=reader)
-        security_filter = SecurityFilter(name="SecurityFilter", lower={Filtering.FLOOR: ["volume", "interest", "size"]})
-        security_writer = SecuritySaver(name="SecurityWriter", file=security_file)
-        security_pipeline = security_downloader + security_filter + security_writer
+    with ETradeReader(name="ETradeReader", authorizer=authorizer) as reader:
+        ticker_scheduler = SecurityScheduler(name="TickerScheduler", tickers=tickers)
+        expire_downloader = ETradeExpireDownloader(name="ExpireDownloader", feed=reader)
+        option_downloader = ETradeOptionDownloader(name="OptionDownloader", feed=reader)
+        option_filter = SecurityFilter(name="SecurityFilter", lower={Filtering.FLOOR: ["volume", "interest", "size"]})
+        option_writer = SecuritySaver(name="SecurityWriter", file=file)
+        security_pipeline = ticker_scheduler + expire_downloader + option_downloader + option_filter + option_writer
         security_thread = SideThread(security_pipeline, name="SecurityThread")
-        security_thread.setup(tickers=tickers, expires=expires, **parameters)
+        security_thread.setup(expires=expires, **parameters)
         security_thread.start()
         security_thread.join()
 

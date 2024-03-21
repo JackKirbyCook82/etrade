@@ -10,6 +10,7 @@ import pytz
 import numpy as np
 import pandas as pd
 from enum import IntEnum
+from itertools import chain
 from datetime import date as Date
 from datetime import datetime as Datetime
 from datetime import timezone as Timezone
@@ -18,12 +19,13 @@ from collections import namedtuple as ntuple
 from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
-from support.processes import CycleDownloader
-from finance.variables import Query, Contract, Instruments, Options, Positions
+from support.processes import Downloader
+from support.pipelines import Processor
+from finance.variables import Instruments, Options, Positions
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["ETradePortfolioDownloader"]
+__all__ = ["ETradeAccountDownloader", "ETradePortfolioDownloader"]
 __copyright__ = "Copyright 2023, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -78,6 +80,7 @@ class ETradePortfolioData(WebJSON, locator="//PortfolioResponse/AccountPortfolio
     class Volume(WebJSON.Text, locator="//volume", key="volume", parser=np.int64): pass
     class Interest(WebJSON.Text, locator="//openInterest", key="interest", parser=np.int32, optional=True): pass
     class Quantity(WebJSON.Text, locator="//quantity", key="quantity", parser=np.int32): pass
+    class Paid(WebJSON.Text, locator="pricePaid", key="paid", parser=np.float32): pass
 
     class Position(WebJSON.Text, locator="//positionType", key="position", parser=position_parser): pass
     class Instrument(WebJSON.Text, key="instrument"):
@@ -117,54 +120,89 @@ class ETradeBalancePage(WebJsonPage):
 
 
 class ETradePortfolioPage(WebJsonPage):
-    def __init__(self, *args, **kwargs):
-        Columns = ntuple("Columns", "markets holdings")
-        securities = ["instrument", "position", "ticker", "expire", "strike", "date", "price", "size", "volume", "interest", "underlying"]
-        holdings = ["instrument", "position", "ticker", "expire", "strike", "date", "quantity"]
-        self.columns = Columns(securities, holdings)
-        super().__init__(*args, **kwargs)
-
     def __call__(self, ticker, *args, account, **kwargs):
+        Columns = ntuple("Columns", "securities holdings")
+        security = ["instrument", "position", "ticker", "expire", "strike", "date", "price", "underlying", "size", "volume", "interest"]
+        holding = ["instrument", "position", "ticker", "expire", "strike", "date", "quantity"]
+        columns = Columns(security, holding)
+        string = lambda x: str(x.name).lower()
         curl = ETradePortfolioURL(account=account)
         self.load(str(curl.address), params=dict(curl.query))
         contents = ETradePortfolioData(self.source)
-        for (ticker, expire), (securities, holdings) in self.portfolio(contents, *args, **kwargs):
-            securities = securities[self.columns.securities]
-            holdings = holdings[self.columns.holdings]
-            yield (ticker, expire), (securities, holdings)
+        for contract, portfolio in self.portfolio(contents, *args, **kwargs):
+            securities = self.securities(portfolio, *args, **kwargs)
+            securities["instrument"] = securities["instrument"].apply(string)
+            securities["position"] = securities["instrument"].apply(string)
+            securities = securities[columns.securities]
+            holdings = self.holdings(portfolio, *args, **kwargs)
+            holdings["instrument"] = holdings["instrument"].apply(string)
+            holdings["position"] = holdings["instrument"].apply(string)
+            holdings = holdings[columns.holdings]
+            yield contract, (securities, holdings)
 
     @staticmethod
     def portfolio(contents, *args, **kwargs):
-        position_function = lambda cols: Positions.LONG if cols["position"] == Positions.SHORT else Positions.SHORT
-        size_function = lambda cols: cols["supply"] if cols["position"] == Positions.LONG else cols["demand"]
-        price_function = lambda cols: cols["ask"] if cols["position"] == Positions.LONG else cols["bid"]
-        string_function = lambda x: str(x.name).lower()
         contents = [{key: value(*args, **kwargs) for key, value in iter(content)} for content in iter(contents)]
         portfolio = pd.DataFrame.from_records(contents)
-        for (ticker, expire), dataframe in iter(portfolio.groupby(["ticker", "expire"])):
-            securities = dataframe.copy(deep=False)
-            holdings = dataframe.copy(deep=False)
-            securities = securities.where(securities["security"] == Instruments.STOCK).dropna(how="all", inplace=False)
-            securities["position"] = securities.apply(position_function)
-            securities["price"] = securities.apply(price_function)
-            securities["size"] = securities.apply(size_function)
-            securities["instrument"] = securities["instrument"].apply(string_function)
-            securities["position"] = securities["instrument"].apply(string_function)
-            holdings["instrument"] = holdings["instrument"].apply(string_function)
-            holdings["position"] = holdings["instrument"].apply(string_function)
-            yield (ticker, expire), (securities, holdings)
+        for contract, dataframe in iter(portfolio.groupby(["ticker", "expire"])):
+            yield contract, dataframe
+
+    @staticmethod
+    def securities(dataframe, *args, **kwargs):
+        position = lambda cols: Positions.LONG if cols["position"] == Positions.SHORT else Positions.SHORT
+        size = lambda cols: cols["supply"] if cols["position"] == Positions.LONG else cols["demand"]
+        price = lambda cols: cols["ask"] if cols["position"] == Positions.LONG else cols["bid"]
+        mask = dataframe["instrument"] != Instruments.STOCK
+        options = dataframe.where(mask).dropna(how="all", inplace=False)
+        options["position"] = options.apply(position)
+        options["price"] = options.apply(price)
+        options["size"] = options.apply(size)
+        return options
+
+    @staticmethod
+    def holdings(dataframe, *args, **kwargs):
+        index = ["instrument", "position", "ticker", "expire", "strike", "date"]
+        invert = lambda x: Positions.SHORT if x == Positions.LONG else Positions.LONG
+        quantity = lambda x: np.floor(np.divide(x, 100)).astype(np.float32)
+        strike = lambda x: np.round(x, 2).astype(np.float32)
+        parameters = lambda record: {"strike": strike(record["paid"]), "quantity": quantity(record["quantity"])}
+        call = lambda record: {"instrument": Instruments.CALL, "position": record["position"]}
+        put = lambda record: {"instrument": Instruments.PUT, "position": invert(record["position"])}
+        left = lambda record: record | put(record) | parameters(record)
+        right = lambda record: record | call(record) | parameters(record)
+        stocks = dataframe["instrument"] == Instruments.STOCKS
+        stocks = dataframe.where(stocks).dropna(axis=0, how="all")
+        virtuals = [[left(record), right(record)] for record in stocks.to_dict("records")]
+        virtuals = pd.DataFrame.from_records(list(chain(*virtuals)))
+        virtuals["strike"] = virtuals["strike"].apply(strike)
+        mask = dataframe["instrument"] != Instruments.STOCK
+        options = dataframe.where(mask).dropna(axis=0, how="all")
+        options = pd.concat([options, virtuals], axis=0)[index + ["quantity"]]
+        options = options.groupby(index)["quantity"].sum()
+        options = options.reset_index(drop=False, inplace=False)
+        return options
 
 
-class ETradePortfolioDownloader(CycleDownloader, pages={"account": ETradeAccountPage, "portfolio": ETradePortfolioPage}):
-    def prepare(self, *args, account, **kwargs):
-        account = self.pages["account"](*args, **kwargs)[account]
-        return {"account": account}
+class ETradeAccountDownloader(Downloader, Processor, pages={"account": ETradeAccountPage, "portfolio": ETradePortfolioPage}):
+    def execute(self, query, *args, **kwargs):
+        pass
 
-    def execute(self, *args, account, **kwargs):
-        portfolio = self.pages["portfolio"](*args, acccount=account, **kwargs)
-        for (ticker, expire), (securities, holdings) in iter(portfolio):
-            contract = Contract(ticker, expire)
-            yield Query(contract, securities=securities, holdings=holdings)
+
+class ETradePortfolioDownloader(Downloader, Processor, pages={"account": ETradeAccountPage, "portfolio": ETradePortfolioPage}):
+    def execute(self, query, *args, **kwargs):
+        pass
+
+
+# class ETradePortfolioDownloader(CycleDownloader, pages={"account": ETradeAccountPage, "portfolio": ETradePortfolioPage}):
+#     def prepare(self, *args, account, **kwargs):
+#         account = self.pages["account"](*args, **kwargs)[account]
+#        return {"account": account}
+
+#     def execute(self, *args, account, **kwargs):
+#         portfolio = self.pages["portfolio"](*args, acccount=account, **kwargs)
+#         for (ticker, expire), (securities, holdings) in iter(portfolio):
+#             contract = Contract(ticker, expire)
+#             yield Query(contract, securities=securities, holdings=holdings)
 
 
 
