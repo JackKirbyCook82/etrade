@@ -183,12 +183,12 @@ class ETradePortfolioPage(WebJsonPage):
         return options
 
 
-class ETradeAccountDownloader(Downloader, Processor, pages={"account": ETradeAccountPage, "portfolio": ETradePortfolioPage}):
+class ETradeAccountDownloader(Downloader, Processor, pages={"account": ETradeAccountPage, "balance": ETradeBalancePage}):
     def execute(self, query, *args, **kwargs):
         pass
 
 
-class ETradePortfolioDownloader(Downloader, Processor, pages={"account": ETradeAccountPage, "portfolio": ETradePortfolioPage}):
+class ETradePortfolioDownloader(Downloader, Processor, pages={"portfolio": ETradePortfolioPage}):
     def execute(self, query, *args, **kwargs):
         pass
 
