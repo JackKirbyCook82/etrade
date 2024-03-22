@@ -65,7 +65,7 @@ def main(*args, apikey, apicode, tickers, expires, parameters, **kwargs):
     market_file = SecurityFile(name="MarketFile", repository=MARKET, timeout=None)
     authorizer = ETradeAuthorizer(name="ETradeAuthorizer", apikey=apikey, apicode=apicode)
     with ETradeReader(name="ETradeReader", authorizer=authorizer) as reader:
-        ticker_scheduler = SecurityScheduler(name="MarketTickerScheduler")  # SINGLE READING, SINGLE DOWNLOAD, NO CYCLING
+        ticker_scheduler = SecurityScheduler(name="MarketTickerScheduler")                                              # SINGLE READING, SINGLE DOWNLOAD, NO CYCLING
         expire_downloader = ETradeExpireDownloader(name="ETradeExpireDownloader", feed=reader)
         security_downloader = ETradeOptionDownloader(name="ETradeSecurityDownloader", feed=reader)
         security_filter = SecurityFilter(name="SecurityFilter", filtering={Filtering.FLOOR: ["volume", "interest", "size"]})

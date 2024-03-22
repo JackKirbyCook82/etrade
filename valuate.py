@@ -53,7 +53,7 @@ pd.set_option("display.max_columns", 25)
 
 def main(*args, tickers, expires, parameters, **kwargs):
     market_file = SecurityFile(name="MarketFile", repository=MARKET, timeout=None)
-    security_scheduler = SecurityScheduler(name="MarketSecurityScheduler")  # SINGLE READING, NO CYCLING
+    security_scheduler = SecurityScheduler(name="MarketSecurityScheduler")                                              # SINGLE READING, NO CYCLING
     security_loader = SecurityLoader(name="MarketSecurityLoader", file=market_file)
     security_filter = SecurityFilter(name="SecurityFilter", filtering={Filtering.FLOOR: ["volume", "interest", "size"]})
     strategy_calculator = StrategyCalculator(name="StrategyCalculator")

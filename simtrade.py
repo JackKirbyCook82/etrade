@@ -28,7 +28,7 @@ TICKERS = os.path.join(ROOT, "Library", "tickers.txt")
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 
-from support.synchronize import MainThread, SideThread
+from support.synchronize import SideThread
 from support.processes import Filtering
 from finance.variables import Scenarios, Valuations
 from finance.securities import SecurityFile, SecurityFilter, SecurityLoader, SecuritySaver
@@ -61,8 +61,8 @@ def main(*args, tickers, expires, parameters, **kwargs):
     portfolio_file = SecurityFile(name="PortfolioFile", repository=PORTFOLIO, timeout=None)
     acquisitions_table = AcquisitionTable(name="AcquisitionTable", timeout=None)
     divestitures_table = DivestitureTable(name="DivestitureTable", timeout=None)
-    market_scheduler = SecurityScheduler(name="MarketSecurityScheduler")  # SINGLE READING, NO CYCLING
-    portfolio_scheduler = SecurityScheduler(name="PortfolioSecurityScheduler")  # CONTINUOUS READING, WITH CYCLING, BREAKER = ???
+    market_scheduler = SecurityScheduler(name="MarketSecurityScheduler")                                                # SINGLE READING, NO CYCLING
+    portfolio_scheduler = SecurityScheduler(name="PortfolioSecurityScheduler")                                          # CONTINUOUS READING, WITH CYCLING, BREAKER = ???
     market_loader = SecurityLoader(name="MarketSecurityLoader", file=market_file)
     portfolio_loader = SecurityLoader(name="PortfolioSecurityLoader", file=portfolio_file)
     security_simulator = SecuritySimulator(name="SecuritySimulator")
@@ -72,20 +72,16 @@ def main(*args, tickers, expires, parameters, **kwargs):
     valuation_filter = ValuationFilter(name="ValuationFilter", scenario=Scenarios.MINIMUM, filtering={Filtering.FLOOR: ["apy", "size"]})
     acquisitions_writer = AcquisitionWriter(name="AcquisitionWriter", table=acquisitions_table, valuation=Valuations.ARBITRAGE, priority=priority)
     divestitures_writer = DivestitureWriter(name="DivestitureWriter", table=divestitures_table, valuation=Valuations.ARBITRAGE, priority=priority)
-    acquisitions_scheduler = AcquisitionScheduler(name="AcquisitionScheduler")  # CONTINUOUS READING, WITH CYCLING, BREAKER = ???
+    acquisitions_scheduler = AcquisitionScheduler(name="AcquisitionScheduler")                                          # CONTINUOUS READING, WITH CYCLING, BREAKER = ???
     acquisitions_reader = AcquisitionReader(name="AcquisitionReader", table=acquisitions_table)
     acquisitions_saver = SecuritySaver(name="PortfolioSecuritySaver", file=portfolio_file)
-    divestitures_scheduler = DivestitureScheduler(name="DivestitureScheduler")  # CONTINUOUS READING, WITH CYCLING, BREAKER = ???
+    divestitures_scheduler = DivestitureScheduler(name="DivestitureScheduler")                                          # CONTINUOUS READING, WITH CYCLING, BREAKER = ???
     divestitures_reader = DivestitureReader(name="DivestitureReader", table=divestitures_table)
     divestitures_saver = SecuritySaver(name="PortfolioSecuritySaver", file=portfolio_file)
-    acquisitions_window = AcquisitionWindow(name="AcquisitionWindow", table=acquisitions_table)
-    divestitures_window = DivestitureWindow(name="DivestitureWindow", table=divestitures_table)
     market_pipeline = market_scheduler + market_loader + security_filter + strategy_calculator + valuation_calculator + valuation_filter + acquisitions_writer
     portfolio_pipeline = portfolio_scheduler + portfolio_loader + security_simulator + security_filter + strategy_calculator + valuation_calculator + valuation_filter + divestitures_writer
     acquisition_pipeline = acquisitions_scheduler + acquisitions_reader + acquisitions_saver
     divestiture_pipeline = divestitures_scheduler + divestitures_reader + divestitures_saver
-    window_terminal = WindowTerminal(name="WindowTerminal", windows=[acquisitions_window, divestitures_window])
-    window_thread = MainThread(window_terminal, name="WindowThread")
     market_thread = SideThread(market_pipeline, name="MarketThread")
     portfolio_thread = SideThread(portfolio_pipeline, name="PortfolioThread")
     acquisition_thread = SideThread(acquisition_pipeline, name="AcquisitionThread")
@@ -93,7 +89,6 @@ def main(*args, tickers, expires, parameters, **kwargs):
     threads = [acquisition_thread, divestiture_thread, market_thread, portfolio_thread]
     for thread in list(threads):
         thread.setup(tickers=tickers, expires=expires, **parameters)
-    window_thread.run()
     for thread in list(threads):
         thread.start()
     for thread in reversed(threads):
