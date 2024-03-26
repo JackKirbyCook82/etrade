@@ -48,12 +48,12 @@ pd.set_option("display.max_columns", 25)
 
 
 def valuation(file, *args, parameters, **kwargs):
-    security_loader = SecurityLoader(name="MarketSecurityLoader", file=file)
+    security_loader = SecurityLoader(name="MarketSecurityLoader", source=file)
     security_filter = SecurityFilter(name="MarketSecurityFilter", filtering={Filtering.FLOOR: ["volume", "interest", "size"]})
     strategy_calculator = StrategyCalculator(name="MarketStrategyCalculator")
     valuation_calculator = ValuationCalculator(name="MarketValuationCalculator", valuation=Valuations.ARBITRAGE)
     valuation_filter = ValuationFilter(name="MarketValuationFilter", scenario=Scenarios.MINIMUM, filtering={Filtering.FLOOR: ["apy", "size"]})
-    valuation_saver = ValuationSaver(name="MarketValuationSaver", file=file)
+    valuation_saver = ValuationSaver(name="MarketValuationSaver", destination=file)
     valuation_pipeline = security_loader + security_filter + strategy_calculator + valuation_calculator + valuation_filter + valuation_saver
     valuation_thread = SideThread(valuation_pipeline, name="MarketValuationThread")
     valuation_thread.setup(**parameters)

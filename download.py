@@ -39,7 +39,6 @@ __author__ = "Jack Kirby Cook"
 __all__ = []
 __copyright__ = "Copyright 2023, Jack Kirby Cook"
 __license__ = "MIT License"
-__date__ = Datetime.today().date()
 
 
 warnings.filterwarnings("ignore")
@@ -74,7 +73,7 @@ def security(source, reader, file, *args, parameters, **kwargs):
     security_dequeue = SecurityDequeue(name="MarketSecurityDequeue", source=source)
     security_downloader = ETradeSecurityDownloader(name="ETradeSecurityDownloader", feed=reader)
     security_filter = SecurityFilter(name="MarketSecurityFilter", filtering={Filtering.FLOOR: ["volume", "interest", "size"]})
-    security_saver = SecuritySaver(name="MarketSecuritySaver", file=file)
+    security_saver = SecuritySaver(name="MarketSecuritySaver", destination=file)
     security_pipeline = security_dequeue + security_downloader + security_downloader + security_filter + security_saver
     security_thread = SideThread(security_pipeline, name="MarketSecurityThread")
     security_thread.setup(**parameters)
@@ -83,15 +82,16 @@ def security(source, reader, file, *args, parameters, **kwargs):
 
 def main(*args, apikey, apicode, **kwargs):
     market_file = SecurityFile(name="MarketFile", repository=MARKET, timeout=None)
-    market_schedule = SecuritySchedule(name="MarketSchedule", timeout=None)
-    authorizer = ETradeAuthorizer(name="ETradeAuthorizer", apikey=apikey, apicode=apicode)
-    with ETradeReader(name="ETradeReader", authorizer=authorizer) as market_reader:
-        expire_thread = expire(market_reader, market_schedule, *args, **kwargs)
-        security_thread = security(market_schedule, market_reader, market_file, *args, **kwargs)
-        expire_thread.start()
-        expire_thread.join()
-        security_thread.start()
-        security_thread.join()
+    market_schedule = SecuritySchedule(name="MarketSchedule", timeout=None, capacity=None)
+#    authorizer = ETradeAuthorizer(name="ETradeAuthorizer", apikey=apikey, apicode=apicode)
+#    with ETradeReader(name="ETradeReader", authorizer=authorizer) as market_reader:
+    market_reader = None
+    expire_thread = expire(market_reader, market_schedule, *args, **kwargs)
+    security_thread = security(market_schedule, market_reader, market_file, *args, **kwargs)
+    expire_thread.start()
+    expire_thread.join()
+    security_thread.start()
+    security_thread.join()
 
 
 if __name__ == "__main__":
@@ -100,7 +100,7 @@ if __name__ == "__main__":
         sysApiKey, sysApiCode = [str(string).strip() for string in str(apifile.read()).split("\n")]
     with open(TICKERS, "r") as tickerfile:
         sysTickers = [str(string).strip().upper() for string in tickerfile.read().split("\n")]
-    sysExpires = DateRange([(__date__ + Timedelta(days=1)).date(), (__date__ + Timedelta(weeks=52)).date()])
+    sysExpires = DateRange([(Datetime.today() + Timedelta(days=1)).date(), (Datetime.today() + Timedelta(weeks=52)).date()])
     sysParameters = {"volume": None, "interest": None, "size": None}
     main(apikey=sysApiKey, apicode=sysApiCode, tickers=sysTickers, expires=sysExpires, parameters=sysParameters)
 
