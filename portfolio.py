@@ -20,12 +20,12 @@ from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
 from support.processes import Downloader
-from support.pipelines import Processor
-from finance.variables import Instruments, Options, Positions
+from support.pipelines import CycleProducer
+from finance.variables import Contract, Instruments, Options, Positions
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["ETradeAccountDownloader", "ETradePortfolioDownloader"]
+__all__ = ["ETradePortfolioDownloader"]
 __copyright__ = "Copyright 2023, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -101,7 +101,7 @@ class ETradePortfolioData(WebJSON, locator="//PortfolioResponse/AccountPortfolio
 
 
 class ETradeAccountPage(WebJsonPage):
-    def __call__(self, ticker, *args, account, **kwargs):
+    def __call__(self, *args, account, **kwargs):
         assert isinstance(account, int)
         curl = ETradeAccountURL()
         self.load(str(curl.address), params=dict(curl.query))
@@ -111,7 +111,7 @@ class ETradeAccountPage(WebJsonPage):
 
 
 class ETradeBalancePage(WebJsonPage):
-    def __call__(self, ticker, *args, account, **kwargs):
+    def __call__(self, *args, account, **kwargs):
         curl = ETradeBalanceURL(account=account)
         self.load(str(curl.address), params=dict(curl.query))
         contents = ETradeBalanceData(self.source)
@@ -183,26 +183,16 @@ class ETradePortfolioPage(WebJsonPage):
         return options
 
 
-class ETradeAccountDownloader(Downloader, Processor, pages={"account": ETradeAccountPage, "balance": ETradeBalancePage}):
-    def execute(self, query, *args, **kwargs):
-        pass
+class ETradePortfolioDownloader(Downloader, CycleProducer, pages={"account": ETradeAccountPage, "portfolio": ETradePortfolioPage}):
+    def prepare(self, *args, account, **kwargs):
+        account = self.pages["account"](*args, account=account, **kwargs)
+        return dict(account=account)
 
-
-class ETradePortfolioDownloader(Downloader, Processor, pages={"portfolio": ETradePortfolioPage}):
-    def execute(self, query, *args, **kwargs):
-        pass
-
-
-# class ETradePortfolioDownloader(CycleDownloader, pages={"account": ETradeAccountPage, "portfolio": ETradePortfolioPage}):
-#     def prepare(self, *args, account, **kwargs):
-#         account = self.pages["account"](*args, **kwargs)[account]
-#        return {"account": account}
-
-#     def execute(self, *args, account, **kwargs):
-#         portfolio = self.pages["portfolio"](*args, acccount=account, **kwargs)
-#         for (ticker, expire), (securities, holdings) in iter(portfolio):
-#             contract = Contract(ticker, expire)
-#             yield Query(contract, securities=securities, holdings=holdings)
+    def execute(self, query, *args, account, **kwargs):
+        portfolio = self.pages["portfolio"](*args, acccount=account, **kwargs)
+        for (ticker, expire), (securities, holdings) in iter(portfolio):
+            contract = Contract(ticker, expire)
+            yield dict(contract=contract, securities=securities, holdings=holdings)
 
 
 

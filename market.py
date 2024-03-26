@@ -18,12 +18,12 @@ from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
 from support.processes import Downloader
-from support.pipelines import Processor
-from finance.variables import Instruments, Positions
+from support.pipelines import Producer, Processor
+from finance.variables import Contract, Instruments, Positions
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["ETradeStockDownloader", "ETradeExpireDownloader", "ETradeOptionDownloader"]
+__all__ = ["ETradeExpireDownloader", "ETradeSecurityDownloader"]
 __copyright__ = "Copyright 2023, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -169,36 +169,21 @@ class ETradeOptionPage(WebJsonPage):
         return options
 
 
-class ETradeExpireDownloader(Downloader, Processor, pages={"stock": ETradeStockPage}):
+class ETradeExpireDownloader(Downloader, Producer, pages={"expire": ETradeExpirePage}):
+    def execute(self, *args, tickers=[], expires=[], **kwargs):
+        for ticker in tickers:
+            expires = [expire for expire in self.pages["expire"](ticker, *args, **kwargs) if expire in expires]
+            for expire in expires:
+                yield Contract(ticker, expire)
+
+
+class ETradeSecurityDownloader(Downloader, Processor, pages={"stock": ETradeStockPage, "option": ETradeOptionPage}):
     def execute(self, query, *args, **kwargs):
-        pass
-
-
-class ETradeStockDownloader(Downloader, Processor, pages={"expire": ETradeExpirePage}):
-    def execute(self, query, *args, **kwargs):
-        pass
-
-
-class ETradeOptionDownloader(Downloader, Processor, pages={"option": ETradeOptionPage}):
-    def execute(self, query, *args, **kwargs):
-        pass
-
-
-# class ETradeMarketDownloader(Downloader, pages={"stock": ETradeStockPage, "expire": ETradeExpirePage, "option": ETradeOptionPage}):
-#     def prepare(self, *args, tickers, expires, **kwargs):
-#         strikes = [self.pages["stock"].price(ticker, *args, **kwargs) for ticker in tickers]
-#         chains = [[expire for expire in self.pages["expire"](ticker, *args, **kwargs) if expire in expires] for ticker in tickers]
-#         return {"strikes": strikes, "chains": chains}
-#
-#     def execute(self, *args, tickers, strikes, chains, **kwargs):
-#         assert all([isinstance(values, list) for values in (tickers, strikes, chains)])
-#         assert len(tickers) == len(strikes) == len(chains)
-#         for ticker, strike, expires in zip(tickers, strikes, chains):
-#             for expire in expires:
-#                 contract = Contract(ticker, expire)
-#                 securities = self.pages["option"](ticker, *args, expire=expire, strike=strike, **kwargs)
-#                 securities["underlying"] = self.pages["stock"].price(ticker, *args, **kwargs)
-#                 yield Query(contract, securities=securities)
+        ticker, expire = query.contract.ticker, query.contract.expire
+        underlying = self.pages["stock"](ticker, *args, **kwargs)["price"].mean()
+        securities = self.pages["option"](ticker, *args, expire=expire, strike=underlying, **kwargs)
+        securities["underlying"] = underlying
+        yield query | dict(securities=securities)
 
 
 

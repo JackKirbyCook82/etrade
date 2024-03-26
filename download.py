@@ -29,10 +29,10 @@ if ROOT not in sys.path:
 from support.synchronize import SideThread
 from support.processes import Filtering
 from webscraping.webreaders import WebAuthorizer, WebReader
-from finance.securities import SecurityFile, SecurityFilter, SecuritySaver
+from finance.securities import SecuritySchedule, SecurityFile, SecurityFilter, SecurityQueue, SecurityDequeue, SecuritySaver
 from finance.variables import DateRange
 
-from market import ETradeExpireDownloader, ETradeOptionDownloader
+from market import ETradeExpireDownloader, ETradeSecurityDownloader
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -61,20 +61,37 @@ class ETradeAuthorizer(WebAuthorizer, authorize=authorize, request=request, acce
 class ETradeReader(WebReader, delay=10): pass
 
 
-def main(*args, apikey, apicode, tickers, expires, parameters, **kwargs):
+def expire(reader, destination, *args, tickers, expires, **kwargs):
+    expire_downloader = ETradeExpireDownloader(name="ETradeExpireDownloader", feed=reader)
+    expire_queue = SecurityQueue(name="MarketExpireQueue", destination=destination)
+    expire_pipeline = expire_downloader + expire_queue
+    expire_thread = SideThread(expire_pipeline, name="MarketExpireThread")
+    expire_thread.setup(tickers=tickers, expires=expires)
+    return expire_thread
+
+
+def security(source, reader, file, *args, parameters, **kwargs):
+    security_dequeue = SecurityDequeue(name="MarketSecurityDequeue", source=source)
+    security_downloader = ETradeSecurityDownloader(name="ETradeSecurityDownloader", feed=reader)
+    security_filter = SecurityFilter(name="MarketSecurityFilter", filtering={Filtering.FLOOR: ["volume", "interest", "size"]})
+    security_saver = SecuritySaver(name="MarketSecuritySaver", file=file)
+    security_pipeline = security_dequeue + security_downloader + security_downloader + security_filter + security_saver
+    security_thread = SideThread(security_pipeline, name="MarketSecurityThread")
+    security_thread.setup(**parameters)
+    return security_thread
+
+
+def main(*args, apikey, apicode, **kwargs):
     market_file = SecurityFile(name="MarketFile", repository=MARKET, timeout=None)
+    market_schedule = SecuritySchedule(name="MarketSchedule", timeout=None)
     authorizer = ETradeAuthorizer(name="ETradeAuthorizer", apikey=apikey, apicode=apicode)
-    with ETradeReader(name="ETradeReader", authorizer=authorizer) as reader:
-        ticker_scheduler = SecurityScheduler(name="MarketTickerScheduler")                                              # SINGLE READING, SINGLE DOWNLOAD, NO CYCLING
-        expire_downloader = ETradeExpireDownloader(name="ETradeExpireDownloader", feed=reader)
-        security_downloader = ETradeOptionDownloader(name="ETradeSecurityDownloader", feed=reader)
-        security_filter = SecurityFilter(name="SecurityFilter", filtering={Filtering.FLOOR: ["volume", "interest", "size"]})
-        security_saver = SecuritySaver(name="SecuritySaver", file=market_file)
-        download_pipeline = ticker_scheduler + expire_downloader + security_downloader + security_filter + security_saver
-        download_thread = SideThread(download_pipeline, name="DownloadThread")
-        download_thread.setup(tickers=tickers, expires=expires, **parameters)
-        download_thread.start()
-        download_thread.join()
+    with ETradeReader(name="ETradeReader", authorizer=authorizer) as market_reader:
+        expire_thread = expire(market_reader, market_schedule, *args, **kwargs)
+        security_thread = security(market_schedule, market_reader, market_file, *args, **kwargs)
+        expire_thread.start()
+        expire_thread.join()
+        security_thread.start()
+        security_thread.join()
 
 
 if __name__ == "__main__":
