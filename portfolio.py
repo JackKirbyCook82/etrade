@@ -10,7 +10,6 @@ import pytz
 import numpy as np
 import pandas as pd
 from enum import IntEnum
-from itertools import chain
 from datetime import date as Date
 from datetime import datetime as Datetime
 from datetime import timezone as Timezone
@@ -97,7 +96,7 @@ class ETradePortfolioData(WebJSON, locator="//PortfolioResponse/AccountPortfolio
         class Day(WebJSON.Text, locator="//Product/expiryDay", key="day", parser=np.int16, optional=True): pass
 
         def execute(self, *args, **kwargs):
-            return Date(year=self["year"].data, month=self["month"].data, day=self["day"].data)
+            return Date(year=self["year"].data, month=self["month"].data, day=self["day"].data) if "option" in self["instrument"] else np.NaT
 
 
 class ETradeAccountPage(WebJsonPage):
@@ -149,38 +148,33 @@ class ETradePortfolioPage(WebJsonPage):
 
     @staticmethod
     def securities(dataframe, *args, **kwargs):
-        position = lambda cols: Positions.LONG if cols["position"] == Positions.SHORT else Positions.SHORT
+        strike = lambda cols: cols["underlying"] if cols["instrument"] == Instruments.STOCK else cols["strike"]
+        underlying = lambda cols: np.NaN if cols["instrument"] == Instruments.STOCK else cols["underlying"]
+        interest = lambda cols: np.NaN if cols["instrument"] == Instruments.STOCK else cols["interest"]
+        expire = lambda cols: np.NaN if cols["instrument"] == Instruments.STOCK else cols["expire"]
+        position = lambda cols: Positions.SHORT if cols["position"] == Positions.LONG else Positions.LONG
         size = lambda cols: cols["supply"] if cols["position"] == Positions.LONG else cols["demand"]
         price = lambda cols: cols["ask"] if cols["position"] == Positions.LONG else cols["bid"]
-        mask = dataframe["instrument"] != Instruments.STOCK
-        options = dataframe.where(mask).dropna(how="all", inplace=False)
-        options["position"] = options.apply(position)
-        options["price"] = options.apply(price)
-        options["size"] = options.apply(size)
-        return options
+        dataframe["strike"] = dataframe.apply(strike)
+        dataframe["underlying"] = dataframe.apply(underlying)
+        dataframe["interest"] = dataframe.apply(interest)
+        dataframe["expire"] = dataframe.apply(expire)
+        dataframe["position"] = dataframe.apply(position)
+        dataframe["size"] = dataframe.apply(size)
+        dataframe["price"] = dataframe.apply(price)
+        return dataframe
 
     @staticmethod
     def holdings(dataframe, *args, **kwargs):
-        index = ["instrument", "position", "ticker", "expire", "strike", "date"]
-        invert = lambda x: Positions.SHORT if x == Positions.LONG else Positions.LONG
-        quantity = lambda x: np.floor(np.divide(x, 100)).astype(np.float32)
-        strike = lambda x: np.round(x, 2).astype(np.float32)
-        parameters = lambda record: {"strike": strike(record["paid"]), "quantity": quantity(record["quantity"])}
-        call = lambda record: {"instrument": Instruments.CALL, "position": record["position"]}
-        put = lambda record: {"instrument": Instruments.PUT, "position": invert(record["position"])}
-        left = lambda record: record | put(record) | parameters(record)
-        right = lambda record: record | call(record) | parameters(record)
-        stocks = dataframe["instrument"] == Instruments.STOCKS
-        stocks = dataframe.where(stocks).dropna(axis=0, how="all")
-        virtuals = [[left(record), right(record)] for record in stocks.to_dict("records")]
-        virtuals = pd.DataFrame.from_records(list(chain(*virtuals)))
-        virtuals["strike"] = virtuals["strike"].apply(strike)
-        mask = dataframe["instrument"] != Instruments.STOCK
-        options = dataframe.where(mask).dropna(axis=0, how="all")
-        options = pd.concat([options, virtuals], axis=0)[index + ["quantity"]]
-        options = options.groupby(index)["quantity"].sum()
-        options = options.reset_index(drop=False, inplace=False)
-        return options
+        adjustment = lambda x:  np.floor(np.divide(x, 100)).astype(np.float32)
+        rounding = lambda x: np.round(x, 3).astype(np.float32)
+        quantity = lambda cols: adjustment(cols["quantity"]) if cols["instrument"] == Instruments.STOCK else cols["quantity"]
+        strike = lambda cols: rounding(cols["paid"]) if cols["instrument"] == Instruments.STOCK else cols["strike"]
+        expire = lambda cols: np.NaN if cols["instrument"] == Instruments.STOCK else cols["expire"]
+        dataframe["quantity"] = dataframe.apply(quantity)
+        dataframe["strike"] = dataframe.apply(strike)
+        dataframe["expire"] = dataframe.apply(expire)
+        return dataframe
 
 
 class ETradePortfolioDownloader(Downloader, CycleProducer, pages={"account": ETradeAccountPage, "portfolio": ETradePortfolioPage}):
@@ -192,7 +186,7 @@ class ETradePortfolioDownloader(Downloader, CycleProducer, pages={"account": ETr
         portfolio = self.pages["portfolio"](*args, acccount=account, **kwargs)
         for (ticker, expire), (securities, holdings) in iter(portfolio):
             contract = Contract(ticker, expire)
-            yield dict(contract=contract, securities=securities, holdings=holdings)
+            yield dict(contract=contract, security=securities, holding=holdings)
 
 
 

@@ -23,7 +23,7 @@ from finance.variables import Contract, Instruments, Positions
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["ETradeExpireDownloader", "ETradeSecurityDownloader"]
+__all__ = ["ETradeContractDownloader", "ETradeMarketDownloader"]
 __copyright__ = "Copyright 2023, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -67,7 +67,6 @@ class ETradeOptionURL(ETradeMarketsURL):
 class ETradeStockData(WebJSON, locator="//QuoteResponse/QuoteData[]", collection=True):
     class Date(WebJSON.Text, locator="//dateTimeUTC", key="date", parser=date_parser): pass
     class Ticker(WebJSON.Text, locator="//Product/symbol", key="ticker", parser=str): pass
-    class Price(WebJSON.Text, locator="//All/lastTrade", key="price", parser=np.float32): pass
     class Bid(WebJSON.Text, locator="//All/bid", key="bid", parser=np.float32): pass
     class Demand(WebJSON.Text, locator="//All/bidSize", key="demand", parser=np.int32): pass
     class Ask(WebJSON.Text, locator="//All/ask", key="ask", parser=np.float32): pass
@@ -111,7 +110,7 @@ class ETradeOptionData(WebJSON, locator="//OptionChainResponse/OptionPair[]", co
 
 class ETradeStockPage(WebJsonPage):
     def __call__(self, ticker, *args, **kwargs):
-        columns = ["instrument", "position", "ticker", "date", "price", "size", "volume"]
+        columns = ["instrument", "position", "ticker", "expire", "strike", "date", "price", "size", "volume", "interest"]
         curl = ETradeStockURL(ticker=ticker)
         self.load(str(curl.address), params=dict(curl.query))
         contents = ETradeStockData(self.source)
@@ -120,14 +119,18 @@ class ETradeStockPage(WebJsonPage):
 
     @staticmethod
     def stocks(contents, *args, instrument, **kwargs):
+        rounding = lambda x: np.round(x, 3).astype(np.float32)
         stocks = [{key: value(*args, **kwargs) for key, value in iter(content)} for content in iter(contents)]
         stocks = pd.DataFrame.from_records(stocks)
         long = stocks.drop(["bid", "demand"], axis=1, inplace=False).rename(columns={"ask": "price", "supply": "size"})
-        long["position"] = str(Positions.LONG)
+        long["position"] = str(Positions.LONG.name).lower()
         short = stocks.drop(["ask", "supply"], axis=1, inplace=False).rename(columns={"bid": "price", "demand": "size"})
         short["position"] = str(Positions.SHORT.name).lower()
-        stocks = pd.concat([long, short], axis=0)
+        stocks = pd.concat([long, short], axis=0).reset_index(drop=True, inplace=False)
         stocks["instrument"] = str(instrument.name).lower()
+        stocks["strike"] = rounding(stocks["price"].mean())
+        stocks["interest"] = np.NaN
+        stocks["expire"] = np.NaN
         return stocks
 
 
@@ -164,26 +167,30 @@ class ETradeOptionPage(WebJsonPage):
         long["position"] = str(Positions.LONG.name).lower()
         short = options.drop(["ask", "supply"], axis=1, inplace=False).rename(columns={"bid": "price", "demand": "size"})
         short["position"] = str(Positions.SHORT.name).lower()
-        options = pd.concat([long, short], axis=0)
+        options = pd.concat([long, short], axis=0).reset_index(drop=True, inplace=False)
         options["instrument"] = str(instrument.name).lower()
         return options
 
 
-class ETradeExpireDownloader(Downloader, Producer, pages={"expire": ETradeExpirePage}):
+class ETradeContractDownloader(Downloader, Producer, pages={"expire": ETradeExpirePage}):
     def execute(self, *args, tickers=[], expires=[], **kwargs):
         for ticker in tickers:
             expires = [expire for expire in self.pages["expire"](ticker, *args, **kwargs) if expire in expires]
             for expire in expires:
-                yield Contract(ticker, expire)
+                contract = Contract(ticker, expire)
+                yield dict(contract=contract)
 
 
-class ETradeSecurityDownloader(Downloader, Processor, pages={"stock": ETradeStockPage, "option": ETradeOptionPage}):
+class ETradeMarketDownloader(Downloader, Processor, pages={"stock": ETradeStockPage, "option": ETradeOptionPage}):
     def execute(self, query, *args, **kwargs):
-        ticker, expire = query.contract.ticker, query.contract.expire
-        underlying = self.pages["stock"](ticker, *args, **kwargs)["price"].mean()
-        securities = self.pages["option"](ticker, *args, expire=expire, strike=underlying, **kwargs)
-        securities["underlying"] = underlying
-        yield query | dict(securities=securities)
+        ticker, expire = query["contract"].ticker, query["contract"].expire
+        stocks = self.pages["stock"](ticker, *args, **kwargs)
+        underlying = stocks["price"].mean()
+        options = self.pages["option"](ticker, *args, expire=expire, strike=underlying, **kwargs)
+        options["underlying"] = underlying
+        stocks["underlying"] = np.NaN
+        securities = pd.concat([options, stocks], axis=0).reset_index(drop=True, inplace=False)
+        yield query | dict(security=securities)
 
 
 

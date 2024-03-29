@@ -29,10 +29,10 @@ if ROOT not in sys.path:
 from support.synchronize import SideThread
 from support.processes import Filtering
 from webscraping.webreaders import WebAuthorizer, WebReader
-from finance.securities import SecuritySchedule, SecurityFile, SecurityFilter, SecurityQueue, SecurityDequeue, SecuritySaver
+from finance.securities import SecurityFile, SecurityFilter, SecuritySaver
 from finance.variables import DateRange
 
-from market import ETradeExpireDownloader, ETradeSecurityDownloader
+from market import ETradeContractDownloader, ETradeMarketDownloader
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -60,38 +60,24 @@ class ETradeAuthorizer(WebAuthorizer, authorize=authorize, request=request, acce
 class ETradeReader(WebReader, delay=10): pass
 
 
-def expire(reader, destination, *args, tickers, expires, **kwargs):
-    expire_downloader = ETradeExpireDownloader(name="ETradeExpireDownloader", feed=reader)
-    expire_queue = SecurityQueue(name="MarketExpireQueue", destination=destination)
-    expire_pipeline = expire_downloader + expire_queue
-    expire_thread = SideThread(expire_pipeline, name="MarketExpireThread")
-    expire_thread.setup(tickers=tickers, expires=expires)
-    return expire_thread
-
-
-def security(source, reader, file, *args, parameters, **kwargs):
-    security_dequeue = SecurityDequeue(name="MarketSecurityDequeue", source=source)
-    security_downloader = ETradeSecurityDownloader(name="ETradeSecurityDownloader", feed=reader)
-    security_filter = SecurityFilter(name="MarketSecurityFilter", filtering={Filtering.FLOOR: ["volume", "interest", "size"]})
-    security_saver = SecuritySaver(name="MarketSecuritySaver", destination=file)
-    security_pipeline = security_dequeue + security_downloader + security_downloader + security_filter + security_saver
+def security(reader, destination, *args, tickers, expires, parameters, **kwargs):
+    contract_downloader = ETradeContractDownloader(feed=reader, name="MarketContractDownloader")
+    security_downloader = ETradeMarketDownloader(feed=reader, name="MarketSecurityDownloader")
+    security_filter = SecurityFilter(filtering={Filtering.FLOOR: ["volume", "interest", "size"]}, name="MarketSecurityFilter")
+    security_saver = SecuritySaver(destination=destination, name="MarketSecuritySaver")
+    security_pipeline = contract_downloader + security_downloader + security_filter + security_saver
     security_thread = SideThread(security_pipeline, name="MarketSecurityThread")
-    security_thread.setup(**parameters)
+    security_thread.setup(tickers=tickers, expires=expires, **parameters)
     return security_thread
 
 
 def main(*args, apikey, apicode, **kwargs):
-    market_file = SecurityFile(name="MarketFile", repository=MARKET, timeout=None)
-    market_schedule = SecuritySchedule(name="MarketSchedule", timeout=None, capacity=None)
-#    authorizer = ETradeAuthorizer(name="ETradeAuthorizer", apikey=apikey, apicode=apicode)
-#    with ETradeReader(name="ETradeReader", authorizer=authorizer) as market_reader:
-    market_reader = None
-    expire_thread = expire(market_reader, market_schedule, *args, **kwargs)
-    security_thread = security(market_schedule, market_reader, market_file, *args, **kwargs)
-    expire_thread.start()
-    expire_thread.join()
-    security_thread.start()
-    security_thread.join()
+    security_file = SecurityFile(repository=MARKET, timeout=None)
+    authorizer = ETradeAuthorizer(name="ETradeAuthorizer", apikey=apikey, apicode=apicode)
+    with ETradeReader(name="ETradeReader", authorizer=authorizer) as reader:
+        security_thread = security(reader, security_file, *args, **kwargs)
+        security_thread.start()
+        security_thread.join()
 
 
 if __name__ == "__main__":
@@ -99,7 +85,7 @@ if __name__ == "__main__":
     with open(API, "r") as apifile:
         sysApiKey, sysApiCode = [str(string).strip() for string in str(apifile.read()).split("\n")]
     with open(TICKERS, "r") as tickerfile:
-        sysTickers = [str(string).strip().upper() for string in tickerfile.read().split("\n")]
+        sysTickers = [str(string).strip().upper() for string in tickerfile.read().split("\n")][0:2]
     sysExpires = DateRange([(Datetime.today() + Timedelta(days=1)).date(), (Datetime.today() + Timedelta(weeks=52)).date()])
     sysParameters = {"volume": None, "interest": None, "size": None}
     main(apikey=sysApiKey, apicode=sysApiCode, tickers=sysTickers, expires=sysExpires, parameters=sysParameters)
