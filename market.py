@@ -119,7 +119,7 @@ class ETradeStockPage(WebJsonPage):
 
     @staticmethod
     def stocks(contents, *args, instrument, **kwargs):
-        rounding = lambda x: np.round(x, 3).astype(np.float32)
+        rounding = lambda x: np.round(x, 2).astype(np.float32)
         stocks = [{key: value(*args, **kwargs) for key, value in iter(content)} for content in iter(contents)]
         stocks = pd.DataFrame.from_records(stocks)
         long = stocks.drop(["bid", "demand"], axis=1, inplace=False).rename(columns={"ask": "price", "supply": "size"})

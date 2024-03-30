@@ -29,7 +29,7 @@ if ROOT not in sys.path:
 from support.synchronize import SideThread
 from support.processes import Filtering
 from webscraping.webreaders import WebAuthorizer, WebReader
-from finance.securities import SecurityFile, SecurityFilter, SecuritySaver
+from finance.securities import SecurityArchive, SecurityFilter, SecuritySaver
 from finance.variables import DateRange
 
 from market import ETradeContractDownloader, ETradeMarketDownloader
@@ -72,10 +72,10 @@ def security(reader, destination, *args, tickers, expires, parameters, **kwargs)
 
 
 def main(*args, apikey, apicode, **kwargs):
-    security_file = SecurityFile(repository=MARKET, timeout=None)
+    archive = SecurityArchive(repository=MARKET)
     authorizer = ETradeAuthorizer(name="ETradeAuthorizer", apikey=apikey, apicode=apicode)
     with ETradeReader(name="ETradeReader", authorizer=authorizer) as reader:
-        security_thread = security(reader, security_file, *args, **kwargs)
+        security_thread = security(reader, archive, *args, **kwargs)
         security_thread.start()
         security_thread.join()
 

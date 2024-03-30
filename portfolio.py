@@ -167,7 +167,7 @@ class ETradePortfolioPage(WebJsonPage):
     @staticmethod
     def holdings(dataframe, *args, **kwargs):
         adjustment = lambda x:  np.floor(np.divide(x, 100)).astype(np.float32)
-        rounding = lambda x: np.round(x, 3).astype(np.float32)
+        rounding = lambda x: np.round(x, 2).astype(np.float32)
         quantity = lambda cols: adjustment(cols["quantity"]) if cols["instrument"] == Instruments.STOCK else cols["quantity"]
         strike = lambda cols: rounding(cols["paid"]) if cols["instrument"] == Instruments.STOCK else cols["strike"]
         expire = lambda cols: np.NaN if cols["instrument"] == Instruments.STOCK else cols["expire"]

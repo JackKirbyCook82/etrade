@@ -27,9 +27,9 @@ if ROOT not in sys.path:
 from support.synchronize import SideThread
 from support.processes import Filtering
 from finance.variables import Scenarios, Valuations
-from finance.securities import SecurityFile, SecurityFilter, SecurityLoader
+from finance.securities import SecurityArchive, SecurityFilter, SecurityLoader
 from finance.strategies import StrategyCalculator
-from finance.valuations import ValuationFile, ValuationCalculator, ValuationFilter, ValuationSaver
+from finance.valuations import ValuationArchive, ValuationCalculator, ValuationFilter, ValuationSaver
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -47,13 +47,13 @@ pd.set_option("display.max_rows", 20)
 pd.set_option("display.max_columns", 25)
 
 
-def valuation(files, *args, parameters, **kwargs):
-    security_loader = SecurityLoader(name="MarketSecurityLoader", source=files)
+def valuation(archive, *args, parameters, **kwargs):
+    security_loader = SecurityLoader(name="MarketSecurityLoader", source=archive)
     security_filter = SecurityFilter(name="MarketSecurityFilter", filtering={Filtering.FLOOR: ["volume", "interest", "size"]})
     strategy_calculator = StrategyCalculator(name="MarketStrategyCalculator")
     valuation_calculator = ValuationCalculator(name="MarketValuationCalculator", valuation=Valuations.ARBITRAGE)
     valuation_filter = ValuationFilter(name="MarketValuationFilter", scenario=Scenarios.MINIMUM, filtering={Filtering.FLOOR: ["apy", "size"]})
-    valuation_saver = ValuationSaver(name="MarketValuationSaver", destination=files)
+    valuation_saver = ValuationSaver(name="MarketValuationSaver", destination=archive)
     valuation_pipeline = security_loader + security_filter + strategy_calculator + valuation_calculator + valuation_filter + valuation_saver
     valuation_thread = SideThread(valuation_pipeline, name="MarketValuationThread")
     valuation_thread.setup(**parameters)
@@ -61,10 +61,10 @@ def valuation(files, *args, parameters, **kwargs):
 
 
 def main(*args, **kwargs):
-    security_file = SecurityFile(repository=MARKET, timeout=None)
-    valuation_file = ValuationFile(repository=MARKET, timeout=None)
-    files = [security_file, valuation_file]
-    valuation_thread = valuation(files, *args, **kwargs)
+    security_archive = SecurityArchive(repository=MARKET)
+    valuation_archive = ValuationArchive(repository=MARKET)
+    archive = security_archive + valuation_archive
+    valuation_thread = valuation(archive, *args, **kwargs)
     valuation_thread.start()
     valuation_thread.join()
 
