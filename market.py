@@ -119,7 +119,6 @@ class ETradeStockPage(WebJsonPage):
 
     @staticmethod
     def stocks(contents, *args, instrument, **kwargs):
-        rounding = lambda x: np.round(x, 2).astype(np.float32)
         stocks = [{key: value(*args, **kwargs) for key, value in iter(content)} for content in iter(contents)]
         stocks = pd.DataFrame.from_records(stocks)
         long = stocks.drop(["bid", "demand"], axis=1, inplace=False).rename(columns={"ask": "price", "supply": "size"})
@@ -128,9 +127,6 @@ class ETradeStockPage(WebJsonPage):
         short["position"] = str(Positions.SHORT.name).lower()
         stocks = pd.concat([long, short], axis=0).reset_index(drop=True, inplace=False)
         stocks["instrument"] = str(instrument.name).lower()
-        stocks["strike"] = rounding(stocks["price"].mean())
-        stocks["interest"] = np.NaN
-        stocks["expire"] = np.NaN
         return stocks
 
 
@@ -188,9 +184,8 @@ class ETradeMarketDownloader(Downloader, Processor, pages={"stock": ETradeStockP
         underlying = stocks["price"].mean()
         options = self.pages["option"](ticker, *args, expire=expire, strike=underlying, **kwargs)
         options["underlying"] = underlying
-        stocks["underlying"] = np.NaN
-        securities = pd.concat([options, stocks], axis=0).reset_index(drop=True, inplace=False)
-        yield query | dict(security=securities)
+        options = options.reset_index(drop=True, inplace=False)
+        yield query | dict(security=options)
 
 
 

@@ -24,12 +24,13 @@ TICKERS = os.path.join(ROOT, "Library", "tickers.txt")
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 
+from support.files import Archive, FileTiming, FileTyping
 from support.synchronize import SideThread
 from support.processes import Filtering
 from finance.variables import Scenarios, Valuations
-from finance.securities import SecurityArchive, SecurityFilter, SecurityLoader
+from finance.securities import SecurityFile, SecurityFilter, SecurityLoader, SecuritySaver
 from finance.strategies import StrategyCalculator
-from finance.valuations import ValuationArchive, ValuationCalculator, ValuationFilter, ValuationSaver
+from finance.valuations import ValuationFile, ValuationCalculator, ValuationFilter
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -48,12 +49,14 @@ pd.set_option("display.max_columns", 25)
 
 
 def valuation(archive, *args, parameters, **kwargs):
+    security_filtering = {Filtering.FLOOR: {"volume": 25, "interest": 25, "size": 10}, Filtering.NULL: ["volume", "interest", "size"]}
+    valuation_filtering = {Filtering.FLOOR: {"apy": 0.0, "size": 10}, Filtering.NULL: ["apy", "size"]}
     security_loader = SecurityLoader(name="MarketSecurityLoader", source=archive)
-    security_filter = SecurityFilter(name="MarketSecurityFilter", filtering={Filtering.FLOOR: ["volume", "interest", "size"]})
+    security_filter = SecurityFilter(name="MarketSecurityFilter", filtering=security_filtering)
     strategy_calculator = StrategyCalculator(name="MarketStrategyCalculator")
     valuation_calculator = ValuationCalculator(name="MarketValuationCalculator", valuation=Valuations.ARBITRAGE)
-    valuation_filter = ValuationFilter(name="MarketValuationFilter", scenario=Scenarios.MINIMUM, filtering={Filtering.FLOOR: ["apy", "size"]})
-    valuation_saver = ValuationSaver(name="MarketValuationSaver", destination=archive)
+    valuation_filter = ValuationFilter(name="MarketValuationFilter", scenario=Scenarios.MINIMUM, filtering=valuation_filtering)
+    valuation_saver = SecuritySaver(name="MarketValuationSaver", destination=archive, saving="valuation")
     valuation_pipeline = security_loader + security_filter + strategy_calculator + valuation_calculator + valuation_filter + valuation_saver
     valuation_thread = SideThread(valuation_pipeline, name="MarketValuationThread")
     valuation_thread.setup(**parameters)
@@ -61,17 +64,17 @@ def valuation(archive, *args, parameters, **kwargs):
 
 
 def main(*args, **kwargs):
-    security_archive = SecurityArchive(repository=MARKET)
-    valuation_archive = ValuationArchive(repository=MARKET)
-    archive = security_archive + valuation_archive
-    valuation_thread = valuation(archive, *args, **kwargs)
+    security_file = SecurityFile(typing=FileTyping.CSV, timing=FileTiming.EAGER)
+    valuation_file = ValuationFile(typing=FileTyping.CSV, timing=FileTiming.EAGER)
+    market_archive = Archive(repository=MARKET, loading=security_file, saving=valuation_file)
+    valuation_thread = valuation(market_archive, *args, **kwargs)
     valuation_thread.start()
     valuation_thread.join()
 
 
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
-    sysParameters = {"volume": 25, "interest": 25, "size": 10, "apy": 0.01, "discount": 0.0, "fees": 0.0}
+    sysParameters = {"discount": 0.0, "fees": 0.0}
     main(parameters=sysParameters)
 
 

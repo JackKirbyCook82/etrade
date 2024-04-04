@@ -131,11 +131,11 @@ class ETradePortfolioPage(WebJsonPage):
         for contract, portfolio in self.portfolio(contents, *args, **kwargs):
             securities = self.securities(portfolio, *args, **kwargs)
             securities["instrument"] = securities["instrument"].apply(string)
-            securities["position"] = securities["instrument"].apply(string)
+            securities["position"] = securities["position"].apply(string)
             securities = securities[columns.securities]
             holdings = self.holdings(portfolio, *args, **kwargs)
             holdings["instrument"] = holdings["instrument"].apply(string)
-            holdings["position"] = holdings["instrument"].apply(string)
+            holdings["position"] = holdings["position"].apply(string)
             holdings = holdings[columns.holdings]
             yield contract, (securities, holdings)
 
@@ -148,33 +148,11 @@ class ETradePortfolioPage(WebJsonPage):
 
     @staticmethod
     def securities(dataframe, *args, **kwargs):
-        strike = lambda cols: cols["underlying"] if cols["instrument"] == Instruments.STOCK else cols["strike"]
-        underlying = lambda cols: np.NaN if cols["instrument"] == Instruments.STOCK else cols["underlying"]
-        interest = lambda cols: np.NaN if cols["instrument"] == Instruments.STOCK else cols["interest"]
-        expire = lambda cols: np.NaN if cols["instrument"] == Instruments.STOCK else cols["expire"]
-        position = lambda cols: Positions.SHORT if cols["position"] == Positions.LONG else Positions.LONG
-        size = lambda cols: cols["supply"] if cols["position"] == Positions.LONG else cols["demand"]
-        price = lambda cols: cols["ask"] if cols["position"] == Positions.LONG else cols["bid"]
-        dataframe["strike"] = dataframe.apply(strike)
-        dataframe["underlying"] = dataframe.apply(underlying)
-        dataframe["interest"] = dataframe.apply(interest)
-        dataframe["expire"] = dataframe.apply(expire)
-        dataframe["position"] = dataframe.apply(position)
-        dataframe["size"] = dataframe.apply(size)
-        dataframe["price"] = dataframe.apply(price)
-        return dataframe
+        pass
 
     @staticmethod
     def holdings(dataframe, *args, **kwargs):
-        adjustment = lambda x:  np.floor(np.divide(x, 100)).astype(np.float32)
-        rounding = lambda x: np.round(x, 2).astype(np.float32)
-        quantity = lambda cols: adjustment(cols["quantity"]) if cols["instrument"] == Instruments.STOCK else cols["quantity"]
-        strike = lambda cols: rounding(cols["paid"]) if cols["instrument"] == Instruments.STOCK else cols["strike"]
-        expire = lambda cols: np.NaN if cols["instrument"] == Instruments.STOCK else cols["expire"]
-        dataframe["quantity"] = dataframe.apply(quantity)
-        dataframe["strike"] = dataframe.apply(strike)
-        dataframe["expire"] = dataframe.apply(expire)
-        return dataframe
+        pass
 
 
 class ETradePortfolioDownloader(Downloader, CycleProducer, pages={"account": ETradeAccountPage, "portfolio": ETradePortfolioPage}):
