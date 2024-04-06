@@ -26,15 +26,13 @@ TICKERS = os.path.join(ROOT, "Library", "tickers.txt")
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 
-from support.files import FileTiming, FileTyping
+from support.files import Archive, FileTiming, FileTyping
 from support.synchronize import SideThread
 from support.processes import Filtering
 from finance.variables import Scenarios, Valuations
-from finance.securities import SecurityArchive, SecurityFile, HoldingFile, SecurityLoader, SecuritySaver
-from finance.strategies import StrategyCalculator
-from finance.valuations import ValuationArchive, ValuationFile, ValuationCalculator, ValuationFilter, ValuationLoader
-from finance.acquisitions import AcquisitionTable, AcquisitionWriter, AcquisitionReader
-from finance.divestitures import DivestitureTable, DivestitureWriter, DivestitureReader
+from finance.securities import SecurityLoader
+from finance.valuations import ValuationFile, ValuationFilter
+from finance.acquisitions import AcquisitionTable, AcquisitionWriter
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -52,62 +50,32 @@ pd.set_option("display.max_rows", 20)
 pd.set_option("display.max_columns", 25)
 
 
-def valuation(file, table, *args, parameters, **kwargs):
+def valuation(archive, table, *args, parameters, **kwargs):
     valuation_filtering = {Filtering.FLOOR: {"apy": 0.0, "size": 10}, Filtering.NULL: ["apy", "size"]}
-    acquisition_priority = lambda cols: cols[(Scenarios.MINIMUM, "apy")].astype(np.float32)
-    valuation_loader = ValuationLoader(name="MarketSecurityLoader", source=file)
+    liquidity_function = lambda cols: np.floor(cols["size"] * 0.1).astype(np.int32)
+    priority_function = lambda cols: cols[("apy", str(Scenarios.MINIMUM.name).lower())]
+    valuation_functions = dict(liquidity=liquidity_function, priority=priority_function)
+    valuation_loader = SecurityLoader(name="MarketValuationLoader", source=archive, mode="r")
     valuation_filter = ValuationFilter(name="MarketValuationFilter", scenario=Scenarios.MINIMUM, filtering=valuation_filtering)
-    acquisition_writer = AcquisitionWriter(name="MarketAcquisitionWriter", destination=table, valuation=Valuations.ARBITRAGE, priority=acquisition_priority)
+    acquisition_writer = AcquisitionWriter(name="MarketAcquisitionWriter", destination=table, valuation=Valuations.ARBITRAGE, **valuation_functions)
     valuation_pipeline = valuation_loader + valuation_filter + acquisition_writer
     valuation_thread = SideThread(valuation_pipeline, name="MarketValuationThread")
     valuation_thread.setup(**parameters)
     return valuation_thread
 
 
-def holding(source, destination, *args, parameters, **kwargs):
-    holding_loader = SecurityLoader(name="PortfolioHoldingLoader", source=source)
-    strategy_calculator = StrategyCalculator(name="PortfolioStrategyCalculator")
-    valuation_calculator = ValuationCalculator(name="PortfolioValuationCalculator", valuation=Valuations.ARBITRAGE)
-    valuation_filter = ValuationFilter(name="PortfolioValuationFilter", scenario=Scenarios.MINIMUM, filtering={Filtering.FLOOR: ["apy", "size"]})
-    market_simulator = MarketSimulatior(name="PortfolioSecuritySimulator")
-    acquisition_writer = DivestitureWriter(name="PortfolioDivestitureWriter", destination=destination, valuation=Valuations.ARBITRAGE, priority=priority)
-    security_pipeline = holding_loader + strategy_calculator + valuation_calculator + valuation_filter + market_simulator + acquisition_writer
-    holding_thread = SideThread(security_pipeline, name="MarketValuationThread")
-    holding_thread.setup(**parameters)
-    return holding_thread
-
-
-def acquisition(source, destination, *args, parameters, breaker, wait, **kwargs):
-    acquisition_reader = AcquisitionReader(name="PortfolioAcquisitionReader", source=source, breaker=breaker, wait=wait)
-    acquisition_saver = SecuritySaver(name="PortfolioAcquisitionSaver", destination=destination)
-    acquisition_pipeline = acquisition_reader + acquisition_saver
-    acquisition_thread = SideThread(acquisition_pipeline, name="PortfolioAcquisitionThread")
-    acquisition_thread.setup(**parameters)
-    return acquisition_thread
-
-
-def divestiture(source, destination, *args, parameters, breaker, wait, **kwargs):
-    divestiture_reader = DivestitureReader(name="PortfolioDivestitureReader", source=source, breaker=breaker, wait=wait)
-    divestiture_saver = SecuritySaver(name="PortfolioDivestitureSaver", destination=destination)
-    divestiture_pipeline = divestiture_reader + divestiture_saver
-    divestiture_thread = SideThread(divestiture_pipeline, name="PortfolioDivestitureThread")
-    divestiture_thread.setup(**parameters)
-    return divestiture_thread
-
-
 def main(*args, **kwargs):
-    security_file = SecurityFile(typing=FileTyping.CSV, timing=FileTiming.EAGER)
-    holding_file = HoldingFile(typing=FileTyping.CSV, timing=FileTiming.EAGER)
     valuation_file = ValuationFile(typing=FileTyping.CSV, timing=FileTiming.EAGER)
-    market_archive = ValuationArchive(repository=MARKET, files=[])
-    portfolio_archive = SecurityArchive(repository=PORTFOLIO, files=[])
+    market_archive = Archive(repository=MARKET, loading=valuation_file)
     acquisition_table = AcquisitionTable()
-    divestiture_table = DivestitureTable()
+    valuation_thread = valuation(market_archive, acquisition_table, *args, **kwargs)
+    valuation_thread.start()
+    valuation_thread.join()
 
 
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
-    sysParameters = {"liquidity": 1.0, "discount": 0.0, "fees": 0.0}
+    sysParameters = {"discount": 0.0, "fees": 0.0}
     main(parameters=sysParameters)
 
 

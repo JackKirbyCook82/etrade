@@ -26,11 +26,11 @@ TICKERS = os.path.join(ROOT, "Library", "tickers.txt")
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 
-from support.files import FileTiming, FileTyping
+from support.files import Archive, FileTiming, FileTyping
 from support.synchronize import SideThread
 from support.processes import Filtering
 from webscraping.webreaders import WebAuthorizer, WebReader
-from finance.securities import SecurityFile, SecurityFilter, SecuritySaver
+from finance.securities import StockFile, OptionFile, SecurityFilter, SecuritySaver
 from finance.variables import DateRange
 
 from market import ETradeContractDownloader, ETradeMarketDownloader
@@ -61,12 +61,12 @@ class ETradeAuthorizer(WebAuthorizer, authorize=authorize, request=request, acce
 class ETradeReader(WebReader, delay=10): pass
 
 
-def security(reader, destination, *args, tickers, expires, **kwargs):
+def security(reader, archive, *args, tickers, expires, **kwargs):
     security_filtering = {Filtering.NULL: ["price", "underlying", "volume", "interest", "size"]}
     contract_downloader = ETradeContractDownloader(feed=reader, name="MarketContractDownloader")
     security_downloader = ETradeMarketDownloader(feed=reader, name="MarketSecurityDownloader")
     security_filter = SecurityFilter(filtering=security_filtering, name="MarketSecurityFilter")
-    security_saver = SecuritySaver(destination=destination, name="MarketSecuritySaver", saving="security")
+    security_saver = SecuritySaver(destination=archive, name="MarketSecuritySaver", mode="w")
     security_pipeline = contract_downloader + security_downloader + security_filter + security_saver
     security_thread = SideThread(security_pipeline, name="MarketSecurityThread")
     security_thread.setup(tickers=tickers, expires=expires)
@@ -74,8 +74,9 @@ def security(reader, destination, *args, tickers, expires, **kwargs):
 
 
 def main(*args, apikey, apicode, **kwargs):
-    security_file = SecurityFile(typing=FileTyping.CSV, timing=FileTiming.EAGER)
-    market_archive = SecurityArchive(repository=MARKET, saving=security_file)
+    stock_file = StockFile(typing=FileTyping.CSV, timing=FileTiming.EAGER)
+    option_file = OptionFile(typing=FileTyping.CSV, timing=FileTiming.EAGER)
+    market_archive = Archive(repository=MARKET, saving=[stock_file, option_file])
     authorizer = ETradeAuthorizer(name="ETradeAuthorizer", apikey=apikey, apicode=apicode)
     with ETradeReader(name="ETradeReader", authorizer=authorizer) as market_reader:
         security_thread = security(market_reader, market_archive, *args, **kwargs)

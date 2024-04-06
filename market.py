@@ -110,7 +110,7 @@ class ETradeOptionData(WebJSON, locator="//OptionChainResponse/OptionPair[]", co
 
 class ETradeStockPage(WebJsonPage):
     def __call__(self, ticker, *args, **kwargs):
-        columns = ["instrument", "position", "ticker", "expire", "strike", "date", "price", "size", "volume", "interest"]
+        columns = ["instrument", "position", "ticker", "date", "price", "size", "volume"]
         curl = ETradeStockURL(ticker=ticker)
         self.load(str(curl.address), params=dict(curl.query))
         contents = ETradeStockData(self.source)
@@ -185,7 +185,7 @@ class ETradeMarketDownloader(Downloader, Processor, pages={"stock": ETradeStockP
         options = self.pages["option"](ticker, *args, expire=expire, strike=underlying, **kwargs)
         options["underlying"] = underlying
         options = options.reset_index(drop=True, inplace=False)
-        yield query | dict(security=options)
+        yield query | dict(stock=stocks, option=options)
 
 
 

@@ -28,7 +28,7 @@ from support.files import Archive, FileTiming, FileTyping
 from support.synchronize import SideThread
 from support.processes import Filtering
 from finance.variables import Scenarios, Valuations
-from finance.securities import SecurityFile, SecurityFilter, SecurityLoader, SecuritySaver
+from finance.securities import StockFile, OptionFile, SecurityFilter, SecurityLoader, SecuritySaver
 from finance.strategies import StrategyCalculator
 from finance.valuations import ValuationFile, ValuationCalculator, ValuationFilter
 
@@ -51,12 +51,12 @@ pd.set_option("display.max_columns", 25)
 def valuation(archive, *args, parameters, **kwargs):
     security_filtering = {Filtering.FLOOR: {"volume": 25, "interest": 25, "size": 10}, Filtering.NULL: ["volume", "interest", "size"]}
     valuation_filtering = {Filtering.FLOOR: {"apy": 0.0, "size": 10}, Filtering.NULL: ["apy", "size"]}
-    security_loader = SecurityLoader(name="MarketSecurityLoader", source=archive)
+    security_loader = SecurityLoader(name="MarketSecurityLoader", source=archive, mode="r")
     security_filter = SecurityFilter(name="MarketSecurityFilter", filtering=security_filtering)
     strategy_calculator = StrategyCalculator(name="MarketStrategyCalculator")
     valuation_calculator = ValuationCalculator(name="MarketValuationCalculator", valuation=Valuations.ARBITRAGE)
     valuation_filter = ValuationFilter(name="MarketValuationFilter", scenario=Scenarios.MINIMUM, filtering=valuation_filtering)
-    valuation_saver = SecuritySaver(name="MarketValuationSaver", destination=archive, saving="valuation")
+    valuation_saver = SecuritySaver(name="MarketValuationSaver", destination=archive, mode="a")
     valuation_pipeline = security_loader + security_filter + strategy_calculator + valuation_calculator + valuation_filter + valuation_saver
     valuation_thread = SideThread(valuation_pipeline, name="MarketValuationThread")
     valuation_thread.setup(**parameters)
@@ -64,9 +64,10 @@ def valuation(archive, *args, parameters, **kwargs):
 
 
 def main(*args, **kwargs):
-    security_file = SecurityFile(typing=FileTyping.CSV, timing=FileTiming.EAGER)
+    stock_file = StockFile(typing=FileTyping.CSV, timing=FileTiming.EAGER)
+    option_file = OptionFile(typing=FileTyping.CSV, timing=FileTiming.EAGER)
     valuation_file = ValuationFile(typing=FileTyping.CSV, timing=FileTiming.EAGER)
-    market_archive = Archive(repository=MARKET, loading=security_file, saving=valuation_file)
+    market_archive = Archive(repository=MARKET, loading=[stock_file, option_file], saving=valuation_file)
     valuation_thread = valuation(market_archive, *args, **kwargs)
     valuation_thread.start()
     valuation_thread.join()
