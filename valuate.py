@@ -64,10 +64,10 @@ def valuation(archive, *args, parameters, **kwargs):
 
 
 def main(*args, **kwargs):
-    stock_file = StockFile(typing=FileTyping.CSV, timing=FileTiming.EAGER)
-    option_file = OptionFile(typing=FileTyping.CSV, timing=FileTiming.EAGER)
-    valuation_file = ValuationFile(typing=FileTyping.CSV, timing=FileTiming.EAGER)
-    market_archive = Archive(repository=MARKET, loading=[stock_file, option_file], saving=valuation_file)
+    stock_file = StockFile(name="MarketStockFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
+    option_file = OptionFile(name="MarketOptionFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
+    valuation_file = ValuationFile(name="MarketValuationFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
+    market_archive = Archive(name="MarketArchive", repository=MARKET, loading=[stock_file, option_file], saving=valuation_file)
     valuation_thread = valuation(market_archive, *args, **kwargs)
     valuation_thread.start()
     valuation_thread.join()

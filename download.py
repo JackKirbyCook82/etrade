@@ -74,11 +74,11 @@ def security(reader, archive, *args, tickers, expires, **kwargs):
 
 
 def main(*args, apikey, apicode, **kwargs):
-    stock_file = StockFile(typing=FileTyping.CSV, timing=FileTiming.EAGER)
-    option_file = OptionFile(typing=FileTyping.CSV, timing=FileTiming.EAGER)
-    market_archive = Archive(repository=MARKET, saving=[stock_file, option_file])
-    authorizer = ETradeAuthorizer(name="ETradeAuthorizer", apikey=apikey, apicode=apicode)
-    with ETradeReader(name="ETradeReader", authorizer=authorizer) as market_reader:
+    stock_file = StockFile(name="MarketStockFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
+    option_file = OptionFile(name="MarketOptionFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
+    market_archive = Archive(name="MarketArchive", repository=MARKET, saving=[stock_file, option_file])
+    market_authorizer = ETradeAuthorizer(name="MarketAuthorizer", apikey=apikey, apicode=apicode)
+    with ETradeReader(name="MarketReader", authorizer=market_authorizer) as market_reader:
         security_thread = security(market_reader, market_archive, *args, **kwargs)
         security_thread.start()
         security_thread.join()
