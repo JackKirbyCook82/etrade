@@ -14,7 +14,6 @@ import numpy as np
 import xarray as xr
 import pandas as pd
 import PySimpleGUI as gui
-from time import sleep
 
 MAIN = os.path.dirname(os.path.realpath(__file__))
 PROJECT = os.path.abspath(os.path.join(MAIN, os.pardir))
@@ -28,15 +27,16 @@ if ROOT not in sys.path:
     sys.path.append(ROOT)
 
 from support.files import Archive, FileTiming, FileTyping
-from support.tables import DataframeOptions
+from support.tables import Tabulation, Options
 from support.synchronize import SideThread
 from support.processes import Filtering
 from support.pipelines import Breaker
 from finance.variables import Scenarios, Valuations
-from finance.securities import SecurityLoader, SecuritySaver
-from finance.valuations import ValuationFile, ValuationFilter
-from finance.acquisitions import AcquisitionTable, AcquisitionWriter, AcquisitionReader
-from finance.targets import HoldingFile, TargetStatus
+from finance.securities import SecurityLoader
+from finance.valuations import ValuationFilter, ValuationFile
+from finance.holdings import HoldingReader, HoldingSaver, HoldingFile
+from finance.acquisitions import AcquisitionWriter, AcquisitionTable
+from finance.divestitures import DivestitureWriter, DivestitureTable
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -45,8 +45,8 @@ __copyright__ = "Copyright 2023, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
-warnings.filterwarnings("ignore")
 gui.theme("DarkGrey11")
+warnings.filterwarnings("ignore")
 xr.set_options(**{"display_width": 200})
 xr.set_options(**{"display_max_rows": 35})
 pd.set_option("display.width", 1000)
@@ -54,47 +54,63 @@ pd.set_option("display.max_rows", 20)
 pd.set_option("display.max_columns", 25)
 
 
-def valuation(archive, table, *args, parameters, **kwargs):
+def valuation(archive, tables, *args, parameters, **kwargs):
     valuation_filtering = {Filtering.FLOOR: {"apy": 0.0, "size": 10}, Filtering.NULL: ["apy", "size"]}
     liquidity_function = lambda cols: np.floor(cols["size"] * 0.1).astype(np.int32)
     priority_function = lambda cols: cols[("apy", str(Scenarios.MINIMUM.name).lower())]
     valuation_functions = dict(liquidity=liquidity_function, priority=priority_function)
     valuation_loader = SecurityLoader(name="MarketValuationLoader", source=archive, mode="r")
     valuation_filter = ValuationFilter(name="MarketValuationFilter", scenario=Scenarios.MINIMUM, filtering=valuation_filtering)
-    acquisition_writer = AcquisitionWriter(name="MarketAcquisitionWriter", destination=table, valuation=Valuations.ARBITRAGE, **valuation_functions)
+    acquisition_writer = AcquisitionWriter(name="MarketAcquisitionWriter", destination=tables, valuation=Valuations.ARBITRAGE, **valuation_functions)
     valuation_pipeline = valuation_loader + valuation_filter + acquisition_writer
     valuation_thread = SideThread(valuation_pipeline, name="MarketValuationThread")
     valuation_thread.setup(**parameters)
     return valuation_thread
 
 
-def acquisition(table, archive, breaker, *args, parameters, **kwargs):
-    acquisition_reader = AcquisitionReader(name="PortfolioAcquisitionReader", source=table, breaker=breaker, wait=10)
-    acquisition_saver = SecuritySaver(name="PortfolioAcquisitionSaver", destination=archive, mode="a")
+def acquisition(tables, archive, breaker, *args, parameters, **kwargs):
+    acquisition_reader = TargetReader(name="PortfolioAcquisitionReader", source=tables, breaker=breaker, wait=5)
+    acquisition_saver = TargetSaver(name="PortfolioAcquisitionSaver", destination=archive, mode="a")
     acquisition_pipeline = acquisition_reader + acquisition_saver
     acquisition_thread = SideThread(acquisition_pipeline, name="PortfolioAcquisitionThread")
     acquisition_thread.setup(**parameters)
     return acquisition_thread
 
 
+def divestiture(tables, archive, breaker, *args, parameters, **kwargs):
+    divestiture_reader = TargetReader(name="PortfolioDivestitureReader", source=tables, breaker=breaker, wait=5)
+    divestiture_saver = TargetSaver(name="PortfolioDivestitureSaver", destination=archive, mode="a")
+    divestiture_pipeline = divestiture_reader + divestiture_saver
+    divestiture_thread = SideThread(divestiture_pipeline, name="PortfolioDivestitureThread")
+    divestiture_thread.setup(**parameters)
+    return divestiture_thread
+
+
 def main(*args, **kwargs):
-    valuation_file = ValuationFile(name="MarketValuationFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
-    holding_file = HoldingFile(name="PortfolioHoldingFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
-    market_archive = Archive(name="MarketArchive", repository=MARKET, loading=valuation_file)
-    portfolio_archive = Archive(name="PortfolioArchive", repository=PORTFOLIO, saving=holding_file)
-    acquisition_breaker = Breaker(name="AcquisitionBreaker")
-    table_options = DataframeOptions(rows=20, columns=25, width=1000, format=lambda num: f"{num:.02f}")
+    table_options = Options.Dataframe(rows=20, columns=25, width=1000, format=lambda num: f"{num:.02f}")
     acquisition_table = AcquisitionTable(name="AcquisitionTable", options=table_options)
-    valuation_thread = valuation(market_archive, acquisition_table, *args, **kwargs)
-    acquisition_thread = acquisition(acquisition_table, portfolio_archive, acquisition_breaker, *args, **kwargs)
-    acquisition_thread.start()
-    valuation_thread.start()
-    valuation_thread.join()
-    while True:
-        sleep(10)
-        break
-    acquisition_breaker.stop()
-    acquisition_thread.join()
+    divestiture_table = DivestitureTable(name="DivestitureTable", options=table_options)
+    target_tabulation = Tabulation(name="TargetTables", tables=[acquisition_table, divestiture_table])
+    valuation_file = ValuationFile(name="MarketValuationFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
+    target_file = TargetFile(name="PortfolioTargetFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
+    market_archive = Archive(name="MarketArchive", repository=MARKET, files=[valuation_file])
+    portfolio_archive = Archive(name="PortfolioArchive", repository=PORTFOLIO, files=[target_file])
+    acquisition_breaker = Breaker(name="AcquisitionBreaker")
+    divestiture_breaker = Breaker(name="DivestitureBreaker")
+    valuation_thread = valuation(market_archive, target_tabulation, *args, **kwargs)
+    acquisition_thread = acquisition(target_tabulation, portfolio_archive, acquisition_breaker, *args, **kwargs)
+    divestiture_thread = divestiture(target_tabulation, portfolio_archive, divestiture_breaker, *args, **kwargs)
+
+#    acquisition_thread.start()
+#    divestiture_thread.start()
+#    valuation_thread.start()
+#    valuation_thread.join()
+#    print(acquisition_table)
+#    acquisition_table[0:10, "status"] = TargetStatus.PURCHASED
+#    acquisition_breaker.stop()
+#    divestiture_breaker.stop()
+#    acquisition_thread.join()
+#    divestiture_thread.join()
 
 
 if __name__ == "__main__":

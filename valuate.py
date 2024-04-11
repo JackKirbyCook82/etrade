@@ -28,9 +28,9 @@ from support.files import Archive, FileTiming, FileTyping
 from support.synchronize import SideThread
 from support.processes import Filtering
 from finance.variables import Scenarios, Valuations
-from finance.securities import StockFile, OptionFile, SecurityFilter, SecurityLoader, SecuritySaver
+from finance.securities import SecurityFilter, SecurityLoader, SecuritySaver, StockFile, OptionFile
 from finance.strategies import StrategyCalculator
-from finance.valuations import ValuationFile, ValuationCalculator, ValuationFilter
+from finance.valuations import ValuationCalculator, ValuationFilter, ValuationFile
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -39,8 +39,8 @@ __copyright__ = "Copyright 2023, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
-warnings.filterwarnings("ignore")
 gui.theme("DarkGrey11")
+warnings.filterwarnings("ignore")
 xr.set_options(**{"display_width": 200})
 xr.set_options(**{"display_max_rows": 35})
 pd.set_option("display.width", 1000)
@@ -67,7 +67,7 @@ def main(*args, **kwargs):
     stock_file = StockFile(name="MarketStockFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
     option_file = OptionFile(name="MarketOptionFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
     valuation_file = ValuationFile(name="MarketValuationFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
-    market_archive = Archive(name="MarketArchive", repository=MARKET, loading=[stock_file, option_file], saving=valuation_file)
+    market_archive = Archive(name="MarketArchive", repository=MARKET, files=[stock_file, option_file, valuation_file])
     valuation_thread = valuation(market_archive, *args, **kwargs)
     valuation_thread.start()
     valuation_thread.join()

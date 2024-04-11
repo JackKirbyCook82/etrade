@@ -30,7 +30,7 @@ from support.files import Archive, FileTiming, FileTyping
 from support.synchronize import SideThread
 from support.processes import Filtering
 from webscraping.webreaders import WebAuthorizer, WebReader
-from finance.securities import StockFile, OptionFile, SecurityFilter, SecuritySaver
+from finance.securities import SecurityFilter, SecuritySaver, StockFile, OptionFile
 from finance.variables import DateRange
 
 from market import ETradeContractDownloader, ETradeMarketDownloader
@@ -42,8 +42,8 @@ __copyright__ = "Copyright 2023, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
-warnings.filterwarnings("ignore")
 gui.theme("DarkGrey11")
+warnings.filterwarnings("ignore")
 xr.set_options(**{"display_width": 200})
 xr.set_options(**{"display_max_rows": 35})
 pd.set_option("display.width", 1000)
@@ -76,7 +76,7 @@ def security(reader, archive, *args, tickers, expires, **kwargs):
 def main(*args, apikey, apicode, **kwargs):
     stock_file = StockFile(name="MarketStockFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
     option_file = OptionFile(name="MarketOptionFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
-    market_archive = Archive(name="MarketArchive", repository=MARKET, saving=[stock_file, option_file])
+    market_archive = Archive(name="MarketArchive", repository=MARKET, files=[stock_file, option_file])
     market_authorizer = ETradeAuthorizer(name="MarketAuthorizer", apikey=apikey, apicode=apicode)
     with ETradeReader(name="MarketReader", authorizer=market_authorizer) as market_reader:
         security_thread = security(market_reader, market_archive, *args, **kwargs)
