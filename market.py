@@ -185,7 +185,7 @@ class ETradeMarketDownloader(Downloader, Processor, pages={"stock": ETradeStockP
         options = self.pages["option"](ticker, *args, expire=expire, strike=underlying, **kwargs)
         options["underlying"] = underlying
         options = options.reset_index(drop=True, inplace=False)
-        yield query | dict(stock=stocks, option=options)
+        yield query | dict(stocks=stocks, options=options)
 
 
 

@@ -76,7 +76,7 @@ def security(reader, archive, *args, tickers, expires, **kwargs):
 def main(*args, apikey, apicode, **kwargs):
     stock_file = StockFile(name="MarketStockFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
     option_file = OptionFile(name="MarketOptionFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
-    market_archive = Archive(name="MarketArchive", repository=MARKET, files=[stock_file, option_file])
+    market_archive = Archive(name="MarketArchive", repository=MARKET, save=[stock_file, option_file])
     market_authorizer = ETradeAuthorizer(name="MarketAuthorizer", apikey=apikey, apicode=apicode)
     with ETradeReader(name="MarketReader", authorizer=market_authorizer) as market_reader:
         security_thread = security(market_reader, market_archive, *args, **kwargs)
@@ -89,7 +89,7 @@ if __name__ == "__main__":
     with open(API, "r") as apifile:
         sysApiKey, sysApiCode = [str(string).strip() for string in str(apifile.read()).split("\n")]
     with open(TICKERS, "r") as tickerfile:
-        sysTickers = [str(string).strip().upper() for string in tickerfile.read().split("\n")][0:2]
+        sysTickers = [str(string).strip().upper() for string in tickerfile.read().split("\n")]
     sysExpires = DateRange([(Datetime.today() + Timedelta(days=1)).date(), (Datetime.today() + Timedelta(weeks=52)).date()])
     main(apikey=sysApiKey, apicode=sysApiCode, tickers=sysTickers, expires=sysExpires)
 

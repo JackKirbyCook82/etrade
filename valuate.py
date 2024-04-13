@@ -67,7 +67,7 @@ def main(*args, **kwargs):
     stock_file = StockFile(name="MarketStockFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
     option_file = OptionFile(name="MarketOptionFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
     valuation_file = ValuationFile(name="MarketValuationFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
-    market_archive = Archive(name="MarketArchive", repository=MARKET, files=[stock_file, option_file, valuation_file])
+    market_archive = Archive(name="MarketArchive", repository=MARKET, load=[stock_file, option_file], save=[valuation_file])
     valuation_thread = valuation(market_archive, *args, **kwargs)
     valuation_thread.start()
     valuation_thread.join()
