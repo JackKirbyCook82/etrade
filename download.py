@@ -30,7 +30,7 @@ from support.files import Archive, FileTiming, FileTyping
 from support.synchronize import SideThread
 from support.processes import Filtering
 from webscraping.webreaders import WebAuthorizer, WebReader
-from finance.securities import SecurityFilter, SecuritySaver, StockFile, OptionFile
+from finance.securities import SecurityFilter, SecuritySaver, SecurityStockFile, SecurityOptionFile
 from finance.variables import DateRange
 
 from market import ETradeContractDownloader, ETradeMarketDownloader
@@ -74,8 +74,8 @@ def security(reader, archive, *args, tickers, expires, **kwargs):
 
 
 def main(*args, apikey, apicode, **kwargs):
-    stock_file = StockFile(name="MarketStockFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
-    option_file = OptionFile(name="MarketOptionFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
+    stock_file = SecurityStockFile(name="MarketStockFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
+    option_file = SecurityOptionFile(name="MarketOptionFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
     market_archive = Archive(name="MarketArchive", repository=MARKET, save=[stock_file, option_file])
     market_authorizer = ETradeAuthorizer(name="MarketAuthorizer", apikey=apikey, apicode=apicode)
     with ETradeReader(name="MarketReader", authorizer=market_authorizer) as market_reader:

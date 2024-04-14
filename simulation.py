@@ -14,6 +14,7 @@ import numpy as np
 import xarray as xr
 import pandas as pd
 import PySimpleGUI as gui
+from time import sleep
 
 MAIN = os.path.dirname(os.path.realpath(__file__))
 PROJECT = os.path.abspath(os.path.join(MAIN, os.pardir))
@@ -34,7 +35,7 @@ from support.pipelines import Breaker
 from finance.variables import Scenarios, Valuations
 from finance.securities import SecurityLoader
 from finance.valuations import ValuationFilter, ValuationFile
-from finance.holdings import HoldingLoader, HoldingSaver, HoldingFile
+from finance.holdings import HoldingLoader, HoldingSaver, HoldingFile, HoldingStatus
 from finance.acquisitions import AcquisitionReader, AcquisitionWriter, AcquisitionTable
 from finance.divestitures import DivestitureReader, DivestitureWriter, DivestitureTable
 
@@ -91,29 +92,28 @@ def main(*args, **kwargs):
     divestitures_table = DivestitureTable(name="DivestitureTable")
     holdings_tabulation = Tabulation(name="HoldingsTables", tables=[acquisitions_table, divestitures_table])
     valuations_file = ValuationFile(name="MarketValuationFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
-    holdings_file = HoldingFile(name="PortfolioTargetFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
+    holding_file = HoldingFile(name="PortfolioHoldingFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
     market_archive = Archive(name="MarketArchive", repository=MARKET, load=[valuations_file])
-    portfolio_archive = Archive(name="PortfolioArchive", repository=PORTFOLIO, save=[holdings_file])
+    portfolio_archive = Archive(name="PortfolioArchive", repository=PORTFOLIO, save=[holding_file])
     acquisition_breaker = Breaker(name="AcquisitionBreaker")
     divestiture_breaker = Breaker(name="DivestitureBreaker")
     valuation_thread = valuation(market_archive, holdings_tabulation, *args, **kwargs)
     acquisition_thread = acquisition(holdings_tabulation, portfolio_archive, acquisition_breaker, *args, **kwargs)
     divestiture_thread = divestiture(holdings_tabulation, portfolio_archive, divestiture_breaker, *args, **kwargs)
 
+    acquisition_thread.start()
+    divestiture_thread.start()
     valuation_thread.start()
     valuation_thread.join()
     print(holdings_tabulation["acquisitions"])
-
-#    acquisition_thread.start()
-#    divestiture_thread.start()
-#    valuation_thread.start()
-#    valuation_thread.join()
-#    print(acquisition_table)
-#    acquisition_table[0:10, "status"] = TargetStatus.PURCHASED
-#    acquisition_breaker.stop()
-#    divestiture_breaker.stop()
-#    acquisition_thread.join()
-#    divestiture_thread.join()
+    while bool(holdings_tabulation["acquisitions"]):
+        holdings_tabulation["acquisitions"][0:10, "status"] = HoldingStatus.PURCHASED
+        sleep(5)
+    print(holdings_tabulation["acquisitions"])
+    acquisition_breaker.stop()
+    divestiture_breaker.stop()
+    acquisition_thread.join()
+    divestiture_thread.join()
 
 
 if __name__ == "__main__":
