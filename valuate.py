@@ -28,7 +28,7 @@ from support.files import Archive, FileTiming, FileTyping
 from support.synchronize import SideThread
 from support.processes import Filtering
 from finance.variables import Scenarios, Valuations
-from finance.securities import SecurityFilter, SecurityLoader, SecuritySaver, SecurityStockFile, SecurityOptionFile
+from finance.securities import SecurityFilter, SecurityLoader, SecuritySaver, SecurityFile
 from finance.strategies import StrategyCalculator
 from finance.valuations import ValuationCalculator, ValuationFilter, ValuationFile
 
@@ -64,10 +64,9 @@ def valuation(archive, *args, parameters, **kwargs):
 
 
 def main(*args, **kwargs):
-    stock_file = SecurityStockFile(name="MarketStockFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
-    option_file = SecurityOptionFile(name="MarketOptionFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
+    security_file = SecurityFile(name="MarketOptionFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
     valuation_file = ValuationFile(name="MarketValuationFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
-    market_archive = Archive(name="MarketArchive", repository=MARKET, load=[stock_file, option_file], save=[valuation_file])
+    market_archive = Archive(name="MarketArchive", repository=MARKET, load=[security_file], save=[valuation_file])
     valuation_thread = valuation(market_archive, *args, **kwargs)
     valuation_thread.start()
     valuation_thread.join()

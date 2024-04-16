@@ -8,13 +8,13 @@ Created on Weds Jul 12 2023
 
 import os
 import sys
+import time
 import logging
 import warnings
 import numpy as np
 import xarray as xr
 import pandas as pd
 import PySimpleGUI as gui
-from time import sleep
 
 MAIN = os.path.dirname(os.path.realpath(__file__))
 PROJECT = os.path.abspath(os.path.join(MAIN, os.pardir))
@@ -33,9 +33,10 @@ from support.synchronize import SideThread
 from support.processes import Filtering
 from support.pipelines import Breaker
 from finance.variables import Scenarios, Valuations
-from finance.securities import SecurityLoader
-from finance.valuations import ValuationFilter, ValuationFile
-from finance.holdings import HoldingLoader, HoldingSaver, HoldingFile, HoldingStatus
+from finance.securities import SecurityFilter
+from finance.strategies import StrategyCalculator
+from finance.valuations import ValuationCalculator, ValuationFilter, ValuationLoader, ValuationFile
+from finance.holdings import HoldingCalculator, HoldingLoader, HoldingSaver, HoldingFile, HoldingStatus
 from finance.acquisitions import AcquisitionReader, AcquisitionWriter, AcquisitionTable
 from finance.divestitures import DivestitureReader, DivestitureWriter, DivestitureTable
 
@@ -55,65 +56,78 @@ pd.set_option("display.max_rows", 20)
 pd.set_option("display.max_columns", 25)
 
 
-def valuation(archive, tabulation, *args, parameters, **kwargs):
+def market(archive, tabulation, *args, parameters, **kwargs):
     valuations_filtering = {Filtering.FLOOR: {"apy": 0.0, "size": 10}, Filtering.NULL: ["apy", "size"]}
     liquidity_function = lambda cols: np.floor(cols["size"] * 0.1).astype(np.int32)
     priority_function = lambda cols: cols[("apy", str(Scenarios.MINIMUM.name).lower())]
     valuations_functions = dict(liquidity=liquidity_function, priority=priority_function)
-    valuations_loader = SecurityLoader(name="MarketValuationLoader", source=archive, mode="r")
-    valuations_filter = ValuationFilter(name="MarketValuationFilter", scenario=Scenarios.MINIMUM, filtering=valuations_filtering)
-    acquisitions_writer = AcquisitionWriter(name="MarketAcquisitionWriter", destination=tabulation, valuation=Valuations.ARBITRAGE, **valuations_functions)
-    valuations_pipeline = valuations_loader + valuations_filter + acquisitions_writer
-    valuations_thread = SideThread(valuations_pipeline, name="MarketValuationThread")
-    valuations_thread.setup(**parameters)
-    return valuations_thread
+    valuation_loader = ValuationLoader(name="MarketValuationLoader", source=archive, mode="r")
+    valuation_filter = ValuationFilter(name="MarketValuationFilter", scenario=Scenarios.MINIMUM, filtering=valuations_filtering)
+    acquisition_writer = AcquisitionWriter(name="MarketAcquisitionWriter", destination=tabulation, valuation=Valuations.ARBITRAGE, **valuations_functions)
+    market_pipeline = valuation_loader + valuation_filter + acquisition_writer
+    market_thread = SideThread(market_pipeline, name="MarketValuationThread")
+    market_thread.setup(**parameters)
+    return market_thread
 
 
-def acquisition(tabulation, archive, breaker, *args, parameters, **kwargs):
-    acquisitions_reader = AcquisitionReader(name="PortfolioAcquisitionReader", source=tabulation, breaker=breaker, wait=5)
-    acquisitions_saver = HoldingSaver(name="PortfolioAcquisitionSaver", destination=archive, mode="a")
-    acquisitions_pipeline = acquisitions_reader + acquisitions_saver
-    acquisitions_thread = SideThread(acquisitions_pipeline, name="PortfolioAcquisitionThread")
-    acquisitions_thread.setup(**parameters)
-    return acquisitions_thread
+def portfolio(archive, tabulation, *args, breaker, parameters, **kwargs):
+    security_filtering = {Filtering.FLOOR: {"volume": 25, "interest": 25, "size": 10}, Filtering.NULL: ["volume", "interest", "size"]}
+    valuation_filtering = {Filtering.FLOOR: {"apy": 0.0, "size": 10}, Filtering.NULL: ["apy", "size"]}
+    liquidity_function = lambda cols: np.floor(cols["size"] * 0.1).astype(np.int32)
+    priority_function = lambda cols: cols[("apy", str(Scenarios.MINIMUM.name).lower())]
+    valuations_functions = dict(liquidity=liquidity_function, priority=priority_function)
+    holding_loader = HoldingLoader(name="PortfolioHoldingLoader", source=archive, breaker=breaker, mode="r")
+    holding_calculator = HoldingCalculator(name="PortfolioHoldingCalculator")
+    security_filter = SecurityFilter(name="PortfolioSecurityFilter", filtering=security_filtering)
+    strategy_calculator = StrategyCalculator(name="PortfolioStrategyCalculator")
+    valuation_calculator = ValuationCalculator(name="PortfolioValuationCalculator", valuation=Valuations.ARBITRAGE)
+    valuation_filter = ValuationFilter(name="PortfolioValuationFilter", scenario=Scenarios.MINIMUM, filtering=valuation_filtering)
+    acquisition_writer = DivestitureWriter(name="PortfolioDivestitureWriter", destination=tabulation, valuation=Valuations.ARBITRAGE, **valuations_functions)
+    portfolio_pipeline = holding_loader + holding_calculator + security_filter + strategy_calculator + valuation_calculator + valuation_filter + acquisition_writer
+    portfolio_thread = SideThread(portfolio_pipeline, name="MarketValuationThread")
+    portfolio_thread.setup(**parameters)
+    return portfolio_thread
 
 
-def divestiture(tabulation, archive, breaker, *args, parameters, **kwargs):
-    divestitures_reader = DivestitureReader(name="PortfolioDivestitureReader", source=tabulation, breaker=breaker, wait=5)
-    divestitures_saver = HoldingSaver(name="PortfolioDivestitureSaver", destination=archive, mode="a")
-    divestitures_pipeline = divestitures_reader + divestitures_saver
-    divestitures_thread = SideThread(divestitures_pipeline, name="PortfolioDivestitureThread")
-    divestitures_thread.setup(**parameters)
-    return divestitures_thread
+def acquisition(tabulation, archive, *args, breaker, parameters, **kwargs):
+    acquisition_reader = AcquisitionReader(name="PortfolioAcquisitionReader", source=tabulation, breaker=breaker, wait=5)
+    acquisition_saver = HoldingSaver(name="PortfolioAcquisitionSaver", destination=archive, mode="a")
+    acquisition_pipeline = acquisition_reader + acquisition_saver
+    acquisition_thread = SideThread(acquisition_pipeline, name="PortfolioAcquisitionThread")
+    acquisition_thread.setup(**parameters)
+    return acquisition_thread
+
+
+def divestiture(tabulation, archive, *args, breaker, parameters, **kwargs):
+    divestiture_reader = DivestitureReader(name="PortfolioDivestitureReader", source=tabulation, breaker=breaker, wait=5)
+    divestiture_saver = HoldingSaver(name="PortfolioDivestitureSaver", destination=archive, mode="a")
+    divestiture_pipeline = divestiture_reader + divestiture_saver
+    divestiture_thread = SideThread(divestiture_pipeline, name="PortfolioDivestitureThread")
+    divestiture_thread.setup(**parameters)
+    return divestiture_thread
 
 
 def main(*args, **kwargs):
-    acquisitions_table = AcquisitionTable(name="AcquisitionTable")
-    divestitures_table = DivestitureTable(name="DivestitureTable")
-    holdings_tabulation = Tabulation(name="HoldingsTables", tables=[acquisitions_table, divestitures_table])
-    valuations_file = ValuationFile(name="MarketValuationFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
+    acquisition_table = AcquisitionTable(name="AcquisitionTable")
+    divestiture_table = DivestitureTable(name="DivestitureTable")
+    holding_tabulation = Tabulation(name="HoldingTables", tables=[acquisition_table, divestiture_table])
+    valuation_file = ValuationFile(name="MarketValuationFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
     holding_file = HoldingFile(name="PortfolioHoldingFile", typing=FileTyping.CSV, timing=FileTiming.EAGER)
-    market_archive = Archive(name="MarketArchive", repository=MARKET, load=[valuations_file])
-    portfolio_archive = Archive(name="PortfolioArchive", repository=PORTFOLIO, save=[holding_file])
+    market_archive = Archive(name="MarketArchive", repository=MARKET, load=[valuation_file])
+    portfolio_archive = Archive(name="PortfolioArchive", repository=PORTFOLIO, load=[holding_file], save=[holding_file])
     acquisition_breaker = Breaker(name="AcquisitionBreaker")
     divestiture_breaker = Breaker(name="DivestitureBreaker")
-    valuation_thread = valuation(market_archive, holdings_tabulation, *args, **kwargs)
-    acquisition_thread = acquisition(holdings_tabulation, portfolio_archive, acquisition_breaker, *args, **kwargs)
-    divestiture_thread = divestiture(holdings_tabulation, portfolio_archive, divestiture_breaker, *args, **kwargs)
+    portfolio_breaker = Breaker(name="PortfolioBreaker")
 
-    acquisition_thread.start()
-    divestiture_thread.start()
-    valuation_thread.start()
-    valuation_thread.join()
-    print(holdings_tabulation["acquisitions"])
-    while bool(holdings_tabulation["acquisitions"]):
-        holdings_tabulation["acquisitions"][0:10, "status"] = HoldingStatus.PURCHASED
-        sleep(5)
-    print(holdings_tabulation["acquisitions"])
-    acquisition_breaker.stop()
-    divestiture_breaker.stop()
-    acquisition_thread.join()
-    divestiture_thread.join()
+    market_thread = market(market_archive, holding_tabulation, *args, **kwargs)
+    portfolio_thread = portfolio(portfolio_archive, holding_tabulation, *args, breaker=portfolio_breaker, **kwargs)
+    acquisition_thread = acquisition(holding_tabulation, portfolio_archive, *args, breaker=acquisition_breaker, **kwargs)
+    divestiture_thread = divestiture(holding_tabulation, portfolio_archive, *args, breaker=divestiture_breaker, **kwargs)
+
+    portfolio_thread.start()
+    time.sleep(5)
+    portfolio_breaker.stop()
+    portfolio_thread.join()
 
 
 if __name__ == "__main__":
