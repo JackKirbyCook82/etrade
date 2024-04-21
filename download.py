@@ -26,10 +26,10 @@ API = os.path.join(ROOT, "AlgoTrading", "etrade.txt")
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 
-from finance.securities import SecurityFilter, SecuritySaver, SecurityFile
-from finance.variables import DateRange
+from finance.securities import SecurityFilter, SecurityFile
+from finance.variables import DateRange, Contract
 from webscraping.webreaders import WebAuthorizer, WebReader
-from support.files import Archive, FileTiming, FileTyping
+from support.files import Saver, Archive, FileTiming, FileTyping
 from support.synchronize import SideThread
 from support.processes import Criterion
 
@@ -62,11 +62,12 @@ class ETradeReader(WebReader, delay=10): pass
 
 
 def security(reader, archive, *args, tickers, expires, **kwargs):
+    security_folder = lambda query: str(query["contract"].tostring(delimiter="_"))
     security_criterion = {Criterion.NULL: ["price", "underlying", "volume", "interest", "size"]}
     contract_downloader = ETradeContractDownloader(name="MarketContractDownloader", feed=reader)
     security_downloader = ETradeMarketDownloader(name="MarketSecurityDownloader", feed=reader)
     security_filter = SecurityFilter(name="MarketSecurityFilter", criterion=security_criterion)
-    security_saver = SecuritySaver(name="MarketSecuritySaver", destination=archive, mode="w")
+    security_saver = Saver(name="MarketSecuritySaver", destination=archive, folder=security_folder, mode="w")
     security_pipeline = contract_downloader + security_downloader + security_filter + security_saver
     security_thread = SideThread(security_pipeline, name="MarketSecurityThread")
     security_thread.setup(tickers=tickers, expires=expires)
@@ -74,7 +75,7 @@ def security(reader, archive, *args, tickers, expires, **kwargs):
 
 
 def main(*args, apikey, apicode, **kwargs):
-    security_file = SecurityFile(name="MarketSecurityFile", typing=FileTyping.CSV, timing=FileTiming.EAGER, duplicates=False)
+    security_file = SecurityFile(name="SecurityFile", typing=FileTyping.CSV, timing=FileTiming.EAGER, duplicates=False)
     market_archive = Archive(name="MarketArchive", repository=MARKET, save=[security_file])
     market_authorizer = ETradeAuthorizer(name="MarketAuthorizer", apikey=apikey, apicode=apicode)
     with ETradeReader(name="MarketReader", authorizer=market_authorizer) as market_reader:
