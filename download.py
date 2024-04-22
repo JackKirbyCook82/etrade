@@ -26,10 +26,10 @@ API = os.path.join(ROOT, "AlgoTrading", "etrade.txt")
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 
-from finance.securities import SecurityFilter, SecurityFile
-from finance.variables import DateRange, Contract
+from finance.securities import SecurityFilter, SecurityFile, SecurityQueue
+from finance.variables import DateRange
 from webscraping.webreaders import WebAuthorizer, WebReader
-from support.files import Saver, Archive, FileTiming, FileTyping
+from support.files import FileTiming, FileTyping
 from support.synchronize import SideThread
 from support.processes import Criterion
 
@@ -61,25 +61,37 @@ class ETradeAuthorizer(WebAuthorizer, authorize=authorize, request=request, acce
 class ETradeReader(WebReader, delay=10): pass
 
 
-def security(reader, archive, *args, tickers, expires, **kwargs):
-    security_folder = lambda query: str(query["contract"].tostring(delimiter="_"))
+def contract(reader, destination, *args, tickers, expires, parameters, **kwargs):
+    contract_downloader = ETradeContractDownloader(name="ContractDownloader", feed=reader)
+    contract_scheduler = Scheduler(name="ContractScheduler", destination=destination)
+    contract_pipeline = contract_downloader + contract_scheduler
+    contract_thread = SideThread(contract_pipeline, name="ContractThread")
+    contract_thread.setup(tickers=tickers, expires=expires, **parameters)
+    return contract_thread
+
+
+def security(source, reader, destination, *args, parameters, **kwargs):
+    security_folder = lambda contents: str(contents["contract"].tostring(delimiter="_"))
     security_criterion = {Criterion.NULL: ["price", "underlying", "volume", "interest", "size"]}
-    contract_downloader = ETradeContractDownloader(name="MarketContractDownloader", feed=reader)
-    security_downloader = ETradeMarketDownloader(name="MarketSecurityDownloader", feed=reader)
-    security_filter = SecurityFilter(name="MarketSecurityFilter", criterion=security_criterion)
-    security_saver = Saver(name="MarketSecuritySaver", destination=archive, folder=security_folder, mode="w")
-    security_pipeline = contract_downloader + security_downloader + security_filter + security_saver
-    security_thread = SideThread(security_pipeline, name="MarketSecurityThread")
-    security_thread.setup(tickers=tickers, expires=expires)
+    security_schedule = Schedule(name="HistorySchedule", source=source)
+    security_downloader = ETradeMarketDownloader(name="HistoryDownloader", feed=reader)
+    security_filter = SecurityFilter(name="HistoryFilter", criterion=security_criterion)
+    security_saver = Saver(name="HistorySaver", destination=destination, folder=security_folder, mode="w")
+    security_pipeline = security_schedule + security_downloader + security_filter + security_saver
+    security_thread = SideThread(security_pipeline, name="HistoryThread")
+    security_thread.setup(**parameters)
     return security_thread
 
 
 def main(*args, apikey, apicode, **kwargs):
-    security_file = SecurityFile(name="SecurityFile", typing=FileTyping.CSV, timing=FileTiming.EAGER, duplicates=False)
-    market_archive = Archive(name="MarketArchive", repository=MARKET, save=[security_file])
-    market_authorizer = ETradeAuthorizer(name="MarketAuthorizer", apikey=apikey, apicode=apicode)
-    with ETradeReader(name="MarketReader", authorizer=market_authorizer) as market_reader:
-        security_thread = security(market_reader, market_archive, *args, **kwargs)
+    security_queue = SecurityQueue(name="SecurityQueue", capacity=None)
+    security_file = SecurityFile(name="SecurityFile", repository=MARKET, typing=FileTyping.CSV, timing=FileTiming.EAGER, duplicates=False)
+    security_authorizer = ETradeAuthorizer(name="SecurityAuthorizer", apikey=apikey, apicode=apicode)
+    with ETradeReader(name="SecurityReader", authorizer=security_authorizer) as security_reader:
+        contract_thread = contract(security_reader, security_queue, *args, **kwargs)
+        security_thread = security(security_queue, security_reader, security_file, *args, **kwargs)
+        contract_thread.start()
+        contract_thread.join()
         security_thread.start()
         security_thread.join()
 
@@ -91,7 +103,7 @@ if __name__ == "__main__":
     with open(TICKERS, "r") as tickerfile:
         sysTickers = [str(string).strip().upper() for string in tickerfile.read().split("\n")][0:2]
     sysExpires = DateRange([(Datetime.today() + Timedelta(days=1)).date(), (Datetime.today() + Timedelta(weeks=60)).date()])
-    main(apikey=sysApiKey, apicode=sysApiCode, tickers=sysTickers, expires=sysExpires)
+    main(apikey=sysApiKey, apicode=sysApiCode, tickers=sysTickers, expires=sysExpires, parameters={})
 
 
 

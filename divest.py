@@ -26,15 +26,15 @@ ETRADE = os.path.join(ROOT, "AlgoTrading", "etrade.txt")
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 
-from finance.divestitures import DivestitureReader, DivestitureWriter, DivestitureTable
+from finance.divestitures import DivestitureReader, DivestitureWriter
+from finance.holdings import HoldingTable
 from finance.valuations import ValuationCalculator, ValuationFilter
 from finance.variables import Scenarios, Valuations, Contract
 from finance.holdings import HoldingCalculator, HoldingFile
 from finance.securities import SecurityFilter
 from finance.strategies import StrategyCalculator
+from support.files import FileTiming, FileTyping
 from support.synchronize import CycleThread
-from support.files import Saver, Loader, Archive, FileTiming, FileTyping
-from support.tables import Tabulation
 from support.processes import Criterion
 from support.pipelines import Processor
 
@@ -55,37 +55,34 @@ pd.set_option("display.max_columns", 25)
 
 
 class HoldingSimulator(Processor):
-    def execute(self, query, *args, **kwargs):
-        holdings = query["holdings"]
-        print(holdings)
-        raise Exception()
+    def execute(self, query, *args, **kwargs): pass
 
 
-def portfolio(archive, tabulation, *args, parameters, **kwargs):
+def portfolio(source, destination, *args, parameters, **kwargs):
     security_criterion = {Criterion.FLOOR: {"volume": 25, "interest": 25, "size": 10}, Criterion.NULL: ["volume", "interest", "size"]}
     valuation_criterion = {Criterion.FLOOR: {"apy": 0.0, "size": 10}, Criterion.NULL: ["apy", "size"]}
-    holding_query = lambda folder: dict(contract=Contract.fromstring(folder, delimiter="_"))
     liquidity_function = lambda cols: np.floor(cols["size"] * 0.1).astype(np.int32)
     priority_function = lambda cols: cols[("apy", str(Scenarios.MINIMUM.name).lower())]
+    holding_query = lambda folder: Contract.fromstring(folder, delimiter="_")
     valuations_functions = dict(liquidity=liquidity_function, priority=priority_function)
-    holding_loader = Loader(name="PortfolioHoldingLoader", source=archive, query=holding_query, mode="r")
+    holding_loader = Loader(name="PortfolioHoldingLoader", source=source, query=holding_query, mode="r")
     holding_calculator = HoldingCalculator(name="PortfolioHoldingCalculator")
     holding_simulator = HoldingSimulator(name="PortfolioHoldingSimulator")
     security_filter = SecurityFilter(name="PortfolioSecurityFilter", criterion=security_criterion)
     strategy_calculator = StrategyCalculator(name="PortfolioStrategyCalculator")
     valuation_calculator = ValuationCalculator(name="PortfolioValuationCalculator", valuation=Valuations.ARBITRAGE)
     valuation_filter = ValuationFilter(name="PortfolioValuationFilter", scenario=Scenarios.MINIMUM, criterion=valuation_criterion)
-    acquisition_writer = DivestitureWriter(name="PortfolioDivestitureWriter", destination=tabulation, valuation=Valuations.ARBITRAGE, capacity=None, **valuations_functions)
+    acquisition_writer = DivestitureWriter(name="PortfolioDivestitureWriter", destination=destination, valuation=Valuations.ARBITRAGE, **valuations_functions)
     portfolio_pipeline = holding_loader + holding_calculator + holding_simulator + security_filter + strategy_calculator + valuation_calculator + valuation_filter + acquisition_writer
     portfolio_thread = CycleThread(portfolio_pipeline, name="MarketValuationThread", wait=10)
     portfolio_thread.setup(**parameters)
     return portfolio_thread
 
 
-def divestiture(tabulation, archive, *args, parameters, **kwargs):
-    divestiture_folder = lambda folder: dict(contract=Contract.fromstring(folder, delimiter="_"))
-    divestiture_reader = DivestitureReader(name="PortfolioDivestitureReader", source=tabulation, wait=5)
-    divestiture_saver = Saver(name="PortfolioDivestitureSaver", destination=archive, folder=divestiture_folder, mode="a")
+def divestiture(source, destination, *args, parameters, **kwargs):
+    divestiture_folder = lambda contents: str(contents["contract"].tostring(delimiter="_"))
+    divestiture_reader = DivestitureReader(name="PortfolioDivestitureReader", source=source)
+    divestiture_saver = Saver(name="PortfolioDivestitureSaver", destination=destination, folder=divestiture_folder, mode="a")
     divestiture_pipeline = divestiture_reader + divestiture_saver
     divestiture_thread = CycleThread(divestiture_pipeline, name="PortfolioDivestitureThread", wait=10)
     divestiture_thread.setup(**parameters)
@@ -93,12 +90,10 @@ def divestiture(tabulation, archive, *args, parameters, **kwargs):
 
 
 def main(*args, **kwargs):
-    divestiture_table = DivestitureTable(name="DivestitureTable")
-    holding_tabulation = Tabulation(name="HoldingTables", tables=[divestiture_table])
-    holding_file = HoldingFile(name="HoldingFile", typing=FileTyping.CSV, timing=FileTiming.EAGER, duplicates=True)
-    portfolio_archive = Archive(name="PortfolioArchive", repository=PORTFOLIO, load=[holding_file], save=[holding_file])
-    portfolio_thread = portfolio(portfolio_archive, holding_tabulation, *args, **kwargs)
-    divestiture_thread = divestiture(holding_tabulation, portfolio_archive, *args, **kwargs)
+    holding_file = HoldingFile(name="HoldingFile", repository=PORTFOLIO, typing=FileTyping.CSV, timing=FileTiming.EAGER, duplicates=True)
+    divestiture_table = HoldingTable(name="DivestitureTable", capacity=None)
+    portfolio_thread = portfolio(holding_file, divestiture_table, *args, **kwargs)
+    divestiture_thread = divestiture(divestiture_table, holding_file, *args, **kwargs)
     portfolio_thread.start()
     portfolio_thread.cease()
     portfolio_thread.join()
@@ -106,8 +101,7 @@ def main(*args, **kwargs):
 
 if __name__ == "__main__":
     logging.basicConfig(level="INFO", format="[%(levelname)s, %(threadName)s]:  %(message)s", handlers=[logging.StreamHandler(sys.stdout)])
-    sysParameters = {}
-    main(parameters=sysParameters)
+    main(parameters={})
 
 
 

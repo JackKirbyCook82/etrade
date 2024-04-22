@@ -28,7 +28,7 @@ from finance.valuations import ValuationCalculator, ValuationFilter, ValuationFi
 from finance.variables import Scenarios, Valuations, Contract
 from finance.securities import SecurityFilter, SecurityFile
 from finance.strategies import StrategyCalculator
-from support.files import Saver, Loader, Archive, FileTiming, FileTyping
+from support.files import FileTiming, FileTyping
 from support.synchronize import SideThread
 from support.processes import Criterion
 
@@ -48,28 +48,27 @@ pd.set_option("display.max_rows", 20)
 pd.set_option("display.max_columns", 25)
 
 
-def valuation(archive, *args, parameters, **kwargs):
+def valuation(source, destination, *args, parameters, **kwargs):
+    security_query = lambda folder: Contract.fromstring(folder, delimiter="_")
+    valuation_folder = lambda contents: str(contents["contract"].tostring(delimiter="_"))
     security_criterion = {Criterion.FLOOR: {"volume": 25, "interest": 25, "size": 10}, Criterion.NULL: ["volume", "interest", "size"]}
     valuation_criterion = {Criterion.FLOOR: {"apy": 0.0, "size": 10}, Criterion.NULL: ["apy", "size"]}
-    security_query = lambda folder: dict(contract=Contract.fromstring(folder, delimiter="_"))
-    valuation_folder = lambda query: str(query["contract"].tostring(delimiter="_"))
-    security_loader = Loader(name="MarketSecurityLoader", source=archive, query=security_query, mode="r")
-    security_filter = SecurityFilter(name="MarketSecurityFilter", criterion=security_criterion)
-    strategy_calculator = StrategyCalculator(name="MarketStrategyCalculator")
-    valuation_calculator = ValuationCalculator(name="MarketValuationCalculator", valuation=Valuations.ARBITRAGE)
-    valuation_filter = ValuationFilter(name="MarketValuationFilter", scenario=Scenarios.MINIMUM, criterion=valuation_criterion)
-    valuation_saver = Saver(name="MarketValuationSaver", destination=archive, folder=valuation_folder, mode="a")
+    security_loader = Loader(name="SecurityLoader", source=source, query=security_query, mode="r")
+    security_filter = SecurityFilter(name="SecurityFilter", criterion=security_criterion)
+    strategy_calculator = StrategyCalculator(name="StrategyCalculator")
+    valuation_calculator = ValuationCalculator(name="ValuationCalculator", valuation=Valuations.ARBITRAGE)
+    valuation_filter = ValuationFilter(name="ValuationFilter", scenario=Scenarios.MINIMUM, criterion=valuation_criterion)
+    valuation_saver = Saver(name="ValuationSaver", destination=destination, folder=valuation_folder, mode="a")
     valuation_pipeline = security_loader + security_filter + strategy_calculator + valuation_calculator + valuation_filter + valuation_saver
-    valuation_thread = SideThread(valuation_pipeline, name="MarketValuationThread")
+    valuation_thread = SideThread(valuation_pipeline, name="ValuationThread")
     valuation_thread.setup(**parameters)
     return valuation_thread
 
 
 def main(*args, **kwargs):
-    security_file = SecurityFile(name="SecurityFile", typing=FileTyping.CSV, timing=FileTiming.EAGER, duplicates=False)
-    valuation_file = ValuationFile(name="ValuationFile", typing=FileTyping.CSV, timing=FileTiming.EAGER, duplicates=False)
-    market_archive = Archive(name="MarketArchive", repository=MARKET, load=[security_file], save=[valuation_file])
-    valuation_thread = valuation(market_archive, *args, **kwargs)
+    security_file = SecurityFile(name="SecurityFile", repository=MARKET, typing=FileTyping.CSV, timing=FileTiming.EAGER, duplicates=False)
+    valuation_file = ValuationFile(name="ValuationFile", repository=MARKET, typing=FileTyping.CSV, timing=FileTiming.EAGER, duplicates=False)
+    valuation_thread = valuation(security_file, valuation_file, *args, **kwargs)
     valuation_thread.start()
     valuation_thread.join()
 
