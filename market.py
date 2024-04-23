@@ -18,7 +18,7 @@ from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
 from support.processes import Downloader
-from support.pipelines import Producer, Processor
+from support.pipelines import Processor
 from finance.variables import Contract, Instruments, Positions
 
 __version__ = "1.0.0"
@@ -168,13 +168,14 @@ class ETradeOptionPage(WebJsonPage):
         return options
 
 
-class ETradeContractDownloader(Downloader, Producer, pages={"expire": ETradeExpirePage}):
-    def execute(self, *args, tickers=[], expires=[], **kwargs):
-        for ticker in tickers:
-            expires = [expire for expire in self.pages["expire"](ticker, *args, **kwargs) if expire in expires]
-            for expire in expires:
-                contract = Contract(ticker, expire)
-                yield dict(contract=contract)
+class ETradeContractDownloader(Downloader, Processor, pages={"expire": ETradeExpirePage}):
+    def execute(self, query, *args, expires=[], **kwargs):
+        ticker = query["ticker"]
+        for expire in self.pages["expire"](ticker, *args, **kwargs):
+            if expire not in expires:
+                continue
+            contract = Contract(ticker, expire)
+            yield query | dict(contract=contract)
 
 
 class ETradeMarketDownloader(Downloader, Processor, pages={"stock": ETradeStockPage, "option": ETradeOptionPage}):
