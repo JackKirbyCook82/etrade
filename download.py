@@ -20,16 +20,16 @@ MAIN = os.path.dirname(os.path.realpath(__file__))
 PROJECT = os.path.abspath(os.path.join(MAIN, os.pardir))
 ROOT = os.path.abspath(os.path.join(PROJECT, os.pardir))
 REPOSITORY = os.path.join(ROOT, "Library", "repository")
-MARKET = os.path.join(REPOSITORY, "market")
+OPTIONS = os.path.join(REPOSITORY, "market", "options")
 TICKERS = os.path.join(ROOT, "AlgoTrading", "tickers.txt")
 API = os.path.join(ROOT, "AlgoTrading", "etrade.txt")
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 
-from finance.securities import SecurityFilter, SecurityFile
+from finance.securities import SecurityFilter, OptionFile
 from finance.variables import DateRange
 from webscraping.webreaders import WebAuthorizer, WebReader
-from support.files import Saver, FileTiming, FileTyping
+from support.files import Saver, Timing, Typing
 from support.queues import Schedule, Scheduler, Queues
 from support.synchronize import SideThread
 from support.processes import Criterion
@@ -64,23 +64,22 @@ class TickerQueue(Queues.FIFO, variable="ticker"): pass
 class ContractQueue(Queues.FIFO, variable="contract"): pass
 
 
-def contract(tickers, reader, contracts, *args, expires, parameters, **kwargs):
-    contract_schedule = Schedule(name="ContractSchedule", source=tickers)
+def contracts(source, reader, destination, *args, expires, parameters, **kwargs):
+    contract_schedule = Schedule(name="ContractSchedule", source=source)
     contract_downloader = ETradeContractDownloader(name="ContractDownloader", feed=reader)
-    contract_scheduler = Scheduler(name="ContractScheduler", destination=contracts)
+    contract_scheduler = Scheduler(name="ContractScheduler", destination=destination)
     contract_pipeline = contract_schedule + contract_downloader + contract_scheduler
     contract_thread = SideThread(contract_pipeline, name="ContractThread")
     contract_thread.setup(expires=expires, **parameters)
     return contract_thread
 
 
-def security(contracts, reader, securities, *args, parameters, **kwargs):
-    security_folder = lambda contents: str(contents["contract"].tostring(delimiter="_"))
+def security(source, reader, destination, *args, parameters, **kwargs):
     security_criterion = {Criterion.NULL: ["price", "underlying", "volume", "interest", "size"]}
-    security_schedule = Schedule(name="HistorySchedule", source=contracts)
+    security_schedule = Schedule(name="HistorySchedule", source=source)
     security_downloader = ETradeMarketDownloader(name="HistoryDownloader", feed=reader)
     security_filter = SecurityFilter(name="HistoryFilter", criterion=security_criterion)
-    security_saver = Saver(name="HistorySaver", destination=securities, folder=security_folder, mode="w")
+    security_saver = Saver(name="HistorySaver", destination=destination, query="contract")
     security_pipeline = security_schedule + security_downloader + security_filter + security_saver
     security_thread = SideThread(security_pipeline, name="HistoryThread")
     security_thread.setup(**parameters)
@@ -88,13 +87,14 @@ def security(contracts, reader, securities, *args, parameters, **kwargs):
 
 
 def main(*args, apikey, apicode, tickers, **kwargs):
+    contract_query = lambda contract: contract.tostring(delimiter="_")
     ticker_queue = TickerQueue(name="TickerQueue", contents=list(tickers), capacity=None)
     contract_queue = ContractQueue(name="ContractQueue", contents=[], capacity=None)
-    security_file = SecurityFile(name="SecurityFile", repository=MARKET, typing=FileTyping.CSV, timing=FileTiming.EAGER, duplicates=False)
+    options_file = OptionFile(name="OptionFile", repository=OPTIONS, query=contract_query, typing=Typing.CSV, timing=Timing.EAGER, duplicates=False)
     security_authorizer = ETradeAuthorizer(name="SecurityAuthorizer", apikey=apikey, apicode=apicode)
     with ETradeReader(name="SecurityReader", authorizer=security_authorizer) as security_reader:
-        contract_thread = contract(ticker_queue, security_reader, contract_queue, *args, **kwargs)
-        security_thread = security(contract_queue, security_reader, security_file, *args, **kwargs)
+        contract_thread = contracts(ticker_queue, security_reader, contract_queue, *args, **kwargs)
+        security_thread = security(contract_queue, security_reader, {options_file: "w"}, *args, **kwargs)
         contract_thread.start()
         contract_thread.join()
         security_thread.start()
