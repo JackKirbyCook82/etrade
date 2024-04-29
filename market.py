@@ -17,7 +17,6 @@ from datetime import timezone as Timezone
 from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
-from support.processes import Downloader
 from support.pipelines import Processor
 from finance.variables import Contract, Instruments, Positions
 
@@ -168,25 +167,39 @@ class ETradeOptionPage(WebJsonPage):
         return options
 
 
-class ETradeContractDownloader(Downloader, Processor, pages={"expire": ETradeExpirePage}):
+class ETradeContractDownloader(Processor):
+    def __init__(self, *args, feed, name=None, **kwargs):
+        super().__init__(*args, name=name, **kwargs)
+        self.__expire = ETradeExpirePage(*args, feed=feed, **kwargs)
+
     def execute(self, query, *args, expires=[], **kwargs):
         ticker = query["ticker"]
-        for expire in self.pages["expire"](ticker, *args, **kwargs):
+        for expire in self.expire(ticker, *args, **kwargs):
             if expire not in expires:
                 continue
             contract = Contract(ticker, expire)
             yield query | dict(contract=contract)
 
 
-class ETradeMarketDownloader(Downloader, Processor, pages={"stock": ETradeStockPage, "option": ETradeOptionPage}):
+class ETradeMarketDownloader(Processor):
+    def __init__(self, *args, feed, name=None, **kwargs):
+        super().__init__(*args, name=name, **kwargs)
+        self.__stock = ETradeStockPage(*args, feed=feed, **kwargs)
+        self.__option = ETradeOptionPage(*args, feed=feed, **kwargs)
+
     def execute(self, query, *args, **kwargs):
         ticker, expire = query["contract"].ticker, query["contract"].expire
-        stocks = self.pages["stock"](ticker, *args, **kwargs)
+        stocks = self.stock(ticker, *args, **kwargs)
         underlying = stocks["price"].mean()
-        options = self.pages["option"](ticker, *args, expire=expire, strike=underlying, **kwargs)
+        options = self.option(ticker, *args, expire=expire, strike=underlying, **kwargs)
         options["underlying"] = underlying
         options = options.reset_index(drop=True, inplace=False)
         yield query | dict(options=options)
+
+    @property
+    def stock(self): return self.__stock
+    @property
+    def option(self): return self.__option
 
 
 
