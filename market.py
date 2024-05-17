@@ -108,13 +108,16 @@ class ETradeOptionData(WebJSON, locator="//OptionChainResponse/OptionPair[]", co
 
 
 class ETradeStockPage(WebJsonPage):
+    index = ["instrument", "position", "ticker", "date"]
+    columns = ["price", "size", "volume"]
+
     def __call__(self, ticker, *args, **kwargs):
-        columns = ["instrument", "position", "ticker", "date", "price", "size", "volume"]
         curl = ETradeStockURL(ticker=ticker)
         self.load(str(curl.address), params=dict(curl.query))
         contents = ETradeStockData(self.source)
         stocks = self.stocks(contents, *args, instrument=Instruments.STOCK, **kwargs)
-        return stocks[columns]
+        stocks = stocks.set_index(self.index, drop=True, inplace=False)[self.columns]
+        return stocks
 
     @staticmethod
     def stocks(contents, *args, instrument, **kwargs):
@@ -143,15 +146,17 @@ class ETradeExpirePage(WebJsonPage):
 
 
 class ETradeOptionPage(WebJsonPage):
+    index = ["instrument", "position", "ticker", "expire", "strike", "date"]
+    columns = ["price", "size", "volume", "interest"]
+
     def __call__(self, ticker, *args, expire, strike, **kwargs):
-        columns = ["instrument", "position", "ticker", "expire", "strike", "date", "price", "size", "volume", "interest"]
         curl = ETradeOptionURL(ticker=ticker, expire=expire, strike=strike)
         self.load(str(curl.address), params=dict(curl.query))
         contents = ETradeOptionData(self.source)
         puts = self.options(contents, *args, instrument=Instruments.PUT, **kwargs)
         calls = self.options(contents, *args, instrument=Instruments.CALL, **kwargs)
         options = pd.concat([puts, calls], axis=0)
-        return options[columns]
+        return options.set_index(self.index, drop=True, inplace=False)[self.columns]
 
     @staticmethod
     def options(contents, *args, instrument, **kwargs):
@@ -180,6 +185,9 @@ class ETradeContractDownloader(Processor):
             contract = Contract(ticker, expire)
             yield query | dict(contract=contract)
 
+    @property
+    def expire(self): return self.__expire
+
 
 class ETradeMarketDownloader(Processor):
     def __init__(self, *args, feed, name=None, **kwargs):
@@ -193,7 +201,6 @@ class ETradeMarketDownloader(Processor):
         underlying = stocks["price"].mean()
         options = self.option(ticker, *args, expire=expire, strike=underlying, **kwargs)
         options["underlying"] = underlying
-        options = options.reset_index(drop=True, inplace=False)
         yield query | dict(options=options)
 
     @property
