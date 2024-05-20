@@ -14,11 +14,12 @@ from datetime import date as Date
 from datetime import datetime as Datetime
 from datetime import timezone as Timezone
 
+from finance.variables import Contract, Instruments, Positions
 from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
 from support.pipelines import Processor
-from finance.variables import Contract, Instruments, Positions
+from support.query import Header, Query
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -183,7 +184,7 @@ class ETradeContractDownloader(Processor):
         super().__init__(*args, name=name, **kwargs)
         self.__expire = ETradeExpirePage(*args, feed=feed, **kwargs)
 
-    @query("ticker")
+    @Query("ticker")
     def execute(self, ticker, *args, expires=[], **kwargs):
         for expire in self.expire(ticker, *args, **kwargs):
             if expire not in expires:
@@ -201,7 +202,7 @@ class ETradeMarketDownloader(Processor):
         self.__stock = ETradeStockPage(*args, feed=feed, **kwargs)
         self.__option = ETradeOptionPage(*args, feed=feed, **kwargs)
 
-    @query("contract", securities=securities_headers)
+    @Query("contract", securities=securities_headers)
     def execute(self, contract, *args, **kwargs):
         ticker, expire = contract.ticker, contract.expire
         stocks = self.stock(ticker, *args, **kwargs)
