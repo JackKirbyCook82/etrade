@@ -27,6 +27,13 @@ __copyright__ = "Copyright 2023, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
+stocks_index = {"instrument": str, "position": str, "ticker": str, "date": np.datetime64}
+stocks_columns = {"price": np.float32, "size": np.float32, "volume": np.float32}
+stocks_header = Header(pd.DataFrame, index=list(stocks_index.keys()), columns=list(stocks_columns.keys()))
+options_index = {"instrument": str, "position": str, "strike": np.float32, "ticker": str, "expire": np.datetime64, "date": np.datetime64}
+options_columns = {"price": np.float32, "underlying": np.float32, "size": np.float32, "volume": np.float32, "interest": np.float32}
+options_header = Header(pd.DataFrame, index=list(options_index.keys()), columns=list(options_columns.keys()))
+securities_headers = dict(stocks=stocks_header, options=options_header)
 timestamp_parser = lambda x: Datetime.fromtimestamp(int(x), Timezone.utc).astimezone(pytz.timezone("US/Central"))
 quote_parser = lambda x: Datetime.strptime(re.findall("(?<=:)[0-9:]+(?=:CALL|:PUT)", x)[0], "%Y:%m:%d")
 datetime_parser = lambda x: np.datetime64(timestamp_parser(x))
@@ -108,15 +115,14 @@ class ETradeOptionData(WebJSON, locator="//OptionChainResponse/OptionPair[]", co
 
 
 class ETradeStockPage(WebJsonPage):
-    index = ["instrument", "position", "ticker", "date"]
-    columns = ["price", "size", "volume"]
+    index = list(stocks_index.keys())
+    columns = list(stocks_columns.keys())
 
     def __call__(self, ticker, *args, **kwargs):
         curl = ETradeStockURL(ticker=ticker)
         self.load(str(curl.address), params=dict(curl.query))
         contents = ETradeStockData(self.source)
         stocks = self.stocks(contents, *args, instrument=Instruments.STOCK, **kwargs)
-        stocks = stocks.set_index(self.index, drop=True, inplace=False)[self.columns]
         return stocks
 
     @staticmethod
@@ -146,8 +152,8 @@ class ETradeExpirePage(WebJsonPage):
 
 
 class ETradeOptionPage(WebJsonPage):
-    index = ["instrument", "position", "ticker", "expire", "strike", "date"]
-    columns = ["price", "size", "volume", "interest"]
+    index = list(options_index.keys())
+    columns = list(options_columns.keys())
 
     def __call__(self, ticker, *args, expire, strike, **kwargs):
         curl = ETradeOptionURL(ticker=ticker, expire=expire, strike=strike)
@@ -156,7 +162,7 @@ class ETradeOptionPage(WebJsonPage):
         puts = self.options(contents, *args, instrument=Instruments.PUT, **kwargs)
         calls = self.options(contents, *args, instrument=Instruments.CALL, **kwargs)
         options = pd.concat([puts, calls], axis=0)
-        return options.set_index(self.index, drop=True, inplace=False)[self.columns]
+        return options
 
     @staticmethod
     def options(contents, *args, instrument, **kwargs):
@@ -177,13 +183,13 @@ class ETradeContractDownloader(Processor):
         super().__init__(*args, name=name, **kwargs)
         self.__expire = ETradeExpirePage(*args, feed=feed, **kwargs)
 
-    def execute(self, query, *args, expires=[], **kwargs):
-        ticker = query["ticker"]
+    @query("ticker")
+    def execute(self, ticker, *args, expires=[], **kwargs):
         for expire in self.expire(ticker, *args, **kwargs):
             if expire not in expires:
                 continue
             contract = Contract(ticker, expire)
-            yield query | dict(contract=contract)
+            yield dict(contract=contract)
 
     @property
     def expire(self): return self.__expire
@@ -195,13 +201,15 @@ class ETradeMarketDownloader(Processor):
         self.__stock = ETradeStockPage(*args, feed=feed, **kwargs)
         self.__option = ETradeOptionPage(*args, feed=feed, **kwargs)
 
-    def execute(self, query, *args, **kwargs):
-        ticker, expire = query["contract"].ticker, query["contract"].expire
+    @query("contract", securities=securities_headers)
+    def execute(self, contract, *args, **kwargs):
+        ticker, expire = contract.ticker, contract.expire
         stocks = self.stock(ticker, *args, **kwargs)
         underlying = stocks["price"].mean()
         options = self.option(ticker, *args, expire=expire, strike=underlying, **kwargs)
         options["underlying"] = underlying
-        yield query | dict(options=options)
+        securities = dict(stocks=stocks, options=options)
+        yield dict(securities=securities)
 
     @property
     def stock(self): return self.__stock
