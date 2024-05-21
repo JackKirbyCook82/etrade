@@ -177,8 +177,8 @@ class ETradeContractDownloader(Processor):
         super().__init__(*args, name=name, **kwargs)
         self.__expire = ETradeExpirePage(*args, feed=feed, **kwargs)
 
-    def execute(self, contents, *args, expires=[], **kwargs):
-        ticker = contents["ticker"]
+    @Query()
+    def execute(self, ticker, *args, expires=[], **kwargs):
         for expire in self.expire(ticker, *args, **kwargs):
             if expire not in expires:
                 continue
@@ -195,13 +195,13 @@ class ETradeMarketDownloader(Processor, title="Downloaded"):
         self.__stock = ETradeStockPage(*args, feed=feed, **kwargs)
         self.__option = ETradeOptionPage(*args, feed=feed, **kwargs)
 
-    @Query("contract", stocks=stocks_header, options=options_header)
+    @Query()
     def execute(self, contract, *args, **kwargs):
         stocks = self.stock(contract.ticker, *args, **kwargs)
         underlying = stocks["price"].mean()
         options = self.option(contract.ticker, *args, expire=contract.expire, strike=underlying, **kwargs)
         options["underlying"] = underlying
-        yield dict(stocks=stocks, options=options)
+        yield stocks, options
 
     @property
     def stock(self): return self.__stock
