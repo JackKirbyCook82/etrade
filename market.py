@@ -34,7 +34,6 @@ stocks_header = Header(pd.DataFrame, index=list(stocks_index.keys()), columns=li
 options_index = {"instrument": str, "position": str, "strike": np.float32, "ticker": str, "expire": np.datetime64, "date": np.datetime64}
 options_columns = {"price": np.float32, "underlying": np.float32, "size": np.float32, "volume": np.float32, "interest": np.float32}
 options_header = Header(pd.DataFrame, index=list(options_index.keys()), columns=list(options_columns.keys()))
-securities_headers = dict(stocks=stocks_header, options=options_header)
 timestamp_parser = lambda x: Datetime.fromtimestamp(int(x), Timezone.utc).astimezone(pytz.timezone("US/Central"))
 quote_parser = lambda x: Datetime.strptime(re.findall("(?<=:)[0-9:]+(?=:CALL|:PUT)", x)[0], "%Y:%m:%d")
 datetime_parser = lambda x: np.datetime64(timestamp_parser(x))
@@ -116,9 +115,6 @@ class ETradeOptionData(WebJSON, locator="//OptionChainResponse/OptionPair[]", co
 
 
 class ETradeStockPage(WebJsonPage):
-    index = list(stocks_index.keys())
-    columns = list(stocks_columns.keys())
-
     def __call__(self, ticker, *args, **kwargs):
         curl = ETradeStockURL(ticker=ticker)
         self.load(str(curl.address), params=dict(curl.query))
@@ -153,9 +149,6 @@ class ETradeExpirePage(WebJsonPage):
 
 
 class ETradeOptionPage(WebJsonPage):
-    index = list(options_index.keys())
-    columns = list(options_columns.keys())
-
     def __call__(self, ticker, *args, expire, strike, **kwargs):
         curl = ETradeOptionURL(ticker=ticker, expire=expire, strike=strike)
         self.load(str(curl.address), params=dict(curl.query))
@@ -184,8 +177,8 @@ class ETradeContractDownloader(Processor):
         super().__init__(*args, name=name, **kwargs)
         self.__expire = ETradeExpirePage(*args, feed=feed, **kwargs)
 
-    @Query("ticker")
-    def execute(self, ticker, *args, expires=[], **kwargs):
+    def execute(self, contents, *args, expires=[], **kwargs):
+        ticker = contents["ticker"]
         for expire in self.expire(ticker, *args, **kwargs):
             if expire not in expires:
                 continue
@@ -196,21 +189,19 @@ class ETradeContractDownloader(Processor):
     def expire(self): return self.__expire
 
 
-class ETradeMarketDownloader(Processor):
+class ETradeMarketDownloader(Processor, title="Downloaded"):
     def __init__(self, *args, feed, name=None, **kwargs):
         super().__init__(*args, name=name, **kwargs)
         self.__stock = ETradeStockPage(*args, feed=feed, **kwargs)
         self.__option = ETradeOptionPage(*args, feed=feed, **kwargs)
 
-    @Query("contract", securities=securities_headers)
+    @Query("contract", stocks=stocks_header, options=options_header)
     def execute(self, contract, *args, **kwargs):
-        ticker, expire = contract.ticker, contract.expire
-        stocks = self.stock(ticker, *args, **kwargs)
+        stocks = self.stock(contract.ticker, *args, **kwargs)
         underlying = stocks["price"].mean()
-        options = self.option(ticker, *args, expire=expire, strike=underlying, **kwargs)
+        options = self.option(contract.ticker, *args, expire=contract.expire, strike=underlying, **kwargs)
         options["underlying"] = underlying
-        securities = dict(stocks=stocks, options=options)
-        yield dict(securities=securities)
+        yield dict(stocks=stocks, options=options)
 
     @property
     def stock(self): return self.__stock
