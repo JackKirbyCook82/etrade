@@ -18,8 +18,8 @@ from finance.variables import Contract, Instruments, Positions
 from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
+from support.query import Header, Input, Output, Query
 from support.pipelines import Processor
-from support.query import Header, Query
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -172,30 +172,35 @@ class ETradeOptionPage(WebJsonPage):
         return options
 
 
+etrade_contract_input = Input(arguments=["ticker"])
+etrade_contract_output = Output(arguments=["contract"])
 class ETradeContractDownloader(Processor):
     def __init__(self, *args, feed, name=None, **kwargs):
         super().__init__(*args, name=name, **kwargs)
         self.__expire = ETradeExpirePage(*args, feed=feed, **kwargs)
 
-    @Query()
+    @Query(input=etrade_contract_input, output=etrade_contract_output)
     def execute(self, ticker, *args, expires=[], **kwargs):
         for expire in self.expire(ticker, *args, **kwargs):
             if expire not in expires:
                 continue
             contract = Contract(ticker, expire)
-            yield dict(contract=contract)
+            yield contract
 
     @property
     def expire(self): return self.__expire
 
 
+etrade_market_input = Input(arguments=["contract"])
+etrade_market_output = Output(arguments=["stocks", "options"])
+etrade_market_header = {"stocks": stocks_header, "options": options_header}
 class ETradeMarketDownloader(Processor, title="Downloaded"):
     def __init__(self, *args, feed, name=None, **kwargs):
         super().__init__(*args, name=name, **kwargs)
         self.__stock = ETradeStockPage(*args, feed=feed, **kwargs)
         self.__option = ETradeOptionPage(*args, feed=feed, **kwargs)
 
-    @Query()
+    @Query(input=etrade_market_input, output=etrade_market_output, header=etrade_market_header)
     def execute(self, contract, *args, **kwargs):
         stocks = self.stock(contract.ticker, *args, **kwargs)
         underlying = stocks["price"].mean()
