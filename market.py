@@ -18,7 +18,6 @@ from finance.variables import Contract, Instruments, Positions
 from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
-from support.query import Header, Query
 from support.pipelines import Processor
 
 __version__ = "1.0.0"
