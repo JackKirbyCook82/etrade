@@ -15,10 +15,10 @@ from datetime import datetime as Datetime
 from datetime import timezone as Timezone
 
 from finance.variables import Contract, Instruments, Positions
+from support.pipelines import Processor, Query, Header
 from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
-from support.pipelines import Processor
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -29,10 +29,10 @@ __license__ = "MIT License"
 
 stocks_index = {"instrument": str, "position": str, "ticker": str, "date": np.datetime64}
 stocks_columns = {"price": np.float32, "size": np.float32, "volume": np.float32}
-stocks_header = Header(pd.DataFrame, index=list(stocks_index.keys()), columns=list(stocks_columns.keys()))
+stocks_header = Header.Dataframe(index=list(stocks_index.keys()), columns=list(stocks_columns.keys()))
 options_index = {"instrument": str, "position": str, "strike": np.float32, "ticker": str, "expire": np.datetime64, "date": np.datetime64}
 options_columns = {"price": np.float32, "underlying": np.float32, "size": np.float32, "volume": np.float32, "interest": np.float32}
-options_header = Header(pd.DataFrame, index=list(options_index.keys()), columns=list(options_columns.keys()))
+options_header = Header.Dataframe(index=list(options_index.keys()), columns=list(options_columns.keys()))
 securities_headers = dict(stocks=stocks_header, options=options_header)
 timestamp_parser = lambda x: Datetime.fromtimestamp(int(x), Timezone.utc).astimezone(pytz.timezone("US/Central"))
 quote_parser = lambda x: Datetime.strptime(re.findall("(?<=:)[0-9:]+(?=:CALL|:PUT)", x)[0], "%Y:%m:%d")
