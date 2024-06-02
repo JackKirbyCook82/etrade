@@ -27,10 +27,6 @@ __copyright__ = "Copyright 2023, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
-stocks_index = {"instrument": str, "position": str, "ticker": str, "date": np.datetime64}
-stocks_columns = {"price": np.float32, "size": np.float32, "volume": np.float32}
-options_index = {"instrument": str, "position": str, "strike": np.float32, "ticker": str, "expire": np.datetime64, "date": np.datetime64}
-options_columns = {"price": np.float32, "underlying": np.float32, "size": np.float32, "volume": np.float32, "interest": np.float32}
 timestamp_parser = lambda x: Datetime.fromtimestamp(int(x), Timezone.utc).astimezone(pytz.timezone("US/Central"))
 quote_parser = lambda x: Datetime.strptime(re.findall("(?<=:)[0-9:]+(?=:CALL|:PUT)", x)[0], "%Y:%m:%d")
 datetime_parser = lambda x: np.datetime64(timestamp_parser(x))
@@ -191,8 +187,6 @@ class ETradeMarketDownloader(Processor, title="Downloaded"):
         super().__init__(*args, name=name, **kwargs)
         self.__stock = ETradeStockPage(*args, feed=feed, **kwargs)
         self.__option = ETradeOptionPage(*args, feed=feed, **kwargs)
-        self.__columns = list(options_columns.keys())
-        self.__index = list(options_index.keys())
 
     def execute(self, contents, *args, **kwargs):
         contract = contents["contract"]
@@ -200,17 +194,12 @@ class ETradeMarketDownloader(Processor, title="Downloaded"):
         underlying = stocks["price"].mean()
         options = self.option(contract.ticker, *args, expire=contract.expire, strike=underlying, **kwargs)
         options["underlying"] = underlying
-        options = options.set_index(self.index, drop=True, inplace=False)[self.columns]
         yield contents | dict(options=options)
 
     @property
     def stock(self): return self.__stock
     @property
     def option(self): return self.__option
-    @property
-    def columns(self): return self.__columns
-    @property
-    def index(self): return self.__index
 
 
 
