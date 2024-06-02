@@ -15,7 +15,7 @@ from datetime import datetime as Datetime
 from datetime import timezone as Timezone
 
 from finance.variables import Contract, Instruments, Positions
-from support.pipelines import Processor, Query, Header
+from support.pipelines import Processor
 from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
@@ -29,11 +29,8 @@ __license__ = "MIT License"
 
 stocks_index = {"instrument": str, "position": str, "ticker": str, "date": np.datetime64}
 stocks_columns = {"price": np.float32, "size": np.float32, "volume": np.float32}
-stocks_header = Header.Dataframe(index=list(stocks_index.keys()), columns=list(stocks_columns.keys()))
 options_index = {"instrument": str, "position": str, "strike": np.float32, "ticker": str, "expire": np.datetime64, "date": np.datetime64}
 options_columns = {"price": np.float32, "underlying": np.float32, "size": np.float32, "volume": np.float32, "interest": np.float32}
-options_header = Header.Dataframe(index=list(options_index.keys()), columns=list(options_columns.keys()))
-securities_headers = dict(stocks=stocks_header, options=options_header)
 timestamp_parser = lambda x: Datetime.fromtimestamp(int(x), Timezone.utc).astimezone(pytz.timezone("US/Central"))
 quote_parser = lambda x: Datetime.strptime(re.findall("(?<=:)[0-9:]+(?=:CALL|:PUT)", x)[0], "%Y:%m:%d")
 datetime_parser = lambda x: np.datetime64(timestamp_parser(x))
@@ -177,13 +174,13 @@ class ETradeContractDownloader(Processor):
         super().__init__(*args, name=name, **kwargs)
         self.__expire = ETradeExpirePage(*args, feed=feed, **kwargs)
 
-    @Query(arguments=["ticker"])
-    def execute(self, *args, ticker, expires=[], **kwargs):
+    def execute(self, contents, *args, expires=[], **kwargs):
+        ticker = contents["ticker"]
         for expire in self.expire(ticker, *args, **kwargs):
             if expire not in expires:
                 continue
             contract = Contract(ticker, expire)
-            yield dict(contract=contract)
+            yield contents | dict(contract=contract)
 
     @property
     def expire(self): return self.__expire
@@ -194,19 +191,26 @@ class ETradeMarketDownloader(Processor, title="Downloaded"):
         super().__init__(*args, name=name, **kwargs)
         self.__stock = ETradeStockPage(*args, feed=feed, **kwargs)
         self.__option = ETradeOptionPage(*args, feed=feed, **kwargs)
+        self.__columns = list(options_columns.keys())
+        self.__index = list(options_index.keys())
 
-    @Query(arguments=["contract"], headers=securities_headers)
-    def execute(self, *args, contract, **kwargs):
+    def execute(self, contents, *args, **kwargs):
+        contract = contents["contract"]
         stocks = self.stock(contract.ticker, *args, **kwargs)
         underlying = stocks["price"].mean()
         options = self.option(contract.ticker, *args, expire=contract.expire, strike=underlying, **kwargs)
         options["underlying"] = underlying
-        yield dict(stocks=stocks, options=options)
+        options = options.set_index(self.index, drop=True, inplace=False)[self.columns]
+        yield contents | dict(options=options)
 
     @property
     def stock(self): return self.__stock
     @property
     def option(self): return self.__option
+    @property
+    def columns(self): return self.__columns
+    @property
+    def index(self): return self.__index
 
 
 
