@@ -39,21 +39,23 @@ class ETradeMarketsURL(WebURL):
     def domain(cls, *args, **kwargs): return "https://api.etrade.com"
 
 class ETradeStockURL(ETradeMarketsURL):
-    def path(cls, *args, ticker=None, tickers=[], **kwargs):
-        tickers = ",".join([ticker] if bool(ticker) else [] + tickers)
-        return f"/v1/market/quote/{tickers}.json"
+    def path(cls, *args, symbol=None, symbols=[], **kwargs):
+        symbols = ([symbol] if bool(symbol) else []) + symbols
+        assert bool(symbols)
+        symbols = ",".join(symbols)
+        return f"/v1/market/quote/{symbols}.json"
 
 class ETradeExpireURL(ETradeMarketsURL):
     def path(cls, *args, **kwargs): return "/v1/market/optionexpiredate.json"
-    def parms(cls, *args, ticker, **kwargs): return {"symbol": str(ticker), "expiryType": "ALL"}
+    def parms(cls, *args, symbol, **kwargs): return {"symbol": str(symbol), "expiryType": "ALL"}
 
 class ETradeOptionURL(ETradeMarketsURL):
     def path(cls, *args, **kwargs): return "/v1/market/optionchains.json"
-    def parms(cls, *args, ticker, **kwargs):
+    def parms(cls, *args, symbol, **kwargs):
         options = cls.options(*args, **kwargs)
         expires = cls.expires(*args, **kwargs)
         strikes = cls.strikes(*args, **kwargs)
-        return {"symbol": str(ticker), **options, **expires, **strikes}
+        return {"symbol": str(symbol), **options, **expires, **strikes}
 
     @staticmethod
     def expires(*args, expire, **kwargs): return {"expiryYear": f"{expire.year:04.0f}", "expiryMonth": f"{expire.month:02.0f}", "expiryDay": f"{expire.day:02.0f}", "expiryType": "ALL"}
@@ -65,7 +67,6 @@ class ETradeOptionURL(ETradeMarketsURL):
 
 class ETradeStockData(WebJSON, locator="//QuoteResponse/QuoteData[]", collection=True):
     class Date(WebJSON.Text, locator="//dateTimeUTC", key="date", parser=date_parser): pass
-    class Ticker(WebJSON.Text, locator="//Product/symbol", key="ticker", parser=str): pass
     class Bid(WebJSON.Text, locator="//All/bid", key="bid", parser=np.float32): pass
     class Demand(WebJSON.Text, locator="//All/bidSize", key="demand", parser=np.int32): pass
     class Ask(WebJSON.Text, locator="//All/ask", key="ask", parser=np.float32): pass
@@ -84,7 +85,6 @@ class ETradeExpireData(WebJSON, locator="//OptionExpireDateResponse/ExpirationDa
 class ETradeOptionData(WebJSON, locator="//OptionChainResponse/OptionPair[]", collection=True, optional=True):
     class Call(WebJSON, locator="//Call", key="call"):
         class Date(WebJSON.Text, locator="//timeStamp", key="date", parser=date_parser): pass
-        class Ticker(WebJSON.Text, locator="//symbol", key="ticker", parser=str): pass
         class Expire(WebJSON.Text, locator="//quoteDetail", key="expire", parser=expire_parser): pass
         class Strike(WebJSON.Text, locator="//strikePrice", key="strike", parser=strike_parser): pass
         class Bid(WebJSON.Text, locator="//bid", key="bid", parser=np.float32): pass
@@ -96,7 +96,6 @@ class ETradeOptionData(WebJSON, locator="//OptionChainResponse/OptionPair[]", co
 
     class Put(WebJSON, locator="//Put", key="put"):
         class Date(WebJSON.Text, locator="//timeStamp", key="date", parser=date_parser): pass
-        class Ticker(WebJSON.Text, locator="//symbol", key="ticker", parser=str): pass
         class Expire(WebJSON.Text, locator="//quoteDetail", key="expire", parser=expire_parser): pass
         class Strike(WebJSON.Text, locator="//strikePrice", key="strike", parser=strike_parser): pass
         class Bid(WebJSON.Text, locator="//bid", key="bid", parser=np.float32): pass
@@ -108,8 +107,8 @@ class ETradeOptionData(WebJSON, locator="//OptionChainResponse/OptionPair[]", co
 
 
 class ETradeStockPage(WebJsonPage):
-    def __call__(self, ticker, *args, **kwargs):
-        curl = ETradeStockURL(ticker=ticker)
+    def __call__(self, *args, symbol, **kwargs):
+        curl = ETradeStockURL(symbol=symbol)
         self.load(str(curl.address), params=dict(curl.query))
         contents = ETradeStockData(self.source)
         stocks = self.stocks(contents, *args, instrument=Instruments.STOCK, **kwargs)
@@ -129,8 +128,8 @@ class ETradeStockPage(WebJsonPage):
 
 
 class ETradeExpirePage(WebJsonPage):
-    def __call__(self, ticker, *args, **kwargs):
-        curl = ETradeExpireURL(ticker=ticker)
+    def __call__(self, *args, symbol, **kwargs):
+        curl = ETradeExpireURL(symbol=symbol)
         self.load(str(curl.address), params=dict(curl.query))
         contents = ETradeExpireData(self.source)
         return list(self.expires(contents))
@@ -142,8 +141,8 @@ class ETradeExpirePage(WebJsonPage):
 
 
 class ETradeOptionPage(WebJsonPage):
-    def __call__(self, ticker, *args, expire, strike, **kwargs):
-        curl = ETradeOptionURL(ticker=ticker, expire=expire, strike=strike)
+    def __call__(self, *args, symbol, expire, strike, **kwargs):
+        curl = ETradeOptionURL(symbol=symbol, expire=expire, strike=strike)
         self.load(str(curl.address), params=dict(curl.query))
         contents = ETradeOptionData(self.source)
         puts = self.options(contents, *args, instrument=Instruments.PUT, **kwargs)
@@ -171,11 +170,11 @@ class ETradeContractDownloader(Processor):
         self.__expire = ETradeExpirePage(*args, feed=feed, **kwargs)
 
     def execute(self, contents, *args, expires=[], **kwargs):
-        ticker = contents["ticker"]
-        for expire in self.expire(ticker, *args, **kwargs):
+        symbol = contents["ticker"].symbol
+        for expire in self.expire(*args, symbol=symbol, **kwargs):
             if expire not in expires:
                 continue
-            contract = Contract(ticker, expire)
+            contract = Contract(symbol, expire)
             yield contents | dict(contract=contract)
 
     @property
@@ -190,9 +189,9 @@ class ETradeMarketDownloader(Processor, title="Downloaded"):
 
     def execute(self, contents, *args, **kwargs):
         contract = contents["contract"]
-        stocks = self.stock(contract.ticker, *args, **kwargs)
+        stocks = self.stock(*args, symbol=contract.symbol, **kwargs)
         underlying = stocks["price"].mean()
-        options = self.option(contract.ticker, *args, expire=contract.expire, strike=underlying, **kwargs)
+        options = self.option(*args, symbol=contract.symbol, expire=contract.expire, strike=underlying, **kwargs)
         options["underlying"] = underlying
         yield contents | dict(options=options)
 
