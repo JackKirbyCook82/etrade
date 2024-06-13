@@ -14,7 +14,7 @@ from datetime import date as Date
 from datetime import datetime as Datetime
 from datetime import timezone as Timezone
 
-from finance.variables import Contract, Instruments, Positions
+from finance.variables import Variables, Querys
 from support.pipelines import Processor
 from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
@@ -114,7 +114,7 @@ class ETradeStockPage(WebJsonPage):
         curl = ETradeStockURL(ticker=ticker)
         self.load(str(curl.address), params=dict(curl.query))
         contents = ETradeStockData(self.source)
-        stocks = self.stocks(contents, *args, instrument=Instruments.STOCK, **kwargs)
+        stocks = self.stocks(contents, *args, instrument=Variables.Instruments.STOCK, **kwargs)
         return stocks
 
     @staticmethod
@@ -122,9 +122,9 @@ class ETradeStockPage(WebJsonPage):
         stocks = [{key: value(*args, **kwargs) for key, value in iter(content)} for content in iter(contents)]
         stocks = pd.DataFrame.from_records(stocks)
         long = stocks.drop(["bid", "demand"], axis=1, inplace=False).rename(columns={"ask": "price", "supply": "size"})
-        long["position"] = str(Positions.LONG.name).lower()
+        long["position"] = str(Variables.Positions.LONG.name).lower()
         short = stocks.drop(["ask", "supply"], axis=1, inplace=False).rename(columns={"bid": "price", "demand": "size"})
-        short["position"] = str(Positions.SHORT.name).lower()
+        short["position"] = str(Variables.Positions.SHORT.name).lower()
         stocks = pd.concat([long, short], axis=0).reset_index(drop=True, inplace=False)
         stocks["instrument"] = str(instrument.name).lower()
         return stocks
@@ -148,8 +148,8 @@ class ETradeOptionPage(WebJsonPage):
         curl = ETradeOptionURL(ticker=ticker, expire=expire, strike=strike)
         self.load(str(curl.address), params=dict(curl.query))
         contents = ETradeOptionData(self.source)
-        puts = self.options(contents, *args, instrument=Instruments.PUT, **kwargs)
-        calls = self.options(contents, *args, instrument=Instruments.CALL, **kwargs)
+        puts = self.options(contents, *args, instrument=Variables.Instruments.PUT, **kwargs)
+        calls = self.options(contents, *args, instrument=Variables.Instruments.CALL, **kwargs)
         options = pd.concat([puts, calls], axis=0)
         return options
 
@@ -159,9 +159,9 @@ class ETradeOptionPage(WebJsonPage):
         options = [{key: value(*args, **kwargs) for key, value in iter(content[string])} for content in iter(contents)]
         options = pd.DataFrame.from_records(options)
         long = options.drop(["bid", "demand"], axis=1, inplace=False).rename(columns={"ask": "price", "supply": "size"})
-        long["position"] = str(Positions.LONG.name).lower()
+        long["position"] = str(Variables.Positions.LONG.name).lower()
         short = options.drop(["ask", "supply"], axis=1, inplace=False).rename(columns={"bid": "price", "demand": "size"})
-        short["position"] = str(Positions.SHORT.name).lower()
+        short["position"] = str(Variables.Positions.SHORT.name).lower()
         options = pd.concat([long, short], axis=0).reset_index(drop=True, inplace=False)
         options["instrument"] = str(instrument.name).lower()
         return options
@@ -177,7 +177,7 @@ class ETradeContractDownloader(Processor):
         for expire in self.expire(*args, ticker=ticker, **kwargs):
             if expire not in expires:
                 continue
-            contract = Contract(ticker, expire)
+            contract = Querys.Contract(ticker, expire)
             yield contents | dict(contract=contract)
 
     @property
@@ -196,12 +196,15 @@ class ETradeMarketDownloader(Processor, title="Downloaded"):
         underlying = stocks["price"].mean()
         options = self.option(*args, ticker=contract.ticker, expire=contract.expire, strike=underlying, **kwargs)
         options["underlying"] = underlying
-        yield contents | dict(options=options)
+        securities = {str(Variables.Instruments.OPTION.name).lower(): options}
+        yield contents | securities
 
     @property
     def stock(self): return self.__stock
     @property
     def option(self): return self.__option
+    @property
+    def security(self): return self.__security
 
 
 
