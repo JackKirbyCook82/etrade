@@ -66,7 +66,7 @@ class ETradeOptionURL(ETradeMarketsURL):
 
 
 class ETradeStockData(WebJSON, locator="//QuoteResponse/QuoteData[]", collection=True):
-    class Ticker(WebJSON.Text, locator="//symbol", key="ticker", parser=str): pass
+    class Ticker(WebJSON.Text, locator="//Product/symbol", key="ticker", parser=str): pass
     class Current(WebJSON.Text, locator="//dateTimeUTC", key="current", parser=datetime_parser): pass
     class Bid(WebJSON.Text, locator="//All/bid", key="bid", parser=np.float32): pass
     class Demand(WebJSON.Text, locator="//All/bidSize", key="demand", parser=np.int32): pass
