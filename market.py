@@ -122,11 +122,11 @@ class ETradeStockPage(WebJsonPage):
         stocks = [{key: value(*args, **kwargs) for key, value in iter(content)} for content in iter(contents)]
         stocks = pd.DataFrame.from_records(stocks)
         long = stocks.drop(["bid", "demand"], axis=1, inplace=False).rename(columns={"ask": "price", "supply": "size"})
-        long["position"] = str(Variables.Positions.LONG.name).lower()
+        long["position"] = Variables.Positions.LONG
         short = stocks.drop(["ask", "supply"], axis=1, inplace=False).rename(columns={"bid": "price", "demand": "size"})
-        short["position"] = str(Variables.Positions.SHORT.name).lower()
+        short["position"] = Variables.Positions.SHORT
         stocks = pd.concat([long, short], axis=0).reset_index(drop=True, inplace=False)
-        stocks["instrument"] = str(instrument.name).lower()
+        stocks["instrument"] = instrument
         return stocks
 
 
@@ -159,11 +159,11 @@ class ETradeOptionPage(WebJsonPage):
         options = [{key: value(*args, **kwargs) for key, value in iter(content[string])} for content in iter(contents)]
         options = pd.DataFrame.from_records(options)
         long = options.drop(["bid", "demand"], axis=1, inplace=False).rename(columns={"ask": "price", "supply": "size"})
-        long["position"] = str(Variables.Positions.LONG.name).lower()
+        long["position"] = Variables.Positions.LONG
         short = options.drop(["ask", "supply"], axis=1, inplace=False).rename(columns={"bid": "price", "demand": "size"})
-        short["position"] = str(Variables.Positions.SHORT.name).lower()
+        short["position"] = Variables.Positions.SHORT
         options = pd.concat([long, short], axis=0).reset_index(drop=True, inplace=False)
-        options["instrument"] = str(instrument.name).lower()
+        options["instrument"] = instrument
         return options
 
 
