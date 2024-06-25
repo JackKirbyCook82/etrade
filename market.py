@@ -148,14 +148,14 @@ class ETradeOptionPage(WebJsonPage):
         curl = ETradeOptionURL(ticker=ticker, expire=expire, strike=strike)
         self.load(str(curl.address), params=dict(curl.query))
         contents = ETradeOptionData(self.source)
-        puts = self.options(contents, *args, instrument=Variables.Instruments.PUT, **kwargs)
-        calls = self.options(contents, *args, instrument=Variables.Instruments.CALL, **kwargs)
+        puts = self.options(contents, *args, option=Variables.Options.PUT, **kwargs)
+        calls = self.options(contents, *args, option=Variables.Options.CALL, **kwargs)
         options = pd.concat([puts, calls], axis=0)
         return options
 
     @staticmethod
-    def options(contents, *args, instrument, **kwargs):
-        string = str(instrument.name).lower()
+    def options(contents, *args, option, **kwargs):
+        string = str(option.name).lower()
         options = [{key: value(*args, **kwargs) for key, value in iter(content[string])} for content in iter(contents)]
         options = pd.DataFrame.from_records(options)
         long = options.drop(["bid", "demand"], axis=1, inplace=False).rename(columns={"ask": "price", "supply": "size"})
@@ -163,7 +163,8 @@ class ETradeOptionPage(WebJsonPage):
         short = options.drop(["ask", "supply"], axis=1, inplace=False).rename(columns={"bid": "price", "demand": "size"})
         short["position"] = Variables.Positions.SHORT
         options = pd.concat([long, short], axis=0).reset_index(drop=True, inplace=False)
-        options["instrument"] = instrument
+        options["instrument"] = Variables.Instruments.OPTION
+        options["option"] = option
         return options
 
 
@@ -196,8 +197,7 @@ class ETradeMarketDownloader(Processor, title="Downloaded"):
         underlying = stocks["price"].mean()
         options = self.option(*args, ticker=contract.ticker, expire=contract.expire, strike=underlying, **kwargs)
         options["underlying"] = underlying
-        securities = {str(Variables.Instruments.OPTION.name).lower(): options}
-        yield contents | securities
+        yield contents | {"option": options}
 
     @property
     def stock(self): return self.__stock
