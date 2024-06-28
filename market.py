@@ -14,7 +14,7 @@ from datetime import date as Date
 from datetime import datetime as Datetime
 from datetime import timezone as Timezone
 
-from finance.variables import Variables, Querys
+from finance.variables import Variables
 from support.pipelines import Processor
 from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
@@ -174,12 +174,13 @@ class ETradeContractDownloader(Processor):
         self.__expire = ETradeExpirePage(*args, feed=feed, **kwargs)
 
     def execute(self, contents, *args, expires=[], **kwargs):
-        ticker = contents["symbol"].ticker
+        ticker = contents[Variables.Querys.SYMBOL].ticker
         for expire in self.expire(*args, ticker=ticker, **kwargs):
             if expire not in expires:
                 continue
-            contract = Querys.Contract(ticker, expire)
-            yield contents | dict(contract=contract)
+            contract = Variables.Querys.CONTRACT(ticker, expire)
+            contract = {Variables.Querys.CONTRACT: contract}
+            yield contents | contract
 
     @property
     def expire(self): return self.__expire
@@ -188,23 +189,21 @@ class ETradeContractDownloader(Processor):
 class ETradeMarketDownloader(Processor, title="Downloaded"):
     def __init__(self, *args, feed, name=None, **kwargs):
         super().__init__(*args, name=name, **kwargs)
-        self.__stock = ETradeStockPage(*args, feed=feed, **kwargs)
-        self.__option = ETradeOptionPage(*args, feed=feed, **kwargs)
+        stocks = ETradeStockPage(*args, feed=feed, **kwargs)
+        options = ETradeOptionPage(*args, feed=feed, **kwargs)
+        self.__downloads = {Variables.Instruments.STOCK: stocks, Variables.Instruments.OPTION: options}
 
     def execute(self, contents, *args, **kwargs):
-        contract = contents["contract"]
-        stocks = self.stock(*args, ticker=contract.ticker, **kwargs)
+        contract = contents[Variables.Querys.CONTRACT]
+        stocks = self.downloads[Variables.Instruments.STOCK](*args, ticker=contract.ticker, **kwargs)
         underlying = stocks["price"].mean()
-        options = self.option(*args, ticker=contract.ticker, expire=contract.expire, strike=underlying, **kwargs)
+        options = self.downloads[Variables.Instruments.OPTION](*args, ticker=contract.ticker, expire=contract.expire, strike=underlying, **kwargs)
         options["underlying"] = underlying
-        yield contents | {"option": options}
+        instruments = {Variables.Instruments.STOCK: stocks, Variables.Instruments.OPTION: options}
+        yield contents | instruments
 
     @property
-    def stock(self): return self.__stock
-    @property
-    def option(self): return self.__option
-    @property
-    def security(self): return self.__security
+    def downloads(self): return self.__downloads
 
 
 
