@@ -14,7 +14,7 @@ from datetime import date as Date
 from datetime import datetime as Datetime
 from datetime import timezone as Timezone
 
-from finance.variables import Variables
+from finance.variables import Variables, Contract
 from support.pipelines import Processor
 from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
@@ -178,7 +178,7 @@ class ETradeContractDownloader(Processor):
         for expire in self.expire(*args, ticker=ticker, **kwargs):
             if expire not in expires:
                 continue
-            contract = Variables.Querys.CONTRACT(ticker, expire)
+            contract = Contract(ticker, expire)
             contract = {Variables.Querys.CONTRACT: contract}
             yield contents | contract
 
