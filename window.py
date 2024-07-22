@@ -24,7 +24,6 @@ class Product(Stencils.Frame):
     contract = Stencils.Text("contract", font="Arial 10", justify=tk.LEFT)
     security = Stencils.Text("security", font="Arial 10", justify=tk.LEFT)
 
-
 class Appraisal(Stencils.Frame):
     valuation = Stencils.Text("valuation", font="Arial 10 bold", justify=tk.LEFT)
     earnings = Stencils.Text("earnings", font="Arial 10", justify=tk.LEFT)
@@ -34,26 +33,26 @@ class Appraisal(Stencils.Frame):
 
 class Pursue(Stencils.Button):
     @staticmethod
-    def click(application, window, *args, **kwargs):
-        Variables.Status.PENDING
+    def click(*args, **kwargs):
+        application[table]["table"][column, "status"] = Variables.Status.PENDING
         window.destroy()
 
 class Abandon(Stencils.Button):
     @staticmethod
-    def click(application, window, *args, **kwargs):
-        Variables.Status.REJECTED
+    def click(*args, **kwargs):
+        application[table]["table"][column, "status"] = Variables.Status.REJECTED
         window.destroy()
 
 class Success(Stencils.Button):
     @staticmethod
-    def click(application, window, *args, **kwargs):
-        Variables.Status.ACCEPTED
+    def click(*args, **kwargs):
+        application[table]["table"][column, "status"] = Variables.Status.ACCEPTED
         window.destroy()
 
 class Failure(Stencils.Button):
     @staticmethod
-    def click(application, window, *args, **kwargs):
-        Variables.Status.REJECTED
+    def click(*args, **kwargs):
+        application[table]["table"][column, "status"] = Variables.Status.REJECTED
         window.destroy()
 
 
@@ -69,20 +68,34 @@ class HoldingsTable(Stencils.Table):
     cost = Stencils.Column("cost", width=10, parser=lambda target: f"${target.value.cost:,.0f}")
     size = Stencils.Column("size", width=10, parser=lambda target: f"{target.size:,.0f} CNT")
 
+    @staticmethod
+    def click(*args, **kwargs):
+        row = application[table]["table"][row, :].to_dict()
+        application[identity] = HoldingsWindow[status](window, application, *args, row=row, **kwargs)
 
-class ProspectWindow(Stencils.Window, elements={"product": Product, "appraisal": Appraisal, "pursue": Pursue, "abandon": Abandon}): pass
-class PendingWindow(Stencils.Window, elements={"product": Product, "appraisal": Appraisal, "success": Success, "failure": Failure}): pass
-class AcceptedWindow(Stencils.Window, elements={"product": Product, "appraisal": Appraisal}): pass
-class RejectedWindow(Stencils.Window, elements={"product": Product, "appraisal": Appraisal}): pass
-class AcquisitionWindow(Stencils.Window, elements={"acquisitions": HoldingsTable}): pass
-class DivestitureWindow(Stencils.Window, elements={"divestitures": HoldingsTable}): pass
+
+class HoldingsWindow(Stencils.Window):
+    def __init__(self, *args, row, **kwargs):
+
+
+
+class ProspectWindow(HoldingsWindow, elements={"product": Product, "appraisal": Appraisal, "pursue": Pursue, "abandon": Abandon}): pass
+class PendingWindow(HoldingsWindow, elements={"product": Product, "appraisal": Appraisal, "success": Success, "failure": Failure}): pass
+class AcceptedWindow(HoldingsWindow, elements={"product": Product, "appraisal": Appraisal}): pass
+class RejectedWindow(HoldingsWindow, elements={"product": Product, "appraisal": Appraisal}): pass
+class AcquisitionWindow(Stencils.Window, elements={"table": HoldingsTable}): pass
+class DivestitureWindow(Stencils.Window, elements={"table": HoldingsTable}): pass
 class PaperTradeWindow(Stencils.Window, elements={}): pass
 
 
-windows = {"acquisitions": AcquisitionWindow, "divestitures": DivestitureWindow, "prospect": ProspectWindow, "pending": PendingWindow, "accepted": AcceptedWindow, "rejected": RejectedWindow}
-class PaperTradeApplication(Stencils.Application, window=PaperTradeWindow, windows=windows):
+class PaperTradeApplication(Stencils.Application, window=PaperTradeWindow):
     def __init__(self, *args, acquisitions, divestitures, **kwargs):
         super().__init__(*args, **kwargs)
+        self["acquisitions"] = AcquisitionWindow(self.window, self, *args, table=acquisitions, **kwargs)
+        self["divestitures"] = DivestitureWindow(self.window, self, *args, table=divestitures, **kwargs)
+
+
+
 
 
 
