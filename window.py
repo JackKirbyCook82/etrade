@@ -32,19 +32,32 @@ class Appraisal(Stencils.Frame):
     size = Stencils.Text("size", font="Arial 10", justify=tk.LEFT)
 
 
-class Pursue(Stencils.Button, title="Pursue", action=): pass
-class Abandon(Stencils.Button, title="Abandon", action=): pass
-class Success(Stencils.Button, title="Success", action=): pass
-class Failure(Stencils.Button, title="Failure", action=): pass
+class Pursue(Stencils.Button):
+    @staticmethod
+    def click(application, window, *args, **kwargs):
+        Variables.Status.PENDING
+        window.destroy()
+
+class Abandon(Stencils.Button):
+    @staticmethod
+    def click(application, window, *args, **kwargs):
+        Variables.Status.REJECTED
+        window.destroy()
+
+class Success(Stencils.Button):
+    @staticmethod
+    def click(application, window, *args, **kwargs):
+        Variables.Status.ACCEPTED
+        window.destroy()
+
+class Failure(Stencils.Button):
+    @staticmethod
+    def click(application, window, *args, **kwargs):
+        Variables.Status.REJECTED
+        window.destroy()
 
 
-class Prospect(Stencils.Window, title="Prospect", layout=[[Product, Appraisal], [Pursue, Abandon]]): pass
-class Pending(Stencils.Window, title="Pending", layout=[[Product, Appraisal], [Success, Failure]]): pass
-class Accepted(Stencils.Window, title="Accepted", layout=[[Product, Appraisal], []]): pass
-class Rejected(Stencils.Window, title="Rejected", layout=[[Product, Appraisal], []]): pass
-
-
-class HoldingsTable(Stencils.Table, action=):
+class HoldingsTable(Stencils.Table):
     tag = Stencils.Column("tag", width=5, parser=lambda row: f"{row.tag:.0f}")
     valuation = Stencils.Column("valuation", width=10, parser=lambda row: str(row.valuation))
     strategy = Stencils.Column("strategy", width=10, parser=lambda row: str(row.strategy))
@@ -57,15 +70,21 @@ class HoldingsTable(Stencils.Table, action=):
     size = Stencils.Column("size", width=10, parser=lambda target: f"{target.size:,.0f} CNT")
 
 
-class HoldingsWindow(Stencils.Window, layout=[[HoldingsTable]]): pass
-class AcquisitionWindow(HoldingsWindow, title="Acquisitions"): pass
-class DivestitureWindow(HoldingsWindow, title="Divestitures"): pass
+class ProspectWindow(Stencils.Window, elements={"product": Product, "appraisal": Appraisal, "pursue": Pursue, "abandon": Abandon}): pass
+class PendingWindow(Stencils.Window, elements={"product": Product, "appraisal": Appraisal, "success": Success, "failure": Failure}): pass
+class AcceptedWindow(Stencils.Window, elements={"product": Product, "appraisal": Appraisal}): pass
+class RejectedWindow(Stencils.Window, elements={"product": Product, "appraisal": Appraisal}): pass
+class AcquisitionWindow(Stencils.Window, elements={"acquisitions": HoldingsTable}): pass
+class DivestitureWindow(Stencils.Window, elements={"divestitures": HoldingsTable}): pass
+class PaperTradeWindow(Stencils.Window, elements={}): pass
 
 
-class PaperTradeWindow(Stencils.Window, title="PaperTrading"):
-    pass
+windows = {"acquisitions": AcquisitionWindow, "divestitures": DivestitureWindow, "prospect": ProspectWindow, "pending": PendingWindow, "accepted": AcceptedWindow, "rejected": RejectedWindow}
+class PaperTradeApplication(Stencils.Application, window=PaperTradeWindow, windows=windows):
+    def __init__(self, *args, acquisitions, divestitures, **kwargs):
+        super().__init__(*args, **kwargs)
 
 
-class PaperTradeApplication(Stencils.Application, window=PaperTradeWindow):
-    pass
+
+
 
