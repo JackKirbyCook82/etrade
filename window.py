@@ -9,8 +9,9 @@ Created on Weds Jul 19 2024
 import numpy as np
 import tkinter as tk
 
+from support.windows import Application, Stencils
+from support.meta import RegistryMeta
 from finance.variables import Variables
-from support.windows import Stencils
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -19,12 +20,12 @@ __copyright__ = "Copyright 2024, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
-class Product(Stencils.Frame):
+class Product(Stencils.Layout):
     strategy = Stencils.Text("strategy", font="Arial 10 bold", justify=tk.LEFT)
     contract = Stencils.Text("contract", font="Arial 10", justify=tk.LEFT)
     security = Stencils.Text("security", font="Arial 10", justify=tk.LEFT)
 
-class Appraisal(Stencils.Frame):
+class Appraisal(Stencils.Layout):
     valuation = Stencils.Text("valuation", font="Arial 10 bold", justify=tk.LEFT)
     earnings = Stencils.Text("earnings", font="Arial 10", justify=tk.LEFT)
     cashflow = Stencils.Text("cashflow", font="Arial 10", justify=tk.LEFT)
@@ -71,31 +72,34 @@ class HoldingsTable(Stencils.Table):
     @staticmethod
     def click(*args, **kwargs):
         row = application[table]["table"][row, :].to_dict()
-        application[identity] = HoldingsWindow[status](window, application, *args, row=row, **kwargs)
+        StatusWindow[status](window, *args, row=row, **kwargs)
 
 
-class HoldingsWindow(Stencils.Window):
-    def __init__(self, *args, row, **kwargs):
+class StatusWindow(Stencils.Window, elements={"product": Product, "appraisal": Appraisal}, metaclass=RegistryMeta): pass
+class ProspectWindow(StatusWindow, title="Prospect", elements={"pursue": Pursue, "abandon": Abandon}, register=Variables.Status.PROSPECT): pass
+class PendingWindow(StatusWindow, title="Pending", elements={"success": Success, "failure": Failure}, register=Variables.Status.PENDING): pass
+class AcceptedWindow(StatusWindow, title="Accepted", register=Variables.Status.ACCEPTED): pass
+class RejectedWindow(StatusWindow, title="Rejected", register=Variables.Status.REJECTED): pass
+class HoldingsWindow(Stencils.Window, elements={"table": HoldingsTable}, metaclass=RegistryMeta): pass
+class AcquisitionsWindow(Stencils.Window, title="Acquisitions", register="acquisitions"): pass
+class DivestituresWindow(Stencils.Window, title="Divestitures", register="divestitures"): pass
+class PaperTradeWindow(Stencils.Window, title="PaperTrading", elements={}): pass
 
 
-
-class ProspectWindow(HoldingsWindow, elements={"product": Product, "appraisal": Appraisal, "pursue": Pursue, "abandon": Abandon}): pass
-class PendingWindow(HoldingsWindow, elements={"product": Product, "appraisal": Appraisal, "success": Success, "failure": Failure}): pass
-class AcceptedWindow(HoldingsWindow, elements={"product": Product, "appraisal": Appraisal}): pass
-class RejectedWindow(HoldingsWindow, elements={"product": Product, "appraisal": Appraisal}): pass
-class AcquisitionWindow(Stencils.Window, elements={"table": HoldingsTable}): pass
-class DivestitureWindow(Stencils.Window, elements={"table": HoldingsTable}): pass
-class PaperTradeWindow(Stencils.Window, elements={}): pass
-
-
-class PaperTradeApplication(Stencils.Application, window=PaperTradeWindow):
+class PaperTradeApplication(Application, window=PaperTradeWindow):
     def __init__(self, *args, acquisitions, divestitures, **kwargs):
         super().__init__(*args, **kwargs)
-        self["acquisitions"] = AcquisitionWindow(self.window, self, *args, table=acquisitions, **kwargs)
-        self["divestitures"] = DivestitureWindow(self.window, self, *args, table=divestitures, **kwargs)
+        self.__acquisitions = acquisitions
+        self.__divestitures = divestitures
 
+#    def execute(self, *args, **kwargs):
+#        self["acquisitions"] = self.HoldingsWindow["acquisitions"](self.window, *args, table=self.acquisitions, **kwargs)
+#        self["divestitures"] = self.HoldingsWindow["divestitures"](self.window, *args, table=self.divestitures, **kwargs)
 
-
+    @property
+    def acquisitions(self): return self.__acquisitions
+    @property
+    def divestitures(self): return self.__divestitures
 
 
 
