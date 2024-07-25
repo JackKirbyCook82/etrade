@@ -25,19 +25,19 @@ security_parser = lambda securities: "\n".join([f"{str(security)}={int(strike):.
 security_locator = lambda row: {(str(security), ""): row[str(security)] for security in list(Variables.Securities) if not np.isnan(row[str(security)])}
 
 
-class Product(Stencils.Frame, title="Product"):
+class Product(Stencils.Frame):
     strategy = Content(Stencils.Label, text="strategy", font="Arial 10 bold", justify=tk.LEFT, locator=(0, 0))
     contract = Content(Stencils.Label, text="contract", font="Arial 10", justify=tk.LEFT, locator=(1, 0))
     security = Content(Stencils.Label, text="security", font="Arial 10", justify=tk.LEFT, locator=(2, 0))
 
-
-class Appraisal(Stencils.Frame, title="Appraisal"):
+class Appraisal(Stencils.Frame):
     valuation = Content(Stencils.Label, text="valuation", font="Arial 10 bold", justify=tk.LEFT, locator=(0, 0))
     earnings = Content(Stencils.Label, text="earnings", font="Arial 10", justify=tk.LEFT, locator=(1, 0))
     cashflow = Content(Stencils.Label, text="cashflow", font="Arial 10", justify=tk.LEFT, locator=(2, 0))
     size = Content(Stencils.Label, text="size", font="Arial 10", justify=tk.LEFT, locator=(3, 0))
 
 
+class HoldingsScroll(Stencils.Scroll): pass
 class HoldingsTable(Stencils.Table):
     tag = Column(text="tag", width=5, parser=lambda tag: f"{tag:.0f}", locator=lambda row: row[("tag", "")])
     valuation = Column(text="valuation", width=10, parser=lambda valuation: str(valuation), locator=lambda row: row[("valuation", "")])
@@ -51,6 +51,14 @@ class HoldingsTable(Stencils.Table):
     size = Column(text="size", width=10, parser=lambda size: f"{size:,.0f} CT", locator=lambda row: row[("size", "")])
 
 
+class Holdings(Stencils.Frame):
+    table = Content(HoldingsTable, locator=(0, 0))
+    vertical = Content(HoldingsScroll, orientation=tk.VERTICAL, locator=(0, 1))
+
+class Acquisitions(Holdings): pass
+class Divestitures(Holdings): pass
+
+
 class Pursue(Stencils.Button): pass
 class Abandon(Stencils.Button): pass
 class Success(Stencils.Button): pass
@@ -61,16 +69,20 @@ class StatusWindow(Stencils.Window):
     product = Content(Product, locator=(0, 0))
     appraisal = Content(Appraisal, locator=(0, 1))
 
-class AcceptedWindow(StatusWindow, title="Accepted"): pass
-class RejectedWindow(StatusWindow, title="Rejected"): pass
+class AcceptedWindow(StatusWindow): pass
+class RejectedWindow(StatusWindow): pass
 
-class ProspectWindow(StatusWindow, title="Prospect"):
+class ProspectWindow(StatusWindow):
     pursue = Content(Pursue, text="pursue", font="Arial 10", justify=tk.CENTER, locator=(1, 0))
     abandon = Content(Abandon, text="abandon", font="Arial 10", justify=tk.CENTER, locator=(1, 1))
 
-class PendingWindow(StatusWindow, title="Pending"):
+class PendingWindow(StatusWindow):
     success = Content(Success, text="success", font="Arial 10", justify=tk.CENTER, locator=(1, 0))
     failure = Content(Failure, text="failure", font="Arial 10", justify=tk.CENTER, locator=(1, 1))
+
+class PaperTradingWindow(Stencils.Notebook):
+    acquisitions = Content(Acquisitions, sticky=tk.NSEW, locator=(0, 0))
+    divestitures = Content(Divestitures, sticky=tk.NSEW, locator=(0, 0))
 
 
 class PaperTradeApplication(Application):
