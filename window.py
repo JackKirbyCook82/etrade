@@ -72,13 +72,6 @@ class PendingWindow(StatusWindow, title="Pending"):
     success = Content(Success, text="success", font="Arial 10", justify=tk.CENTER, locator=(1, 0))
     failure = Content(Failure, text="failure", font="Arial 10", justify=tk.CENTER, locator=(1, 1))
 
-class HoldingsWindow(Stencils.Window):
-    table = Content(Stencils.Table, locator=(0, 0))
-
-class AcquisitionsWindow(HoldingsWindow, title="Acquisitions"): pass
-class DivestituresWindow(HoldingsWindow, title="Divestitures"): pass
-class PaperTradeWindow(Stencils.Window, title="PaperTrading"): pass
-
 
 class PaperTradeApplication(Application):
     def __init__(self, *args, acquisitions, divestitures, **kwargs):
