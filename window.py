@@ -50,6 +50,9 @@ class HoldingsTable(Stencils.Table):
     cost = Layouts.Column(text="cost", width=100, parser=lambda cost: f"${cost:,.0f}", locator=lambda row: row[("cost", "minimum")])
     size = Layouts.Column(text="size", width=100, parser=lambda size: f"{size:,.0f} CT", locator=lambda row: row[("size", "")])
 
+    def select(self, event):
+        pass
+
 
 class Holdings(Stencils.Frame):
     table = Layouts.Widget(HoldingsTable, locator=(0, 0))
@@ -59,10 +62,21 @@ class Acquisitions(Holdings): pass
 class Divestitures(Holdings): pass
 
 
-class Pursue(Stencils.Button): pass
-class Abandon(Stencils.Button): pass
-class Success(Stencils.Button): pass
-class Failure(Stencils.Button): pass
+class Pursue(Stencils.Button):
+    def click(self, event):
+        pass
+
+class Abandon(Stencils.Button):
+    def click(self, event):
+        pass
+
+class Success(Stencils.Button):
+    def click(self, event):
+        pass
+
+class Failure(Stencils.Button):
+    def click(self, event):
+        pass
 
 
 class StatusWindow(Stencils.Window):
@@ -85,7 +99,7 @@ class PaperTradingWindow(Stencils.Notebook):
     divestitures = Layouts.Widget(Divestitures, locator=(0, 0))
 
 
-class PaperTradeApplication(Application, window=PaperTradingWindow, title="PaperTrading"):
+class PaperTradeApplication(Application, window=PaperTradingWindow, heading="PaperTrading"):
     def __init__(self, *args, acquisitions, divestitures, **kwargs):
         super().__init__(*args, **kwargs)
         self.__acquisitions = acquisitions
