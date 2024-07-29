@@ -39,7 +39,7 @@ class Appraisal(Stencils.Frame):
 
 class HoldingsScroll(Stencils.Scroll): pass
 class HoldingsTable(Stencils.Table):
-    tag = Layouts.Column(text="tag", width=50, parser=lambda tag: f"{tag:.0f}", locator=lambda row: row[("tag", "")])
+    tag = Layouts.Column(text="tag", width=50, parser=lambda tag: f"{int(tag):.0f}", locator=lambda row: row[("tag", "")])
     valuation = Layouts.Column(text="valuation", width=200, parser=lambda valuation: str(valuation), locator=lambda row: row[("valuation", "")])
     strategy = Layouts.Column(text="strategy", width=200, parser=lambda strategy: str(strategy), locator=lambda row: row[("strategy", "")])
     contract = Layouts.Column(text="contract", width=200, parser=contract_parser, locator=contract_locator)
@@ -102,13 +102,9 @@ class PaperTradingWindow(Stencils.Notebook):
 class PaperTradeApplication(Application, window=PaperTradingWindow, heading="PaperTrading"):
     def __init__(self, *args, acquisitions, divestitures, **kwargs):
         super().__init__(*args, **kwargs)
-        self.__acquisitions = acquisitions
-        self.__divestitures = divestitures
+        self.acquisitions = acquisitions
+        self.divestitures = divestitures
 
-    @property
-    def acquisitions(self): return self.__acquisitions
-    @property
-    def divestitures(self): return self.__divestitures
 
 
 
