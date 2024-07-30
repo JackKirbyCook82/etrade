@@ -50,53 +50,18 @@ class HoldingsTable(Stencils.Table):
     cost = Layouts.Column(text="cost", width=100, parser=lambda cost: f"${cost:,.0f}", locator=lambda row: row[("cost", "minimum")])
     size = Layouts.Column(text="size", width=100, parser=lambda size: f"{size:,.0f} CT", locator=lambda row: row[("size", "")])
 
-    def select(self, event):
-        pass
 
-
-class Holdings(Stencils.Frame):
+class HoldingsFrame(Stencils.Frame):
     table = Layouts.Widget(HoldingsTable, locator=(0, 0))
     vertical = Layouts.Widget(HoldingsScroll, orientation=tk.VERTICAL, locator=(0, 1))
 
-class Acquisitions(Holdings): pass
-class Divestitures(Holdings): pass
+class AcquisitionFrame(HoldingsFrame): pass
+class DivestitureFrame(HoldingsFrame): pass
 
-
-class Pursue(Stencils.Button):
-    def click(self, event):
-        pass
-
-class Abandon(Stencils.Button):
-    def click(self, event):
-        pass
-
-class Success(Stencils.Button):
-    def click(self, event):
-        pass
-
-class Failure(Stencils.Button):
-    def click(self, event):
-        pass
-
-
-class StatusWindow(Stencils.Window):
-    product = Layouts.Widget(Product, locator=(0, 0))
-    appraisal = Layouts.Widget(Appraisal, locator=(0, 1))
-
-class AcceptedWindow(StatusWindow): pass
-class RejectedWindow(StatusWindow): pass
-
-class ProspectWindow(StatusWindow):
-    pursue = Layouts.Widget(Pursue, text="pursue", font="Arial 10", justify=tk.CENTER, locator=(1, 0))
-    abandon = Layouts.Widget(Abandon, text="abandon", font="Arial 10", justify=tk.CENTER, locator=(1, 1))
-
-class PendingWindow(StatusWindow):
-    success = Layouts.Widget(Success, text="success", font="Arial 10", justify=tk.CENTER, locator=(1, 0))
-    failure = Layouts.Widget(Failure, text="failure", font="Arial 10", justify=tk.CENTER, locator=(1, 1))
 
 class PaperTradingWindow(Stencils.Notebook):
-    acquisitions = Layouts.Widget(Acquisitions, locator=(0, 0))
-    divestitures = Layouts.Widget(Divestitures, locator=(0, 0))
+    acquisitions = Layouts.Widget(AcquisitionFrame, locator=(0, 0))
+    divestitures = Layouts.Widget(DivestitureFrame, locator=(0, 0))
 
 
 class PaperTradeApplication(Application, window=PaperTradingWindow, heading="PaperTrading"):
