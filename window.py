@@ -6,11 +6,15 @@ Created on Weds Jul 19 2024
 
 """
 
+import operator
 import numpy as np
 import tkinter as tk
+from functools import reduce
+from collections import namedtuple as ntuple
+from collections import OrderedDict as ODict
 
 from finance.variables import Variables, Contract
-from support.windows import Application, Stencils, Layouts
+from support.windows import Application, Stencils, Widget, Events
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -19,59 +23,149 @@ __copyright__ = "Copyright 2024, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
-contract_parser = lambda contract: f"{str(contract.ticker)}\n{str(contract.expire.strftime('%Y%m%d'))}"
-contract_locator = lambda row: Contract(row[("ticker", "")], row[("expire", "")])
-security_parser = lambda securities: "\n".join([f"{str(security)}={int(strike):.02}" for security, strike in dict(securities).items()])
-security_locator = lambda row: {(str(security), ""): row[str(security)] for security in list(Variables.Securities) if not np.isnan(row[str(security)])}
+table_valuation_parser = lambda row: str(row[("valuation", "")])
+table_strategy_parser = lambda row: str(row[("strategy", "")])
+table_contract_parser = lambda row: f"{row[('ticker', '')].ticker}|{row[('expire', '')].strftime('%Y-%m-%d')}"
+table_security_iterator = lambda row: {security: row[(str(security), '')] for security in list(Variables.Securities) if not np.isnan(row[(str(security), '')])}
+table_security_parser = lambda row: "\n".join([f"{str(security)}|{strike:.02f}" for security, strike in table_security_iterator(row)])
+table_earning_parser = lambda row: f"{row[('apy', Variables.Scenarios.MINIMUM)]:.02f} %/YR -> {row[('apy', Variables.Scenarios.MAXIMUM)]:.02f} %/YR @ {row[('tau', Variables.Scenarios.MINIMUM)]:.02f} DY"
+table_cashflow_parser = lambda row: f"${row[('npv', Variables.Scenarios.MINIMUM)]:,.02f} -> ${row[('npv', Variables.Scenarios.MAXIMUM)]:,.02f}"
+table_size_parser = lambda row: f"{row[('size', '')]:,.0f} CT"
+
+selection_identity_parser = lambda selection: str(selection.identity)
+selection_status_parser = lambda selection: str(selection.status)
+selection_valuation_parser = lambda selection: str(selection.valuation)
+selection_strategy_parser = lambda selection: str(selection.strategy)
+selection_contract_parser = lambda selection: f"{selection.contract.ticker}\n{selection.contract.expire.strftime('%Y-%m-%d')}"
+selection_security_parser = lambda selection: "\n".join([f"{str(security)} @ {strike:.02f}" for security, strike in selection.securities.items()])
+selection_earning_parser = lambda selection: f"{selection.earnings.apy.minimum:.02f} %/YR -> {selection.earnings.apy.maximum:.02f} %/YR @ {selection.earnings.tau:.02f} DY"
+selection_cashflow_parser = lambda selection: f"${selection.cashflow.npv.minimum:,.02f} -> ${selection.cashflow.npv.maximum:,.02f}"
+selection_size_parser = lambda selection: f"{selection.size:,.0f} CT"
+
+Scenario = ntuple("Scenario", "minimum maximum")
+Earnings = ntuple("Earnings", "apy tau")
+Cashflow = ntuple("Cashflow", "npv cost")
 
 
-class Product(Stencils.Frame):
-    strategy = Layouts.Widget(Stencils.Label, text="strategy", font="Arial 10 bold", justify=tk.LEFT, locator=(0, 0))
-    contract = Layouts.Widget(Stencils.Label, text="contract", font="Arial 10", justify=tk.LEFT, locator=(1, 0))
-    security = Layouts.Widget(Stencils.Label, text="security", font="Arial 10", justify=tk.LEFT, locator=(2, 0))
+class Selections(ODict): pass
+class Selection(ntuple("Selection", "identity index series")):
+    @property
+    def status(self): return self.series[("status", "")]
+    @property
+    def valuation(self): return self.series[("valuation", "")]
+    @property
+    def strategy(self): return self.series[("strategy", "")]
+    @property
+    def contract(self): return Contract(self.series[("ticker", "")], self.series[("expire", "")])
+    @property
+    def securities(self): return {security: self.series[(str(security), "")] for security in list(Variables.Securities) if not np.isnan(self.series[(str(security), "")])}
+    @property
+    def earnings(self): return Earnings(self.apy, self.tau)
+    @property
+    def cashflow(self): return Cashflow(self.npy, self.cost)
 
-class Appraisal(Stencils.Frame):
-    valuation = Layouts.Widget(Stencils.Label, text="valuation", font="Arial 10 bold", justify=tk.LEFT, locator=(0, 0))
-    earnings = Layouts.Widget(Stencils.Label, text="earnings", font="Arial 10", justify=tk.LEFT, locator=(1, 0))
-    cashflow = Layouts.Widget(Stencils.Label, text="cashflow", font="Arial 10", justify=tk.LEFT, locator=(2, 0))
-    size = Layouts.Widget(Stencils.Label, text="size", font="Arial 10", justify=tk.LEFT, locator=(3, 0))
+    @property
+    def apy(self): return Scenario(self.series[("apy", Variables.Scenarios.MINIMUM)], self.series[("apy", Variables.Scenarios.MAXIMUM)])
+    @property
+    def tau(self): return self.series[("tau", "")]
+    @property
+    def npv(self): return Scenario(self.series[("npv", Variables.Scenarios.MINIMUM)], self.series[("npv", Variables.Scenarios.MAXIMUM)])
+    @property
+    def cost(self): return Scenario(self.series[("cost", Variables.Scenarios.MINIMUM)], self.series[("cost", Variables.Scenarios.MAXIMUM)])
+    @property
+    def size(self): return self.series[("size", "")]
+
+
+class SelectionsButton(Stencils.Button):
+    def __init_subclass__(cls, *args, reverse, **kwargs): cls.reverse = reverse
+
+    @Events.Handler(Events.Mouse.MouseSingleClick.LEFT, Events.Mouse.MouseDoubleClick.LEFT)
+    def click(self, controller, **parameters):
+        pass
+
+
+class SelectionButton(Stencils.Button):
+    def __init_subclass__(cls, *args, status, **kwargs): cls.status = status
+
+    @Events.Handler(Events.Mouse.MouseSingleClick.LEFT, Events.Mouse.MouseDoubleClick.LEFT)
+    def click(self, controller, **parameters):
+        pass
+
+
+class ForwardButton(SelectionsButton, reverse=False): pass
+class BackwardButton(SelectionsButton, reverse=True): pass
+class PursueButton(SelectionButton, status=Variables.Status.PENDING): pass
+class AbandonButton(SelectionButton, status=Variables.Status.REJECTED): pass
+class AcceptButton(SelectionButton, status=Variables.Status.ACCEPTED): pass
+class RejectButton(SelectionButton, status=Variables.Status.REJECTED): pass
+
+
+class SelectionsFrame(Stencils.Frame):
+    identity = Widget(element=Stencils.Variable, font="Arial 10 bold", justify=tk.LEFT, locator=(0, 0))
+    status = Widget(element=Stencils.Variable, font="Arial 10 bold", justify=tk.LEFT, locator=(1, 0))
+    valuation = Widget(element=Stencils.Variable, font="Arial 10 bold", justify=tk.LEFT, locator=(2, 0))
+    strategy = Widget(element=Stencils.Variable, font="Arial 10 bold", justify=tk.LEFT, locator=(3, 0))
+    contract = Widget(element=Stencils.Variable, font="Arial 10", justify=tk.LEFT, locator=(4, 0))
+    security = Widget(element=Stencils.Variable, font="Arial 10", justify=tk.LEFT, locator=(5, 0))
+    earnings = Widget(element=Stencils.Variable, font="Arial 10", justify=tk.LEFT, locator=(6, 0))
+    cashflow = Widget(element=Stencils.Variable, font="Arial 10", justify=tk.LEFT, locator=(7, 0))
+    size = Widget(element=Stencils.Variable, font="Arial 10", justify=tk.LEFT, locator=(8, 0))
+
+    pursue = Widget(element=PursueButton, text="Pursue", font="Arial 8", justify=tk.CENTER, locator=(9, 0))
+    abandon = Widget(element=AbandonButton, text="Abandon", font="Arial 8", justify=tk.CENTER, locator=(9, 1))
+    accepted = Widget(element=AcceptButton, text="Accepted", font="Arial 8", justify=tk.CENTER, locator=(10, 0))
+    rejected = Widget(element=RejectButton, text="Rejected", font="Arial 8", justify=tk.CENTER, locator=(10, 1))
+    backward = Widget(element=BackwardButton, text="Preview", font="Arial 8", justify=tk.CENTER, locator=(11, 0))
+    forward = Widget(element=ForwardButton, text="Next", font="Arial 8", justify=tk.CENTER, locator=(11, 1))
 
 
 class HoldingsScroll(Stencils.Scroll): pass
 class HoldingsTable(Stencils.Table):
-    tag = Layouts.Column(text="tag", width=50, parser=lambda tag: f"{int(tag):.0f}", locator=lambda row: row[("tag", "")])
-    valuation = Layouts.Column(text="valuation", width=200, parser=lambda valuation: str(valuation), locator=lambda row: row[("valuation", "")])
-    strategy = Layouts.Column(text="strategy", width=200, parser=lambda strategy: str(strategy), locator=lambda row: row[("strategy", "")])
-    contract = Layouts.Column(text="contract", width=200, parser=contract_parser, locator=contract_locator)
-    security = Layouts.Column(text="security", width=200, parser=security_parser, locator=security_locator)
-    apy = Layouts.Column(text="apy", width=100, parser=lambda apy: f"{apy * 100:.0f}% / YR", locator=lambda row: row[("apy", "minimum")])
-    tau = Layouts.Column(text="tau", width=100, parser=lambda tau: f"{tau:.0f} DY", locator=lambda row: row[("tau", "")])
-    npv = Layouts.Column(text="npv", width=100, parser=lambda npv: f"${npv:,.0f}", locator=lambda row: row[("npv", "minimum")])
-    cost = Layouts.Column(text="cost", width=100, parser=lambda cost: f"${cost:,.0f}", locator=lambda row: row[("cost", "minimum")])
-    size = Layouts.Column(text="size", width=100, parser=lambda size: f"{size:,.0f} CT", locator=lambda row: row[("size", "")])
+    valuation = Widget(element=Stencils.Column, text="valuation", width=200, parser=table_valuation_parser)
+    strategy = Widget(element=Stencils.Column, text="strategy", width=200, parser=table_strategy_parser)
+    contract = Widget(element=Stencils.Column, text="contract", width=200, parser=table_contract_parser)
+    security = Widget(element=Stencils.Column, text="security", width=200, parser=table_security_parser)
+    earning = Widget(element=Stencils.Column, text="apy", width=100, parser=table_earning_parser)
+    cashflow = Widget(element=Stencils.Column, text="tau", width=100, parser=table_cashflow_parser)
+    size = Widget(element=Stencils.Column, text="size", width=100, parser=table_size_parser)
+
+    @Events.Handler(Events.Table.Virtual.SELECT)
+    def select(self, controller, **parameters):
+        pass
 
 
 class HoldingsFrame(Stencils.Frame):
-    table = Layouts.Widget(HoldingsTable, locator=(0, 0))
-    vertical = Layouts.Widget(HoldingsScroll, orientation=tk.VERTICAL, locator=(0, 1))
+    table = Widget(HoldingsTable, locator=(0, 0))
+    vertical = Widget(HoldingsScroll, orientation=tk.VERTICAL, locator=(0, 1))
 
 class AcquisitionFrame(HoldingsFrame): pass
 class DivestitureFrame(HoldingsFrame): pass
 
+class PaperTradingFrame(Stencils.Notebook):
+    acquisitions = Widget(AcquisitionFrame, locator=(0, 0))
+    divestitures = Widget(DivestitureFrame, locator=(0, 0))
 
-class PaperTradingWindow(Stencils.Notebook):
-    acquisitions = Layouts.Widget(AcquisitionFrame, locator=(0, 0))
-    divestitures = Layouts.Widget(DivestitureFrame, locator=(0, 0))
+class PaperTradingWindow(Stencils.Window):
+    holdings = Widget(PaperTradingFrame, locator=(0, 0))
+    selections = Widget(SelectionsFrame, locator=(0, 1))
 
 
 class PaperTradeApplication(Application, window=PaperTradingWindow, heading="PaperTrading"):
-    def __init__(self, *args, acquisitions, divestitures, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.acquisitions = acquisitions
-        self.divestitures = divestitures
+    def create(self, window, *args, acquisitions, divestitures, **kwargs):
+        self.views["acquisitions"] = reduce(operator.getitem, ["holdings", "acquisitions", "table"], window)
+        self.views["divestitures"] = reduce(operator.getitem, ["holdings", "divestitures", "table"], window)
+        self.views["selections"] = window["selections"]
+        self.models["acquisitions"] = acquisitions
+        self.models["divestitures"] = divestitures
+        self.models["selections"] = Selections()
 
-
-
+    def execute(self, *args, **kwargs): self.update()
+    def update(self):
+        acquisitions = self.models["acquisitions"].dataframe
+        divestitures = self.models["divestitures"].dataframe
+        self.views["acquisitions"].update(acquisitions)
+        self.views["divestitures"].update(divestitures)
+        self.after(self.wait, self.update)
 
 
 
