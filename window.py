@@ -5,11 +5,9 @@ Created on Weds Jul 19 2024
 @author: Jack Kirby Cook
 
 """
-
-import operator
+import multiprocessing
 import numpy as np
 import tkinter as tk
-from functools import reduce
 from collections import namedtuple as ntuple
 from collections import OrderedDict as ODict
 
@@ -32,7 +30,6 @@ table_earning_parser = lambda row: f"{row[('apy', Variables.Scenarios.MINIMUM)]:
 table_cashflow_parser = lambda row: f"${row[('npv', Variables.Scenarios.MINIMUM)]:,.02f} -> ${row[('npv', Variables.Scenarios.MAXIMUM)]:,.02f}"
 table_size_parser = lambda row: f"{row[('size', '')]:,.0f} CT"
 
-selection_identity_parser = lambda selection: str(selection.identity)
 selection_status_parser = lambda selection: str(selection.status)
 selection_valuation_parser = lambda selection: str(selection.valuation)
 selection_strategy_parser = lambda selection: str(selection.strategy)
@@ -47,53 +44,65 @@ Earnings = ntuple("Earnings", "apy tau")
 Cashflow = ntuple("Cashflow", "npv cost")
 
 
-class Selections(ODict): pass
-class Selection(ntuple("Selection", "identity index series")):
+class Selections(ODict):
+    def __init__(self, dataset, **contents):
+        selections = [(index, Selection(dataset, index, series)) for index, series in contents.items()]
+        super().__init__(selections)
+        self.mutex = multiprocessing.RLock()
+        self.dataset = dataset
+
+    def __setitem__(self, index, series):
+        selection = Selection(self.dataset, index, series)
+        super().__setitem__(index, selection)
+
+
+class Selection(ntuple("Selection", "dataset index series")):
     @property
-    def status(self): return self.series[("status", "")]
+    def status(self): return self.contents[("status", "")]
     @property
-    def valuation(self): return self.series[("valuation", "")]
+    def valuation(self): return self.contents[("valuation", "")]
     @property
-    def strategy(self): return self.series[("strategy", "")]
+    def strategy(self): return self.contents[("strategy", "")]
     @property
-    def contract(self): return Contract(self.series[("ticker", "")], self.series[("expire", "")])
+    def contract(self): return Contract(self.contents[("ticker", "")], self.contents[("expire", "")])
     @property
-    def securities(self): return {security: self.series[(str(security), "")] for security in list(Variables.Securities) if not np.isnan(self.series[(str(security), "")])}
+    def securities(self): return {security: self.contents[(str(security), "")] for security in list(Variables.Securities) if not np.isnan(self.contents[(str(security), "")])}
     @property
     def earnings(self): return Earnings(self.apy, self.tau)
     @property
     def cashflow(self): return Cashflow(self.npy, self.cost)
 
     @property
-    def apy(self): return Scenario(self.series[("apy", Variables.Scenarios.MINIMUM)], self.series[("apy", Variables.Scenarios.MAXIMUM)])
+    def apy(self): return Scenario(self.contents[("apy", Variables.Scenarios.MINIMUM)], self.contents[("apy", Variables.Scenarios.MAXIMUM)])
     @property
-    def tau(self): return self.series[("tau", "")]
+    def tau(self): return self.contents[("tau", "")]
     @property
-    def npv(self): return Scenario(self.series[("npv", Variables.Scenarios.MINIMUM)], self.series[("npv", Variables.Scenarios.MAXIMUM)])
+    def npv(self): return Scenario(self.contents[("npv", Variables.Scenarios.MINIMUM)], self.contents[("npv", Variables.Scenarios.MAXIMUM)])
     @property
-    def cost(self): return Scenario(self.series[("cost", Variables.Scenarios.MINIMUM)], self.series[("cost", Variables.Scenarios.MAXIMUM)])
+    def cost(self): return Scenario(self.contents[("cost", Variables.Scenarios.MINIMUM)], self.contents[("cost", Variables.Scenarios.MAXIMUM)])
     @property
-    def size(self): return self.series[("size", "")]
+    def size(self): return self.contents[("size", "")]
 
 
 class SelectionsButton(Stencils.Button):
     def __init_subclass__(cls, *args, reverse, **kwargs): cls.reverse = reverse
 
-    @Events.Handler(Events.Mouse.MouseSingleClick.LEFT, Events.Mouse.MouseDoubleClick.LEFT)
+    @Events.Handler(Events.Mouse.LEFT, Events.Mouse.LEFT)
     def click(self, controller, **parameters):
         pass
+
+class ForwardButton(SelectionsButton, reverse=False): pass
+class BackwardButton(SelectionsButton, reverse=True): pass
 
 
 class SelectionButton(Stencils.Button):
     def __init_subclass__(cls, *args, status, **kwargs): cls.status = status
 
-    @Events.Handler(Events.Mouse.MouseSingleClick.LEFT, Events.Mouse.MouseDoubleClick.LEFT)
+    @Events.Handler(Events.Mouse.LEFT)
     def click(self, controller, **parameters):
         pass
 
 
-class ForwardButton(SelectionsButton, reverse=False): pass
-class BackwardButton(SelectionsButton, reverse=True): pass
 class PursueButton(SelectionButton, status=Variables.Status.PENDING): pass
 class AbandonButton(SelectionButton, status=Variables.Status.REJECTED): pass
 class AcceptButton(SelectionButton, status=Variables.Status.ACCEPTED): pass
@@ -129,14 +138,15 @@ class HoldingsTable(Stencils.Table):
     cashflow = Widget(element=Stencils.Column, text="tau", width=100, parser=table_cashflow_parser)
     size = Widget(element=Stencils.Column, text="size", width=100, parser=table_size_parser)
 
-    @Events.Handler(Events.Table.Virtual.SELECT)
+    @Events.Handler(Events.Virtual.SELECT)
     def select(self, controller, **parameters):
         pass
 
 
 class HoldingsFrame(Stencils.Frame):
-    table = Widget(HoldingsTable, locator=(0, 0))
+    table = Widget(HoldingsTable, locator=(0, 0), vertical=True, horizontal=False)
     vertical = Widget(HoldingsScroll, orientation=tk.VERTICAL, locator=(0, 1))
+    selections = Widget(SelectionsFrame, locator=(0, 2))
 
 class AcquisitionFrame(HoldingsFrame): pass
 class DivestitureFrame(HoldingsFrame): pass
@@ -147,25 +157,15 @@ class PaperTradingFrame(Stencils.Notebook):
 
 class PaperTradingWindow(Stencils.Window):
     holdings = Widget(PaperTradingFrame, locator=(0, 0))
-    selections = Widget(SelectionsFrame, locator=(0, 1))
 
 
 class PaperTradeApplication(Application, window=PaperTradingWindow, heading="PaperTrading"):
     def create(self, window, *args, acquisitions, divestitures, **kwargs):
-        self.views["acquisitions"] = reduce(operator.getitem, ["holdings", "acquisitions", "table"], window)
-        self.views["divestitures"] = reduce(operator.getitem, ["holdings", "divestitures", "table"], window)
-        self.views["selections"] = window["selections"]
-        self.models["acquisitions"] = acquisitions
-        self.models["divestitures"] = divestitures
-        self.models["selections"] = Selections()
+        pass
 
     def execute(self, *args, **kwargs): self.update()
     def update(self):
-        acquisitions = self.models["acquisitions"].dataframe
-        divestitures = self.models["divestitures"].dataframe
-        self.views["acquisitions"].update(acquisitions)
-        self.views["divestitures"].update(divestitures)
-        self.after(self.wait, self.update)
+        pass
 
 
 
