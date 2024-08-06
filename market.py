@@ -27,6 +27,7 @@ __copyright__ = "Copyright 2023, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
+market_formatter = lambda self, *, results, elapsed, **kw: f"{str(self.title)}: {repr(self)}|{str(results[Variables.Querys.CONTRACT])}[{elapsed:.02f}s]"
 timestamp_parser = lambda x: Datetime.fromtimestamp(int(x), Timezone.utc).astimezone(pytz.timezone("US/Central"))
 quote_parser = lambda x: Datetime.strptime(re.findall("(?<=:)[0-9:]+(?=:CALL|:PUT)", x)[0], "%Y:%m:%d")
 datetime_parser = lambda x: np.datetime64(timestamp_parser(x))
@@ -168,12 +169,12 @@ class ETradeOptionPage(WebJsonPage):
         return options
 
 
-class ETradeContractDownloader(Processor):
+class ETradeContractDownloader(Processor, title="Downloaded", formatter=market_formatter):
     def __init__(self, *args, feed, name=None, **kwargs):
         super().__init__(*args, name=name, **kwargs)
         self.__expire = ETradeExpirePage(*args, feed=feed, **kwargs)
 
-    def execute(self, contents, *args, expires=[], **kwargs):
+    def processor(self, contents, *args, expires=[], **kwargs):
         ticker = contents[Variables.Querys.SYMBOL].ticker
         for expire in self.expire(*args, ticker=ticker, **kwargs):
             if expire not in expires:
@@ -186,14 +187,14 @@ class ETradeContractDownloader(Processor):
     def expire(self): return self.__expire
 
 
-class ETradeMarketDownloader(Processor, title="Downloaded"):
+class ETradeMarketDownloader(Processor, title="Downloaded", formatter=market_formatter):
     def __init__(self, *args, feed, name=None, **kwargs):
         super().__init__(*args, name=name, **kwargs)
         stocks = ETradeStockPage(*args, feed=feed, **kwargs)
         options = ETradeOptionPage(*args, feed=feed, **kwargs)
         self.__downloads = {Variables.Instruments.STOCK: stocks, Variables.Instruments.OPTION: options}
 
-    def execute(self, contents, *args, **kwargs):
+    def processor(self, contents, *args, **kwargs):
         contract = contents[Variables.Querys.CONTRACT]
         stocks = self.downloads[Variables.Instruments.STOCK](*args, ticker=contract.ticker, **kwargs)
         underlying = stocks["price"].mean()
