@@ -7,6 +7,7 @@ Created on Weds Jul 19 2023
 """
 
 import pytz
+import logging
 import regex as re
 import numpy as np
 import pandas as pd
@@ -15,7 +16,7 @@ from datetime import datetime as Datetime
 from datetime import timezone as Timezone
 
 from finance.variables import Variables, Contract
-from support.pipelines import Processor
+from finance.operations import Operations
 from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
@@ -25,9 +26,9 @@ __author__ = "Jack Kirby Cook"
 __all__ = ["ETradeContractDownloader", "ETradeMarketDownloader"]
 __copyright__ = "Copyright 2023, Jack Kirby Cook"
 __license__ = "MIT License"
+__logger__ = logging.getLogger(__name__)
 
 
-market_formatter = lambda self, *, results, elapsed, **kw: f"{str(self.title)}: {repr(self)}|{str(results[Variables.Querys.CONTRACT])}[{elapsed:.02f}s]"
 timestamp_parser = lambda x: Datetime.fromtimestamp(int(x), Timezone.utc).astimezone(pytz.timezone("US/Central"))
 quote_parser = lambda x: Datetime.strptime(re.findall("(?<=:)[0-9:]+(?=:CALL|:PUT)", x)[0], "%Y:%m:%d")
 datetime_parser = lambda x: np.datetime64(timestamp_parser(x))
@@ -169,7 +170,7 @@ class ETradeOptionPage(WebJsonPage):
         return options
 
 
-class ETradeContractDownloader(Processor, title="Downloaded", formatter=market_formatter):
+class ETradeContractDownloader(Operations.Processor, title="Downloaded"):
     def __init__(self, *args, feed, name=None, **kwargs):
         super().__init__(*args, name=name, **kwargs)
         self.__expire = ETradeExpirePage(*args, feed=feed, **kwargs)
@@ -181,13 +182,13 @@ class ETradeContractDownloader(Processor, title="Downloaded", formatter=market_f
                 continue
             contract = Contract(ticker, expire)
             contract = {Variables.Querys.CONTRACT: contract}
-            yield contents | contract
+            yield contents | dict(contract)
 
     @property
     def expire(self): return self.__expire
 
 
-class ETradeMarketDownloader(Processor, title="Downloaded", formatter=market_formatter):
+class ETradeMarketDownloader(Operations.Processor, title="Downloaded"):
     def __init__(self, *args, feed, name=None, **kwargs):
         super().__init__(*args, name=name, **kwargs)
         stocks = ETradeStockPage(*args, feed=feed, **kwargs)
@@ -200,8 +201,8 @@ class ETradeMarketDownloader(Processor, title="Downloaded", formatter=market_for
         underlying = stocks["price"].mean()
         options = self.downloads[Variables.Instruments.OPTION](*args, ticker=contract.ticker, expire=contract.expire, strike=underlying, **kwargs)
         options["underlying"] = underlying
-        instruments = {Variables.Instruments.STOCK: stocks, Variables.Instruments.OPTION: options}
-        yield contents | instruments
+        instruments = {Variables.Instruments.OPTION: options}
+        yield contents | dict(instruments)
 
     @property
     def downloads(self): return self.__downloads
