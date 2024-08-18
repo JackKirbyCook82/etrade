@@ -175,19 +175,22 @@ class ETradeContractDownloader(Pipelines.Processor, title="Downloaded"):
     def __init__(self, *args, feed, name=None, **kwargs):
         super().__init__(*args, name=name, **kwargs)
         pages = {Variables.Querys.CONTRACT: ETradeExpirePage}
-        self.__pages = {technical: page(*args, feed=feed, **kwargs) for technical, page in pages.items()}
+        self.__pages = {variable: page(*args, feed=feed, **kwargs) for variable, page in pages.items()}
 
     def processor(self, contents, *args, expires=[], **kwargs):
         symbol = contents[Variables.Querys.SYMBOL]
         assert isinstance(symbol, Querys.Symbol)
         parameters = dict(ticker=symbol.ticker, expires=expires)
-        for contract in self.download(*args, **parameters, **kwargs):
-            yield contents | {Variables.Querys.CONTRACT: contract}
+        contract, expires = self.download(*args, **parameters, **kwargs)
+        if not bool(expires): return
+        generator = ((contract, expire) for expire in expires)
+        yield from iter(generator)
 
     def download(self, *args, ticker, expires, **kwargs):
-        expires = [expire for expire in self.pages[Variables.Querys.CONTRACT] if expire in expires]
+        variable = Variables.Querys.CONTRACT
+        expires = [expire for expire in self.pages[variable] if expire in expires]
         contracts = [Querys.Contract(ticker, expire) for expire in expires]
-        return contracts
+        yield variable, contracts
 
     @property
     def pages(self): return self.__pages
@@ -203,14 +206,17 @@ class ETradeMarketDownloader(Pipelines.Processor, title="Downloaded"):
         contract = contents[Variables.Querys.CONTRACT]
         assert isinstance(contract, Querys.Contract)
         parameters = dict(ticker=contract.ticker, expire=contract.expire)
-        update = ODict(list(self.download(*args, **parameters, **kwargs)))
-        yield contents | update
+        securities = ODict(list(self.download(*args, **parameters, **kwargs)))
+        if not bool(securities): return
+        yield contents | securities
 
     def download(self, *args, ticker, expire, **kwargs):
-        variable = Variables.Instruments.OPTION
-        stocks = self.pages[Variables.Instruments.STOCK](*args, ticker=ticker, **kwargs)
+        variable = Variables.Instruments.STOCK
+        stocks = self.pages[variable](*args, ticker=ticker, **kwargs)
+        yield variable, stocks
         underlying = stocks["price"].mean()
-        options = self.pages[Variables.Instruments.OPTION](*args, ticker=ticker, expire=expire, strike=underlying, **kwargs)
+        variable = Variables.Instruments.OPTION
+        options = self.pages[variable](*args, ticker=ticker, expire=expire, strike=underlying, **kwargs)
         options["underlying"] = underlying
         yield variable, options
 
