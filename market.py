@@ -14,9 +14,9 @@ import pandas as pd
 from datetime import date as Date
 from datetime import datetime as Datetime
 from datetime import timezone as Timezone
+from collections import OrderedDict as ODict
 
-from finance.variables import Variables, Contract
-from finance.operations import Operations
+from finance.variables import Pipelines, Variables, Querys
 from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
@@ -29,12 +29,13 @@ __license__ = "MIT License"
 __logger__ = logging.getLogger(__name__)
 
 
-timestamp_parser = lambda x: Datetime.fromtimestamp(int(x), Timezone.utc).astimezone(pytz.timezone("US/Central"))
-quote_parser = lambda x: Datetime.strptime(re.findall("(?<=:)[0-9:]+(?=:CALL|:PUT)", x)[0], "%Y:%m:%d")
-datetime_parser = lambda x: np.datetime64(timestamp_parser(x))
-date_parser = lambda x: np.datetime64(timestamp_parser(x).date(), "D")
-expire_parser = lambda x: np.datetime64(quote_parser(x).date(), "D")
-strike_parser = lambda x: np.round(x, 2).astype(np.float32)
+class Parsers:
+    timestamp = lambda x: Datetime.fromtimestamp(int(x), Timezone.utc).astimezone(pytz.timezone("US/Central"))
+    datetime = lambda x: np.datetime64(Parsers.timestamp(x))
+    date = lambda x: np.datetime64(Parsers.timestamp(x).date(), "D")
+    quote = lambda x: Datetime.strptime(re.findall("(?<=:)[0-9:]+(?=:CALL|:PUT)", x)[0], "%Y:%m:%d")
+    expires = lambda x: np.datetime64(Parsers.quote(x).date(), "D")
+    strike = lambda x: np.round(x, 2).astype(np.float32)
 
 
 class ETradeMarketsURL(WebURL):
@@ -69,7 +70,7 @@ class ETradeOptionURL(ETradeMarketsURL):
 
 class ETradeStockData(WebJSON, locator="//QuoteResponse/QuoteData[]", collection=True):
     class Ticker(WebJSON.Text, locator="//Product/symbol", key="ticker", parser=str): pass
-    class Current(WebJSON.Text, locator="//dateTimeUTC", key="current", parser=datetime_parser): pass
+    class Current(WebJSON.Text, locator="//dateTimeUTC", key="current", parser=Parsers.datetime): pass
     class Bid(WebJSON.Text, locator="//All/bid", key="bid", parser=np.float32): pass
     class Demand(WebJSON.Text, locator="//All/bidSize", key="demand", parser=np.int32): pass
     class Ask(WebJSON.Text, locator="//All/ask", key="ask", parser=np.float32): pass
@@ -88,9 +89,9 @@ class ETradeExpireData(WebJSON, locator="//OptionExpireDateResponse/ExpirationDa
 class ETradeOptionData(WebJSON, locator="//OptionChainResponse/OptionPair[]", collection=True, optional=True):
     class Call(WebJSON, locator="//Call", key="call"):
         class Ticker(WebJSON.Text, locator="//symbol", key="ticker", parser=str): pass
-        class Current(WebJSON.Text, locator="//timeStamp", key="current", parser=datetime_parser): pass
-        class Expire(WebJSON.Text, locator="//quoteDetail", key="expire", parser=expire_parser): pass
-        class Strike(WebJSON.Text, locator="//strikePrice", key="strike", parser=strike_parser): pass
+        class Current(WebJSON.Text, locator="//timeStamp", key="current", parser=Parsers.datetime): pass
+        class Expire(WebJSON.Text, locator="//quoteDetail", key="expire", parser=Parsers.expires): pass
+        class Strike(WebJSON.Text, locator="//strikePrice", key="strike", parser=Parsers.strike): pass
         class Bid(WebJSON.Text, locator="//bid", key="bid", parser=np.float32): pass
         class Ask(WebJSON.Text, locator="//ask", key="ask", parser=np.float32): pass
         class Demand(WebJSON.Text, locator="//bidSize", key="demand", parser=np.int32): pass
@@ -100,9 +101,9 @@ class ETradeOptionData(WebJSON, locator="//OptionChainResponse/OptionPair[]", co
 
     class Put(WebJSON, locator="//Put", key="put"):
         class Ticker(WebJSON.Text, locator="//symbol", key="ticker", parser=str): pass
-        class Current(WebJSON.Text, locator="//timeStamp", key="current", parser=datetime_parser): pass
-        class Expire(WebJSON.Text, locator="//quoteDetail", key="expire", parser=expire_parser): pass
-        class Strike(WebJSON.Text, locator="//strikePrice", key="strike", parser=strike_parser): pass
+        class Current(WebJSON.Text, locator="//timeStamp", key="current", parser=Parsers.datetime): pass
+        class Expire(WebJSON.Text, locator="//quoteDetail", key="expire", parser=Parsers.expires): pass
+        class Strike(WebJSON.Text, locator="//strikePrice", key="strike", parser=Parsers.strike): pass
         class Bid(WebJSON.Text, locator="//bid", key="bid", parser=np.float32): pass
         class Ask(WebJSON.Text, locator="//ask", key="ask", parser=np.float32): pass
         class Demand(WebJSON.Text, locator="//bidSize", key="demand", parser=np.int32): pass
@@ -170,42 +171,51 @@ class ETradeOptionPage(WebJsonPage):
         return options
 
 
-class ETradeContractDownloader(Operations.Processor, title="Downloaded"):
+class ETradeContractDownloader(Pipelines.Processor, title="Downloaded"):
     def __init__(self, *args, feed, name=None, **kwargs):
         super().__init__(*args, name=name, **kwargs)
-        self.__expire = ETradeExpirePage(*args, feed=feed, **kwargs)
+        pages = {Variables.Querys.CONTRACT: ETradeExpirePage}
+        self.__pages = {technical: page(*args, feed=feed, **kwargs) for technical, page in pages.items()}
 
     def processor(self, contents, *args, expires=[], **kwargs):
-        ticker = contents[Variables.Querys.SYMBOL].ticker
-        for expire in self.expire(*args, ticker=ticker, **kwargs):
-            if expire not in expires:
-                continue
-            contract = Contract(ticker, expire)
-            contract = {Variables.Querys.CONTRACT: contract}
-            yield contents | dict(contract)
+        symbol = contents[Variables.Querys.SYMBOL]
+        assert isinstance(symbol, Querys.Symbol)
+        parameters = dict(ticker=symbol.ticker, expires=expires)
+        for contract in self.download(*args, **parameters, **kwargs):
+            yield contents | {Variables.Querys.CONTRACT: contract}
+
+    def download(self, *args, ticker, expires, **kwargs):
+        expires = [expire for expire in self.pages[Variables.Querys.CONTRACT] if expire in expires]
+        contracts = [Querys.Contract(ticker, expire) for expire in expires]
+        return contracts
 
     @property
-    def expire(self): return self.__expire
+    def pages(self): return self.__pages
 
 
-class ETradeMarketDownloader(Operations.Processor, title="Downloaded"):
+class ETradeMarketDownloader(Pipelines.Processor, title="Downloaded"):
     def __init__(self, *args, feed, name=None, **kwargs):
         super().__init__(*args, name=name, **kwargs)
-        stocks = ETradeStockPage(*args, feed=feed, **kwargs)
-        options = ETradeOptionPage(*args, feed=feed, **kwargs)
-        self.__downloads = {Variables.Instruments.STOCK: stocks, Variables.Instruments.OPTION: options}
+        pages = {Variables.Instruments.STOCK: ETradeStockPage, Variables.Instruments.OPTION: ETradeOptionPage}
+        self.__pages = {variable: page(*args, feed=feed, **kwargs) for variable, page in pages.items()}
 
     def processor(self, contents, *args, **kwargs):
         contract = contents[Variables.Querys.CONTRACT]
-        stocks = self.downloads[Variables.Instruments.STOCK](*args, ticker=contract.ticker, **kwargs)
+        assert isinstance(contract, Querys.Contract)
+        parameters = dict(ticker=contract.ticker, expire=contract.expire)
+        update = ODict(list(self.download(*args, **parameters, **kwargs)))
+        yield contents | update
+
+    def download(self, *args, ticker, expire, **kwargs):
+        variable = Variables.Instruments.OPTION
+        stocks = self.pages[Variables.Instruments.STOCK](*args, ticker=ticker, **kwargs)
         underlying = stocks["price"].mean()
-        options = self.downloads[Variables.Instruments.OPTION](*args, ticker=contract.ticker, expire=contract.expire, strike=underlying, **kwargs)
+        options = self.pages[Variables.Instruments.OPTION](*args, ticker=ticker, expire=expire, strike=underlying, **kwargs)
         options["underlying"] = underlying
-        instruments = {Variables.Instruments.OPTION: options}
-        yield contents | dict(instruments)
+        yield variable, options
 
     @property
-    def downloads(self): return self.__downloads
+    def pages(self): return self.__pages
 
 
 
