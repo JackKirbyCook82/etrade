@@ -16,7 +16,7 @@ from datetime import datetime as Datetime
 from datetime import timezone as Timezone
 from collections import OrderedDict as ODict
 
-from finance.variables import Pipelines, Variables, Querys
+from finance.variables import Pipelines, Variables
 from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
@@ -206,9 +206,9 @@ class ETradeMarketDownloader(Pipelines.Processor, title="Downloaded"):
         contract = contents[Variables.Querys.CONTRACT]
         assert isinstance(contract, Querys.Contract)
         parameters = dict(ticker=contract.ticker, expire=contract.expire)
-        securities = ODict(list(self.download(*args, **parameters, **kwargs)))
+        securities = list(self.download(*args, **parameters, **kwargs))
         if not bool(securities): return
-        yield contents | securities
+        yield contents | ODict(securities)
 
     def download(self, *args, ticker, expire, **kwargs):
         variable = Variables.Instruments.STOCK
