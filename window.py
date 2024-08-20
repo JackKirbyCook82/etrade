@@ -21,34 +21,36 @@ __copyright__ = "Copyright 2024, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
-table_valuation_parser = lambda row: str(row[("valuation", "")])
-table_strategy_parser = lambda row: str(row[("strategy", "")])
-table_contract_parser = lambda row: f"{row[('ticker', '')].ticker}|{row[('expire', '')].strftime('%Y-%m-%d')}"
-table_security_iterator = lambda row: {security: row[(str(security), '')] for security in list(Variables.Securities) if not np.isnan(row[(str(security), '')])}
-table_security_parser = lambda row: "\n".join([f"{str(security)}|{strike:.02f}" for security, strike in table_security_iterator(row)])
-table_earning_parser = lambda row: f"{row[('apy', Variables.Scenarios.MINIMUM)]:.02f} %/YR -> {row[('apy', Variables.Scenarios.MAXIMUM)]:.02f} %/YR @ {row[('tau', Variables.Scenarios.MINIMUM)]:.02f} DY"
-table_cashflow_parser = lambda row: f"${row[('npv', Variables.Scenarios.MINIMUM)]:,.02f} -> ${row[('npv', Variables.Scenarios.MAXIMUM)]:,.02f}"
-table_size_parser = lambda row: f"{row[('size', '')]:,.0f} CT"
-
-selection_status_parser = lambda selection: str(selection.status)
-selection_valuation_parser = lambda selection: str(selection.valuation)
-selection_strategy_parser = lambda selection: str(selection.strategy)
-selection_contract_parser = lambda selection: f"{selection.contract.ticker}\n{selection.contract.expire.strftime('%Y-%m-%d')}"
-selection_security_parser = lambda selection: "\n".join([f"{str(security)} @ {strike:.02f}" for security, strike in selection.securities.items()])
-selection_earning_parser = lambda selection: f"{selection.earnings.apy.minimum:.02f} %/YR -> {selection.earnings.apy.maximum:.02f} %/YR @ {selection.earnings.tau:.02f} DY"
-selection_cashflow_parser = lambda selection: f"${selection.cashflow.npv.minimum:,.02f} -> ${selection.cashflow.npv.maximum:,.02f}"
-selection_size_parser = lambda selection: f"{selection.size:,.0f} CT"
-
 Scenario = ntuple("Scenario", "minimum maximum")
 Earnings = ntuple("Earnings", "apy tau")
 Cashflow = ntuple("Cashflow", "npv cost")
+Variables = ["status", "valuation", "strategy", "contract", "securities", "earnings", "cashflow", "apy", "npy", "cost", "tau", "size"]
+
+class Parsers:
+    class Table:
+        valuation = lambda row: str(row[("valuation", "")])
+        strategy = lambda row: str(row[("strategy", "")])
+        contract = lambda row: f"{row[('ticker', '')].ticker}|{row[('expire', '')].strftime('%Y-%m-%d')}"
+        iterator = lambda row: {security: row[(str(security), '')] for security in list(Variables.Securities) if not np.isnan(row[(str(security), '')])}
+        security = lambda row: "\n".join([f"{str(security)}|{strike:.02f}" for security, strike in Parsers.Table.iterator(row)])
+        earning = lambda row: f"{row[('apy', Variables.Scenarios.MINIMUM)]:.02f} %/YR -> {row[('apy', Variables.Scenarios.MAXIMUM)]:.02f} %/YR @ {row[('tau', Variables.Scenarios.MINIMUM)]:.02f} DY"
+        cashflow = lambda row: f"${row[('npv', Variables.Scenarios.MINIMUM)]:,.02f} -> ${row[('npv', Variables.Scenarios.MAXIMUM)]:,.02f}"
+        size = lambda row: f"{row[('size', '')]:,.0f} CT"
+    class Selection:
+        status = lambda selection: str(selection.status)
+        valuation = lambda selection: str(selection.valuation)
+        strategy = lambda selection: str(selection.strategy)
+        contract = lambda selection: f"{selection.contract.ticker}\n{selection.contract.expire.strftime('%Y-%m-%d')}"
+        security = lambda selection: "\n".join([f"{str(security)} @ {strike:.02f}" for security, strike in selection.securities.items()])
+        earning = lambda selection: f"{selection.earnings.apy.minimum:.02f} %/YR -> {selection.earnings.apy.maximum:.02f} %/YR @ {selection.earnings.tau:.02f} DY"
+        cashflow = lambda selection: f"${selection.cashflow.npv.minimum:,.02f} -> ${selection.cashflow.npv.maximum:,.02f}"
+        size = lambda selection: f"{selection.size:,.0f} CT"
 
 
 class HoldingsModel(MVC.Model):
     def __init__(self, table, *args, **kwargs):
-        variables = ["status", "valuation", "strategy", "contract", "securities", "earnings", "cashflow", "apy", "npy", "cost", "tau", "size"]
         super().__init__(*args, **kwargs)
-        self.__variables = variables
+        self.__variables = Variables
         self.__table = table
 
     def status(self, index): return self.table[index, ("status", "")]
@@ -94,14 +96,14 @@ class RejectButton(SelectionButton, activity=Variables.Status.PENDING, status=Va
 
 
 class SelectionFrame(Stencils.Frame):
-    status = Widget(element=Stencils.Variable, font="Arial 10 bold", justify=tk.LEFT, locator=(0, 0), parser=selection_status_parser)
-    valuation = Widget(element=Stencils.Variable, font="Arial 10 bold", justify=tk.LEFT, locator=(1, 0), parser=selection_valuation_parser)
-    strategy = Widget(element=Stencils.Variable, font="Arial 10 bold", justify=tk.LEFT, locator=(2, 0), parser=selection_strategy_parser)
-    contract = Widget(element=Stencils.Variable, font="Arial 10", justify=tk.LEFT, locator=(3, 0), parser=selection_contract_parser)
-    security = Widget(element=Stencils.Variable, font="Arial 10", justify=tk.LEFT, locator=(4, 0), parser=selection_security_parser)
-    earnings = Widget(element=Stencils.Variable, font="Arial 10", justify=tk.LEFT, locator=(5, 0), parser=selection_size_parser)
-    cashflow = Widget(element=Stencils.Variable, font="Arial 10", justify=tk.LEFT, locator=(6, 0), parser=selection_cashflow_parser)
-    size = Widget(element=Stencils.Variable, font="Arial 10", justify=tk.LEFT, locator=(7, 0), parser=selection_size_parser)
+    status = Widget(element=Stencils.Variable, font="Arial 10 bold", justify=tk.LEFT, locator=(0, 0), parser=Parsers.Selection.status)
+    valuation = Widget(element=Stencils.Variable, font="Arial 10 bold", justify=tk.LEFT, locator=(1, 0), parser=Parsers.Selection.valuation)
+    strategy = Widget(element=Stencils.Variable, font="Arial 10 bold", justify=tk.LEFT, locator=(2, 0), parser=Parsers.Selection.strategy)
+    contract = Widget(element=Stencils.Variable, font="Arial 10", justify=tk.LEFT, locator=(3, 0), parser=Parsers.Selection.contract)
+    security = Widget(element=Stencils.Variable, font="Arial 10", justify=tk.LEFT, locator=(4, 0), parser=Parsers.Selection.security)
+    earnings = Widget(element=Stencils.Variable, font="Arial 10", justify=tk.LEFT, locator=(5, 0), parser=Parsers.Selection.earning)
+    cashflow = Widget(element=Stencils.Variable, font="Arial 10", justify=tk.LEFT, locator=(6, 0), parser=Parsers.Selection.cashflow)
+    size = Widget(element=Stencils.Variable, font="Arial 10", justify=tk.LEFT, locator=(7, 0), parser=Parsers.Selection.size)
 
     pursue = Widget(element=PursueButton, text="Pursue", font="Arial 8", justify=tk.CENTER, locator=(8, 0))
     abandon = Widget(element=AbandonButton, text="Abandon", font="Arial 8", justify=tk.CENTER, locator=(8, 1))
@@ -126,13 +128,13 @@ class SelectionFrame(Stencils.Frame):
 
 class HoldingsScroll(Stencils.Scroll): pass
 class HoldingsTable(Stencils.Table):
-    valuation = Widget(element=Stencils.Column, text="valuation", width=200, parser=table_valuation_parser)
-    strategy = Widget(element=Stencils.Column, text="strategy", width=200, parser=table_strategy_parser)
-    contract = Widget(element=Stencils.Column, text="contract", width=200, parser=table_contract_parser)
-    security = Widget(element=Stencils.Column, text="security", width=200, parser=table_security_parser)
-    earning = Widget(element=Stencils.Column, text="apy", width=100, parser=table_earning_parser)
-    cashflow = Widget(element=Stencils.Column, text="tau", width=100, parser=table_cashflow_parser)
-    size = Widget(element=Stencils.Column, text="size", width=100, parser=table_size_parser)
+    valuation = Widget(element=Stencils.Column, text="valuation", width=200, parser=Parsers.Table.valuation)
+    strategy = Widget(element=Stencils.Column, text="strategy", width=200, parser=Parsers.Table.strategy)
+    contract = Widget(element=Stencils.Column, text="contract", width=200, parser=Parsers.Table.contract)
+    security = Widget(element=Stencils.Column, text="security", width=200, parser=Parsers.Table.security)
+    earning = Widget(element=Stencils.Column, text="apy", width=100, parser=Parsers.Table.earning)
+    cashflow = Widget(element=Stencils.Column, text="tau", width=100, parser=Parsers.Table.cashflow)
+    size = Widget(element=Stencils.Column, text="size", width=100, parser=Parsers.Table.size)
 
     @Events.Handler(Events.Table.SELECT)
     def select(self, controller): controller.select()
