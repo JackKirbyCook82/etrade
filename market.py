@@ -16,7 +16,7 @@ from datetime import datetime as Datetime
 from datetime import timezone as Timezone
 from collections import OrderedDict as ODict
 
-from finance.variables import Pipelines, Variables
+from finance.variables import Pipelines, Variables, Symbol, Contract
 from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
@@ -179,18 +179,18 @@ class ETradeContractDownloader(Pipelines.Processor, title="Downloaded"):
 
     def processor(self, contents, *args, expires=[], **kwargs):
         symbol = contents[Variables.Querys.SYMBOL]
-        assert isinstance(symbol, Querys.Symbol)
+        assert isinstance(symbol, Symbol)
         parameters = dict(ticker=symbol.ticker, expires=expires)
-        contract, expires = self.download(*args, **parameters, **kwargs)
-        if not bool(expires): return
-        generator = ((contract, expire) for expire in expires)
-        yield from iter(generator)
+        contracts = list(self.download(*args, **parameters, **kwargs))
+        if not bool(contracts): return
+        for contract in contracts:
+            contract = {Variables.Querys.CONTRACT: contract}
+            yield contents | dict(contract)
 
     def download(self, *args, ticker, expires, **kwargs):
-        variable = Variables.Querys.CONTRACT
-        expires = [expire for expire in self.pages[variable] if expire in expires]
-        contracts = [Querys.Contract(ticker, expire) for expire in expires]
-        yield variable, contracts
+        generator = self.pages[Variables.Querys.CONTRACT](*args, ticker=ticker, **kwargs)
+        expires = [expire for expire in iter(generator) if expire in expires]
+        return [Contract(ticker, expire) for expire in expires]
 
     @property
     def pages(self): return self.__pages
@@ -204,7 +204,7 @@ class ETradeMarketDownloader(Pipelines.Processor, title="Downloaded"):
 
     def processor(self, contents, *args, **kwargs):
         contract = contents[Variables.Querys.CONTRACT]
-        assert isinstance(contract, Querys.Contract)
+        assert isinstance(contract, Contract)
         parameters = dict(ticker=contract.ticker, expire=contract.expire)
         securities = list(self.download(*args, **parameters, **kwargs))
         if not bool(securities): return
@@ -213,7 +213,6 @@ class ETradeMarketDownloader(Pipelines.Processor, title="Downloaded"):
     def download(self, *args, ticker, expire, **kwargs):
         variable = Variables.Instruments.STOCK
         stocks = self.pages[variable](*args, ticker=ticker, **kwargs)
-        yield variable, stocks
         underlying = stocks["price"].mean()
         variable = Variables.Instruments.OPTION
         options = self.pages[variable](*args, ticker=ticker, expire=expire, strike=underlying, **kwargs)
