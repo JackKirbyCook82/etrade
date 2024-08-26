@@ -172,10 +172,10 @@ class ETradeOptionPage(WebJsonPage):
 
 
 class ETradeContractDownloader(Pipelines.Processor, title="Downloaded"):
-    def __init__(self, *args, feed, name=None, **kwargs):
+    def __init__(self, *args, datafeed, name=None, **kwargs):
         super().__init__(*args, name=name, **kwargs)
         pages = {Variables.Querys.CONTRACT: ETradeExpirePage}
-        self.__pages = {variable: page(*args, feed=feed, **kwargs) for variable, page in pages.items()}
+        self.__pages = {variable: page(*args, feed=datafeed, **kwargs) for variable, page in pages.items()}
 
     def processor(self, contents, *args, expires=[], **kwargs):
         symbol = contents[Variables.Querys.SYMBOL]
@@ -197,10 +197,10 @@ class ETradeContractDownloader(Pipelines.Processor, title="Downloaded"):
 
 
 class ETradeMarketDownloader(Pipelines.Processor, title="Downloaded"):
-    def __init__(self, *args, feed, name=None, **kwargs):
+    def __init__(self, *args, datafeed, name=None, **kwargs):
         super().__init__(*args, name=name, **kwargs)
         pages = {Variables.Instruments.STOCK: ETradeStockPage, Variables.Instruments.OPTION: ETradeOptionPage}
-        self.__pages = {variable: page(*args, feed=feed, **kwargs) for variable, page in pages.items()}
+        self.__pages = {variable: page(*args, feed=datafeed, **kwargs) for variable, page in pages.items()}
 
     def processor(self, contents, *args, **kwargs):
         contract = contents[Variables.Querys.CONTRACT]
