@@ -16,7 +16,7 @@ from datetime import datetime as Datetime
 from datetime import timezone as Timezone
 from collections import OrderedDict as ODict
 
-from finance.variables import Pipelines, Variables, Symbol, Contract
+from finance.variables import Variables, Symbol, Contract
 from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
