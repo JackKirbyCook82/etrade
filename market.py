@@ -17,6 +17,7 @@ from datetime import timezone as Timezone
 from collections import OrderedDict as ODict
 
 from finance.variables import Variables, Symbol, Contract
+from support.pipelines import Processor
 from webscraping.weburl import WebURL
 from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
@@ -29,7 +30,7 @@ __license__ = "MIT License"
 __logger__ = logging.getLogger(__name__)
 
 
-class Parsers:
+class Parsers(object):
     timestamp = lambda x: Datetime.fromtimestamp(int(x), Timezone.utc).astimezone(pytz.timezone("US/Central"))
     datetime = lambda x: np.datetime64(Parsers.timestamp(x))
     date = lambda x: np.datetime64(Parsers.timestamp(x).date(), "D")
@@ -171,11 +172,11 @@ class ETradeOptionPage(WebJsonPage):
         return options
 
 
-class ETradeContractDownloader(Pipelines.Processor, title="Downloaded"):
-    def __init__(self, *args, datafeed, name=None, **kwargs):
+class ETradeContractDownloader(Processor, title="Downloaded"):
+    def __init__(self, *args, name=None, **kwargs):
         super().__init__(*args, name=name, **kwargs)
         pages = {Variables.Querys.CONTRACT: ETradeExpirePage}
-        self.__pages = {variable: page(*args, feed=datafeed, **kwargs) for variable, page in pages.items()}
+        self.__pages = {variable: page(*args, **kwargs) for variable, page in pages.items()}
 
     def processor(self, contents, *args, expires=[], **kwargs):
         symbol = contents[Variables.Querys.SYMBOL]
@@ -196,11 +197,11 @@ class ETradeContractDownloader(Pipelines.Processor, title="Downloaded"):
     def pages(self): return self.__pages
 
 
-class ETradeMarketDownloader(Pipelines.Processor, title="Downloaded"):
-    def __init__(self, *args, datafeed, name=None, **kwargs):
+class ETradeMarketDownloader(Processor, title="Downloaded"):
+    def __init__(self, *args, name=None, **kwargs):
         super().__init__(*args, name=name, **kwargs)
         pages = {Variables.Instruments.STOCK: ETradeStockPage, Variables.Instruments.OPTION: ETradeOptionPage}
-        self.__pages = {variable: page(*args, feed=datafeed, **kwargs) for variable, page in pages.items()}
+        self.__pages = {variable: page(*args, **kwargs) for variable, page in pages.items()}
 
     def processor(self, contents, *args, **kwargs):
         contract = contents[Variables.Querys.CONTRACT]
