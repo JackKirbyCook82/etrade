@@ -11,20 +11,21 @@ import logging
 import regex as re
 import numpy as np
 import pandas as pd
+from abc import ABC, abstractmethod
 from datetime import date as Date
 from datetime import datetime as Datetime
 from datetime import timezone as Timezone
-from collections import OrderedDict as ODict
+from collections import namedtuple as ntuple
 
 from finance.variables import Variables, Symbol, Contract
-from support.pipelines import Processor
-from webscraping.weburl import WebURL
-from webscraping.webdatas import WebJSON
 from webscraping.webpages import WebJsonPage
+from webscraping.webdatas import WebJSON
+from webscraping.weburl import WebURL
+from support.mixins import Mixin
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["ETradeContractDownloader", "ETradeMarketDownloader"]
+__all__ = ["ETradeContractDownloader", "ETradeStockDownloader", "ETradeOptionDownloader"]
 __copyright__ = "Copyright 2023, Jack Kirby Cook"
 __license__ = "MIT License"
 __logger__ = logging.getLogger(__name__)
@@ -135,11 +136,12 @@ class ETradeStockPage(WebJsonPage):
 
 
 class ETradeExpirePage(WebJsonPage):
-    def __call__(self, *args, ticker, **kwargs):
+    def __call__(self, *args, ticker, expires, **kwargs):
         curl = ETradeExpireURL(ticker=ticker)
         self.load(str(curl.address), params=dict(curl.query))
         contents = ETradeExpireData(self.source)
-        return list(self.expires(contents))
+        expires = [expire for expire in self.expires(contents) if expire in expires]
+        return expires
 
     @staticmethod
     def expires(contents, *args, **kwargs):
@@ -172,56 +174,70 @@ class ETradeOptionPage(WebJsonPage):
         return options
 
 
-class ETradeContractDownloader(Processor, title="Downloaded"):
-    def __init__(self, *args, name=None, **kwargs):
-        super().__init__(*args, name=name, **kwargs)
-        pages = {Variables.Querys.CONTRACT: ETradeExpirePage}
-        self.__pages = {variable: page(*args, **kwargs) for variable, page in pages.items()}
+class ETradeContractDownloader(Mixin):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__page = ETradeExpirePage(*args, **kwargs)
+        self.__logger = __logger__
 
-    def processor(self, contents, *args, expires=[], **kwargs):
-        symbol = contents[Variables.Querys.SYMBOL]
+    def download(self, symbol, *args, expires, **kwargs):
         assert isinstance(symbol, Symbol)
-        parameters = dict(ticker=symbol.ticker, expires=expires)
-        contracts = list(self.download(*args, **parameters, **kwargs))
-        if not bool(contracts): return
-        for contract in contracts:
-            contract = {Variables.Querys.CONTRACT: contract}
-            yield contents | dict(contract)
+        expires = self.page(*args, ticker=symbol.ticker, expires=expires)
+        contracts = [Contract(symbol.ticker, expire) for expire in expires]
+        string = f"Downloaded: {repr(self)}|{str(symbol)}[{len(contracts):.0f}]"
+        self.logger.info(string)
+        return contracts
 
-    def download(self, *args, ticker, expires, **kwargs):
-        generator = self.pages[Variables.Querys.CONTRACT](*args, ticker=ticker, **kwargs)
-        expires = [expire for expire in iter(generator) if expire in expires]
-        return [Contract(ticker, expire) for expire in expires]
-
+    @property
+    def logger(self): return self.__logger
     @property
     def pages(self): return self.__pages
 
 
-class ETradeMarketDownloader(Processor, title="Downloaded"):
-    def __init__(self, *args, name=None, **kwargs):
-        super().__init__(*args, name=name, **kwargs)
-        pages = {Variables.Instruments.STOCK: ETradeStockPage, Variables.Instruments.OPTION: ETradeOptionPage}
-        self.__pages = {variable: page(*args, **kwargs) for variable, page in pages.items()}
+class ETradeSecurityDownloader(Mixin, ABC):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        Pages = ntuple("Pages", "stocks options")
+        stocks = ETradeStockPage(*args, **kwargs)
+        options = ETradeOptionPage(*args, **kwargs)
+        self.__pages = Pages(stocks, options)
+        self.__logger = __logger__
 
-    def processor(self, contents, *args, **kwargs):
-        contract = contents[Variables.Querys.CONTRACT]
+    @abstractmethod
+    def download(self, *args, **kwargs): pass
+
+    @property
+    def logger(self): return self.__logger
+    @property
+    def pages(self): return self.__pages
+
+
+class ETradeStockDownloader(ETradeSecurityDownloader):
+    def download(self, symbol, *args, **kwargs):
+        assert isinstance(symbol, Symbol)
+        stocks = self.pages.stocks(*args, ticker=symbol.ticker, **kwargs)
+        assert isinstance(stocks, pd.DataFrame)
+        size = self.size(stocks)
+        string = f"Downloaded: {repr(self)}|{str(symbol)}[{size:.0f}]"
+        self.logger.info(string)
+        return stocks
+
+
+class ETradeOptionDownloader(ETradeSecurityDownloader):
+    def download(self, contract, *args, **kwargs):
         assert isinstance(contract, Contract)
-        parameters = dict(ticker=contract.ticker, expire=contract.expire)
-        securities = list(self.download(*args, **parameters, **kwargs))
-        if not bool(securities): return
-        yield contents | ODict(securities)
-
-    def download(self, *args, ticker, expire, **kwargs):
-        variable = Variables.Instruments.STOCK
-        stocks = self.pages[variable](*args, ticker=ticker, **kwargs)
+        stocks = self.pages.stocks(*args, ticker=contract.ticker, **kwargs)
+        assert isinstance(stocks, pd.DataFrame)
         underlying = stocks["price"].mean()
-        variable = Variables.Instruments.OPTION
-        options = self.pages[variable](*args, ticker=ticker, expire=expire, strike=underlying, **kwargs)
+        options = self.pages.options(*args, ticker=contract.ticker, expire=contract.expire, strike=underlying, **kwargs)
+        assert isinstance(options, pd.DataFrame)
         options["underlying"] = underlying
-        yield variable, options
+        size = self.size(options)
+        string = f"Downloaded: {repr(self)}|{str(contract)}[{size:.0f}]"
+        self.logger.info(string)
+        return options
 
-    @property
-    def pages(self): return self.__pages
+
 
 
 
