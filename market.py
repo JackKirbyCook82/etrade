@@ -15,8 +15,7 @@ from datetime import date as Date
 from datetime import datetime as Datetime
 from datetime import timezone as Timezone
 
-from finance.variables import Variables, Symbol, Contract
-from support.processes import Downloader
+from finance.variables import Variables, Contract, Symbol
 from support.meta import RegistryMeta
 from webscraping.webpages import WebJsonPage
 from webscraping.webdatas import WebJSON
@@ -174,34 +173,109 @@ class ETradeOptionPage(ETradeSecurityPage, register=Variables.Instruments.OPTION
         return options
 
 
-class ETradeContractDownloader(Downloader, pages={Variables.Datasets.EXPIRES: ETradeExpirePage}):
-    def execute(self, symbol, *args, expires, **kwargs):
-        assert isinstance(symbol, Symbol)
-        variable = Variables.Datasets.EXPIRES
-        expires = self.pages[variable](*args, ticker=symbol.ticker, expires=expires)
-        contracts = [Contract(symbol.ticker, expire) for expire in expires]
-        string = f"{str(self.title)}: {repr(self)}|{str(symbol)}[{len(contracts):.0f}]"
-        self.logger.info(string)
+class ETradeContractDownloader(object):
+    def __init__(self, *args, **kwargs):
+        self.__page = ETradeExpirePage(*args, **kwargs)
+        self.__logger = __logger__
+
+    def __call__(self, symbols, *args, **kwargs):
+        for symbol in symbols:
+            expires = self.execute(symbol, *args, **kwargs)
+            string = f"Downloaded: {repr(self)}|{str(symbol)}[{len(expires):.0f}]"
+            self.logger.info(string)
+            if not bool(expires): continue
+            yield expires
+
+    def execute(self, symbol, *args, expires=[], **kwargs):
+        parameters = dict(ticker=symbol.ticker, expires=expires)
+        expires = self.download(*args, **parameters, **kwargs)
+        return expires
+
+    def download(self, *args, ticker, expires, **kwargs):
+        expires = self.page(*args, ticker=ticker, expires=expires, **kwargs)
+        contracts = [Contract(ticker, expire) for expire in expires]
         return contracts
 
+    @property
+    def logger(self): return self.__logger
+    @property
+    def page(self): return self.__page
 
-class ETradeSecurityDownloader(Downloader, pages=dict(ETradeSecurityPage)):
-    def execute(self, contract, *args, **kwargs):
-        assert isinstance(contract, Contract)
-        variable = Variables.Instruments.STOCK
-        stocks = self.pages[variable](*args, ticker=contract.ticker, **kwargs)
+
+class ETradeSecurityDownloader(object, metaclass=RegistryMeta):
+    def __new__(cls, *args, **kwargs):
+        if issubclass(cls, ETradeSecurityDownloader) and cls is not ETradeSecurityDownloader:
+            return super().__new__(cls)
+        instrument = kwargs.get("instrument", None)
+        cls = ETradeSecurityDownloader[instrument](*args, **kwargs)
+        return cls(*args, **kwargs)
+
+    def __init__(self, *args, instrument, **kwargs):
+        self.__page = ETradeSecurityPage[instrument](*args, **kwargs)
+        self.__instrument = instrument
+        self.__logger = __logger__
+
+    @property
+    def instrument(self): return self.__instrument
+    @property
+    def logger(self): return self.__logger
+    @property
+    def page(self): return self.__page
+
+
+class ETradeStockDownloader(ETradeSecurityDownloader, register=Variables.Instruments.STOCK):
+    def __init__(self, *args, instrument=Variables.Instruments.STOCK, **kwargs):
+        assert instrument == Variables.Instruments.STOCK
+        super().__init__(*args, instrument=instrument, **kwargs)
+
+    def __call__(self, symbols, *args, **kwargs):
+        assert isinstance(symbols, list)
+        for symbol in symbols:
+            stocks = self.execute(symbol, *args, **kwargs)
+            size = len(stocks.dropna(how="all", inplace=False).index)
+            string = f"Downloaded: {repr(self)}|{str(symbol)}[{size:.0f}]"
+            self.logger.info(string)
+            if bool(stocks.empty): continue
+            yield stocks
+
+    def execute(self, symbol, *args, **kwargs):
+        assert isinstance(symbol, Symbol)
+        parameters = dict(ticker=symbol.ticker)
+        stocks = self.download(*args, **parameters, **kwargs)
+        return stocks
+
+    def download(self, *args, ticker, **kwargs):
+        stocks = self.page(*args, ticker=ticker, **kwargs)
         assert isinstance(stocks, pd.DataFrame)
-        underlying = stocks["price"].mean()
-        variable = Variables.Instruments.OPTION
-        options = self.pages[variable](*args, ticker=contract.ticker, expire=contract.expire, strike=underlying, **kwargs)
-        assert isinstance(options, pd.DataFrame)
-        options["underlying"] = underlying
-        size = self.size(options)
-        string = f"{str(self.title)}: {repr(self)}|{str(contract)}[{size:.0f}]"
-        self.logger.info(string)
+        return stocks
+
+
+class ETradeOptionDownloader(ETradeSecurityDownloader, register=Variables.Instruments.OPTION):
+    def __init__(self, *args, instrument=Variables.Instruments.OPTION, **kwargs):
+        assert instrument == Variables.Instruments.OPTION
+        super().__init__(*args, instrument=Variables.Instruments.OPTION, **kwargs)
+
+    def __call__(self, contracts, *args, **kwargs):
+        assert isinstance(contracts, list)
+        for contract in contracts:
+            options = self.execute(contract, *args, **kwargs)
+            size = len(options.dropna(how="all", inplace=False).index)
+            string = f"Downloaded: {repr(self)}|{str(contract)}[{size:.0f}]"
+            self.logger.info(string)
+            if bool(options.empty): continue
+            yield options
+
+    def execute(self, contract, *args, underlying, **kwargs):
+        assert isinstance(contract, Contract)
+        parameters = dict(ticker=contract.ticker, expire=contract.expire, strike=underlying, underlying=underlying)
+        options = self.download(*args, **parameters, **kwargs)
         return options
 
-
+    def download(self, *args, ticker, expire, strike, underlying, **kwargs):
+        options = self.page(*args, ticker=ticker, expire=expire, strike=strike, **kwargs)
+        assert isinstance(options, pd.DataFrame)
+        options["underlying"] = underlying
+        return options
 
 
 
