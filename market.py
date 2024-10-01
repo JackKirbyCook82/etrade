@@ -19,8 +19,8 @@ from finance.variables import Variables, Symbol, Product
 from webscraping.webpages import WebJsonPage
 from webscraping.webdatas import WebJSON
 from webscraping.weburl import WebURL
+from support.mixins import Empty, Sizing, Logging
 from support.meta import RegistryMeta
-from support.mixins import Sizing
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -174,7 +174,7 @@ class ETradeOptionPage(ETradeSecurityPage, register=Variables.Instruments.OPTION
         return options
 
 
-class ETradeSecurityDownloader(Sizing, metaclass=RegistryMeta):
+class ETradeSecurityDownloader(Sizing, Empty, Logging, metaclass=RegistryMeta):
     def __new__(cls, *args, **kwargs):
         if issubclass(cls, ETradeSecurityDownloader) and cls is not ETradeSecurityDownloader:
             return super().__new__(cls)
@@ -182,21 +182,15 @@ class ETradeSecurityDownloader(Sizing, metaclass=RegistryMeta):
         cls = ETradeSecurityDownloader[instrument](*args, **kwargs)
         return cls(*args, **kwargs)
 
-    def __repr__(self): return str(self.name)
     def __init__(self, *args, instrument, **kwargs):
-        self.__name = kwargs.pop("name", self.__class__.__name__)
+        super().__init__(*args, **kwargs)
         self.__page = ETradeSecurityPage[instrument](*args, **kwargs)
         self.__instrument = instrument
-        self.__logger = __logger__
 
     @property
     def instrument(self): return self.__instrument
     @property
-    def logger(self): return self.__logger
-    @property
     def page(self): return self.__page
-    @property
-    def name(self): return self.__name
 
 
 class ETradeStockDownloader(ETradeSecurityDownloader, register=Variables.Instruments.STOCK):
@@ -231,12 +225,10 @@ class ETradeStockDownloader(ETradeSecurityDownloader, register=Variables.Instrum
         yield from iter(symbols)
 
 
-class ETradeProductDownloader(object):
-    def __repr__(self): return str(self.name)
+class ETradeProductDownloader(Sizing, Empty, Logging):
     def __init__(self, *args, **kwargs):
-        self.__name = kwargs.pop("name", self.__class__.__name__)
+        super().__init__(*args, **kwargs)
         self.__page = ETradeExpirePage(*args, **kwargs)
-        self.__logger = __logger__
 
     def __call__(self, stocks, *args, **kwargs):
         for symbol, dataframe in self.symbols(stocks):
@@ -270,11 +262,7 @@ class ETradeProductDownloader(object):
             yield symbol, dataframe
 
     @property
-    def logger(self): return self.__logger
-    @property
     def page(self): return self.__page
-    @property
-    def name(self): return self.__name
 
 
 class ETradeOptionDownloader(ETradeSecurityDownloader, register=Variables.Instruments.OPTION):
@@ -287,8 +275,9 @@ class ETradeOptionDownloader(ETradeSecurityDownloader, register=Variables.Instru
             parameters = dict(ticker=product.ticker, expire=product.expire, underlying=product.strike, strike=product.strike)
             options = self.execute(*args, **parameters, **kwargs)
             size = self.size(options)
-            string = f"Downloaded: {repr(self)}|{str(product)}[{size:.0f}]"
-            self.logger.info(string)
+            self.log(repr(self), str(product), size)
+#            string = f"Downloaded: {repr(self)}|{str(product)}[{size:.0f}]"
+#            self.logger.info(string)
             if bool(options.empty): continue
             yield options
 
