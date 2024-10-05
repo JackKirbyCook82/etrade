@@ -39,6 +39,21 @@ class ETradeSecurityParsers(object):
     strike = lambda x: np.round(x, 2).astype(np.float32)
 
 
+class ETradeSecurityVariables(object):
+    axes = {Variables.Querys.SYMBOL: ["ticker"], Variables.Querys.CONTRACT: ["ticker", "expire"], Variables.Querys.PRODUCT: ["ticker", "expire", "strike"]}
+    data = {Variables.Instruments.STOCK: ["price", "volume", "current"], Variables.Instruments.OPTION: ["price", "strike", "underlying", "volume", "size", "interest", "current"]}
+
+    def __init__(self, *args, instrument, **kwargs):
+        query = {Variables.Instruments.STOCK: Variables.Querys.SYMBOL, Variables.Instruments.OPTION: Variables.Querys.CONTRACT}[instrument]
+        assert instrument in self.data.keys()
+        self.product = self.axes[Variables.Querys.PRODUCT]
+        self.contract = self.axes[Variables.Querys.CONTRACT]
+        self.symbol = self.axes[Variables.Querys.SYMBOL]
+        self.index = self.axes[query]
+        self.columns = self.data[instrument]
+        self.header = self.index + self.columns
+
+
 class ETradeSecurityURL(WebURL):
     def domain(cls, *args, **kwargs): return "https://api.etrade.com"
 
@@ -174,57 +189,6 @@ class ETradeOptionPage(ETradeSecurityPage, register=Variables.Instruments.OPTION
         return options
 
 
-class ETradeSecurityDownloader(Sizing, Empty, Logging, metaclass=RegistryMeta):
-    def __new__(cls, *args, **kwargs):
-        if issubclass(cls, ETradeSecurityDownloader) and cls is not ETradeSecurityDownloader:
-            return super().__new__(cls)
-        instrument = kwargs.get("instrument", None)
-        cls = ETradeSecurityDownloader[instrument](*args, **kwargs)
-        return cls(*args, **kwargs)
-
-    def __init__(self, *args, instrument, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.__page = ETradeSecurityPage[instrument](*args, **kwargs)
-        self.__instrument = instrument
-
-    @property
-    def instrument(self): return self.__instrument
-    @property
-    def page(self): return self.__page
-
-
-class ETradeStockDownloader(ETradeSecurityDownloader, register=Variables.Instruments.STOCK):
-    def __init__(self, *args, instrument=Variables.Instruments.STOCK, **kwargs):
-        assert instrument == Variables.Instruments.STOCK
-        super().__init__(*args, instrument=instrument, **kwargs)
-
-    def __call__(self, symbols, *args, **kwargs):
-        for symbol in self.symbols(symbols):
-            parameters = dict(ticker=symbol.ticker)
-            stocks = self.execute(*args, **parameters, **kwargs)
-            size = self.size(stocks)
-            string = f"Downloaded: {repr(self)}|{str(symbol)}[{size:.0f}]"
-            self.logger.info(string)
-            if bool(stocks.empty): continue
-            yield stocks
-
-    def execute(self, *args, **kwargs):
-        stocks = self.download(*args, **kwargs)
-        return stocks
-
-    def download(self, *args, ticker, **kwargs):
-        stocks = self.page(*args, ticker=ticker, **kwargs)
-        assert isinstance(stocks, pd.DataFrame)
-        return stocks
-
-    @staticmethod
-    def symbols(symbols):
-        assert isinstance(symbols, (list, Symbol))
-        assert all([isinstance(symbol, Symbol) for symbol in symbols]) if isinstance(symbols, list) else True
-        symbols = [symbols] if not isinstance(symbols, list) else symbols
-        yield from iter(symbols)
-
-
 class ETradeProductDownloader(Sizing, Empty, Logging):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -253,16 +217,68 @@ class ETradeProductDownloader(Sizing, Empty, Logging):
         expires = self.page(*args, ticker=ticker, expires=expires, **kwargs)
         return expires
 
-    @staticmethod
-    def symbols(stocks):
-        assert isinstance(stocks, pd.DataFrame)
-        for ticker, dataframe in stocks.groupby("ticker"):
-            if bool(dataframe.empty): continue
-            symbol = Symbol(ticker)
-            yield symbol, dataframe
+    def symbols(self, bars):
+        assert isinstance(bars, pd.DataFrame)
+        for symbol, dataframe in bars.groupby(self.variables.symbol):
+            if self.empty(dataframe): continue
+            yield Symbol(*symbol), dataframe
 
     @property
     def page(self): return self.__page
+
+
+class ETradeSecurityDownloader(Sizing, Empty, Logging, metaclass=RegistryMeta):
+    def __new__(cls, *args, **kwargs):
+        if issubclass(cls, ETradeSecurityDownloader) and cls is not ETradeSecurityDownloader:
+            return super().__new__(cls)
+        instrument = kwargs.get("instrument", None)
+        cls = ETradeSecurityDownloader[instrument](*args, **kwargs)
+        return cls(*args, **kwargs)
+
+    def __init__(self, *args, instrument, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__variables = ETradeSecurityVariables(*args, instrument=instrument, **kwargs)
+        self.__page = ETradeSecurityPage[instrument](*args, **kwargs)
+        self.__instrument = instrument
+
+    @property
+    def instrument(self): return self.__instrument
+    @property
+    def variables(self): return self.__variables
+    @property
+    def page(self): return self.__page
+
+
+class ETradeStockDownloader(ETradeSecurityDownloader, register=Variables.Instruments.STOCK):
+    def __init__(self, *args, instrument=Variables.Instruments.STOCK, **kwargs):
+        assert instrument == Variables.Instruments.STOCK
+        super().__init__(*args, instrument=instrument, **kwargs)
+
+    def __call__(self, symbols, *args, **kwargs):
+        for symbol in self.symbols(symbols):
+            parameters = dict(ticker=symbol.ticker)
+            stocks = self.execute(*args, **parameters, **kwargs)
+            size = self.size(stocks)
+            string = f"Downloaded: {repr(self)}|{str(symbol)}[{size:.0f}]"
+            self.logger.info(string)
+            if self.empty(stocks): continue
+            yield stocks
+
+    def execute(self, *args, **kwargs):
+        stocks = self.download(*args, **kwargs)
+        return stocks
+
+    def download(self, *args, ticker, **kwargs):
+        stocks = self.page(*args, ticker=ticker, **kwargs)
+        assert isinstance(stocks, pd.DataFrame)
+        return stocks
+
+    @staticmethod
+    def symbols(symbols):
+        assert isinstance(symbols, (list, Symbol))
+        assert all([isinstance(symbol, Symbol) for symbol in symbols]) if isinstance(symbols, list) else True
+        symbols = [symbols] if not isinstance(symbols, list) else symbols
+        yield from iter(symbols)
 
 
 class ETradeOptionDownloader(ETradeSecurityDownloader, register=Variables.Instruments.OPTION):
@@ -275,10 +291,9 @@ class ETradeOptionDownloader(ETradeSecurityDownloader, register=Variables.Instru
             parameters = dict(ticker=product.ticker, expire=product.expire, underlying=product.strike, strike=product.strike)
             options = self.execute(*args, **parameters, **kwargs)
             size = self.size(options)
-            self.log(repr(self), str(product), size)
-#            string = f"Downloaded: {repr(self)}|{str(product)}[{size:.0f}]"
-#            self.logger.info(string)
-            if bool(options.empty): continue
+            string = f"Downloaded: {repr(self)}|{str(product)}[{size:.0f}]"
+            self.logger.info(string)
+            if self.empty(options): continue
             yield options
 
     def execute(self, *args, **kwargs):
