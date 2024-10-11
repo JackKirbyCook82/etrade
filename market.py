@@ -11,15 +11,16 @@ import logging
 import regex as re
 import numpy as np
 import pandas as pd
+from abc import ABC
 from datetime import date as Date
 from datetime import datetime as Datetime
 from datetime import timezone as Timezone
 
-from finance.variables import Variables, Symbol, Product
+from finance.variables import Variables, Querys
 from webscraping.webpages import WebJsonPage
 from webscraping.webdatas import WebJSON
 from webscraping.weburl import WebURL
-from support.mixins import Emptying, Sizing, Logging
+from support.mixins import Pipelining, Emptying, Sizing, Logging, Sourcing
 from support.meta import RegistryMeta
 
 __version__ = "1.0.0"
@@ -30,28 +31,21 @@ __license__ = "MIT License"
 __logger__ = logging.getLogger(__name__)
 
 
-class ETradeSecurityParsers(object):
+class ETradeMarketParsers(object):
     timestamp = lambda x: Datetime.fromtimestamp(int(x), Timezone.utc).astimezone(pytz.timezone("US/Central"))
-    datetime = lambda x: np.datetime64(ETradeSecurityParsers.timestamp(x))
-    date = lambda x: np.datetime64(ETradeSecurityParsers.timestamp(x).date(), "D")
+    datetime = lambda x: np.datetime64(ETradeMarketParsers.timestamp(x))
+    date = lambda x: np.datetime64(ETradeMarketParsers.timestamp(x).date(), "D")
     quote = lambda x: Datetime.strptime(re.findall("(?<=:)[0-9:]+(?=:CALL|:PUT)", x)[0], "%Y:%m:%d")
-    expires = lambda x: np.datetime64(ETradeSecurityParsers.quote(x).date(), "D")
+    expires = lambda x: np.datetime64(ETradeMarketParsers.quote(x).date(), "D")
     strike = lambda x: np.round(x, 2).astype(np.float32)
 
 
-class ETradeSecurityVariables(object):
-    axes = {Variables.Querys.SYMBOL: ["ticker"], Variables.Querys.CONTRACT: ["ticker", "expire"], Variables.Querys.PRODUCT: ["ticker", "expire", "strike"]}
-    data = {Variables.Instruments.STOCK: ["price", "volume", "current"], Variables.Instruments.OPTION: ["price", "strike", "underlying", "volume", "size", "interest", "current"]}
-
+class ETradeMarketVariables(object):
     def __init__(self, *args, instrument, **kwargs):
-        query = {Variables.Instruments.STOCK: Variables.Querys.SYMBOL, Variables.Instruments.OPTION: Variables.Querys.CONTRACT}[instrument]
-        assert instrument in self.data.keys()
-        self.product = self.axes[Variables.Querys.PRODUCT]
-        self.contract = self.axes[Variables.Querys.CONTRACT]
-        self.symbol = self.axes[Variables.Querys.SYMBOL]
-        self.index = self.axes[query]
-        self.columns = self.data[instrument]
-        self.header = self.index + self.columns
+        index = {Variables.Instruments.STOCK: ["ticker"], Variables.Instruments.OPTION: ["ticker", "expire", "strike"]}
+        columns = {Variables.Instruments.STOCK: ["price", "volume", "current"], Variables.Instruments.OPTION: ["price", "strike", "underlying", "volume", "size", "interest", "current"]}
+        self.columns = columns[instrument]
+        self.index = index[instrument]
 
 
 class ETradeSecurityURL(WebURL):
@@ -86,7 +80,7 @@ class ETradeOptionURL(ETradeSecurityURL):
 
 class ETradeStockData(WebJSON, locator="//QuoteResponse/QuoteData[]", collection=True):
     class Ticker(WebJSON.Text, locator="//Product/symbol", key="ticker", parser=str): pass
-    class Current(WebJSON.Text, locator="//dateTimeUTC", key="current", parser=ETradeSecurityParsers.datetime): pass
+    class Current(WebJSON.Text, locator="//dateTimeUTC", key="current", parser=ETradeMarketParsers.datetime): pass
     class Bid(WebJSON.Text, locator="//All/bid", key="bid", parser=np.float32): pass
     class Demand(WebJSON.Text, locator="//All/bidSize", key="demand", parser=np.int32): pass
     class Ask(WebJSON.Text, locator="//All/ask", key="ask", parser=np.float32): pass
@@ -105,9 +99,9 @@ class ETradeExpireData(WebJSON, locator="//OptionExpireDateResponse/ExpirationDa
 class ETradeOptionData(WebJSON, locator="//OptionChainResponse/OptionPair[]", collection=True, optional=True):
     class Call(WebJSON, locator="//Call", key="call"):
         class Ticker(WebJSON.Text, locator="//symbol", key="ticker", parser=str): pass
-        class Current(WebJSON.Text, locator="//timeStamp", key="current", parser=ETradeSecurityParsers.datetime): pass
-        class Expire(WebJSON.Text, locator="//quoteDetail", key="expire", parser=ETradeSecurityParsers.expires): pass
-        class Strike(WebJSON.Text, locator="//strikePrice", key="strike", parser=ETradeSecurityParsers.strike): pass
+        class Current(WebJSON.Text, locator="//timeStamp", key="current", parser=ETradeMarketParsers.datetime): pass
+        class Expire(WebJSON.Text, locator="//quoteDetail", key="expire", parser=ETradeMarketParsers.expires): pass
+        class Strike(WebJSON.Text, locator="//strikePrice", key="strike", parser=ETradeMarketParsers.strike): pass
         class Bid(WebJSON.Text, locator="//bid", key="bid", parser=np.float32): pass
         class Ask(WebJSON.Text, locator="//ask", key="ask", parser=np.float32): pass
         class Demand(WebJSON.Text, locator="//bidSize", key="demand", parser=np.int32): pass
@@ -117,9 +111,9 @@ class ETradeOptionData(WebJSON, locator="//OptionChainResponse/OptionPair[]", co
 
     class Put(WebJSON, locator="//Put", key="put"):
         class Ticker(WebJSON.Text, locator="//symbol", key="ticker", parser=str): pass
-        class Current(WebJSON.Text, locator="//timeStamp", key="current", parser=ETradeSecurityParsers.datetime): pass
-        class Expire(WebJSON.Text, locator="//quoteDetail", key="expire", parser=ETradeSecurityParsers.expires): pass
-        class Strike(WebJSON.Text, locator="//strikePrice", key="strike", parser=ETradeSecurityParsers.strike): pass
+        class Current(WebJSON.Text, locator="//timeStamp", key="current", parser=ETradeMarketParsers.datetime): pass
+        class Expire(WebJSON.Text, locator="//quoteDetail", key="expire", parser=ETradeMarketParsers.expires): pass
+        class Strike(WebJSON.Text, locator="//strikePrice", key="strike", parser=ETradeMarketParsers.strike): pass
         class Bid(WebJSON.Text, locator="//bid", key="bid", parser=np.float32): pass
         class Ask(WebJSON.Text, locator="//ask", key="ask", parser=np.float32): pass
         class Demand(WebJSON.Text, locator="//bidSize", key="demand", parser=np.int32): pass
@@ -189,9 +183,12 @@ class ETradeOptionPage(ETradeSecurityPage, register=Variables.Instruments.OPTION
         return options
 
 
-class ETradeProductDownloader(Sizing, Emptying, Logging):
+class ETradeProductDownloader(Pipelining, Sourcing, Sizing, Emptying, Logging):
+    def __init_subclass__(cls, *args, **kwargs): pass
     def __init__(self, *args, **kwargs):
         Logging.__init__(self, *args, **kwargs)
+        Pipelining.__init__(self, *args, **kwargs)
+        self.__variables = ETradeMarketVariables(*args, **kwargs)
         self.__page = ETradeExpirePage(*args, **kwargs)
 
     def execute(self, stocks, *args, expires, **kwargs):
@@ -206,34 +203,30 @@ class ETradeProductDownloader(Sizing, Emptying, Logging):
     def download(self, stocks, *args, ticker, expires, **kwargs):
         assert isinstance(stocks, pd.DataFrame)
         assert len(set(stocks["ticker"].values)) == 1
-        underlying = stocks.where(stocks[ticker] == ticker).dropna(how="all", inplace=False)
+        underlying = stocks.where(stocks["ticker"] == ticker).dropna(how="all", inplace=False)
         underlying = underlying["price"].mean()
         expires = self.page(*args, ticker=ticker, expires=expires, **kwargs)
-        products = {Product(ticker, expire, underlying): underlying for expire in expires}
+        products = [Querys.Product(ticker, expire, underlying) for expire in expires]
         return products
 
-    def symbols(self, bars):
-        assert isinstance(bars, pd.DataFrame)
-        for symbol, dataframe in bars.groupby(self.variables.symbol):
-            if self.empty(dataframe): continue
-            yield Symbol(*symbol), dataframe
-
+    @property
+    def variables(self): return self.__variables
     @property
     def page(self): return self.__page
 
 
-class ETradeSecurityDownloader(Sizing, Emptying, Logging, metaclass=RegistryMeta):
+class ETradeSecurityDownloader(Pipelining, Sourcing, Sizing, Emptying, Logging, ABC, metaclass=RegistryMeta):
     def __init_subclass__(cls, *args, **kwargs): pass
     def __new__(cls, *args, **kwargs):
         if issubclass(cls, ETradeSecurityDownloader) and cls is not ETradeSecurityDownloader:
-            return super().__new__(cls)
+            return Pipelining.__new__(cls, *args, **kwargs)
         instrument = kwargs.get("instrument", None)
-        cls = ETradeSecurityDownloader[instrument](*args, **kwargs)
-        return cls(*args, **kwargs)
+        return ETradeSecurityDownloader[instrument](*args, **kwargs)
 
     def __init__(self, *args, instrument, **kwargs):
         Logging.__init__(self, *args, **kwargs)
-        self.__variables = ETradeSecurityVariables(*args, instrument=instrument, **kwargs)
+        Pipelining.__init__(self, *args, **kwargs)
+        self.__variables = ETradeMarketVariables(*args, instrument=instrument, **kwargs)
         self.__page = ETradeSecurityPage[instrument](*args, **kwargs)
         self.__instrument = instrument
 
@@ -265,13 +258,6 @@ class ETradeStockDownloader(ETradeSecurityDownloader, register=Variables.Instrum
         assert isinstance(stocks, pd.DataFrame)
         return stocks
 
-    @staticmethod
-    def symbols(symbols):
-        assert isinstance(symbols, (list, Symbol))
-        assert all([isinstance(symbol, Symbol) for symbol in symbols]) if isinstance(symbols, list) else True
-        symbols = [symbols] if not isinstance(symbols, list) else symbols
-        yield from iter(symbols)
-
 
 class ETradeOptionDownloader(ETradeSecurityDownloader, register=Variables.Instruments.OPTION):
     def __init__(self, *args, instrument=Variables.Instruments.OPTION, **kwargs):
@@ -293,13 +279,6 @@ class ETradeOptionDownloader(ETradeSecurityDownloader, register=Variables.Instru
         assert isinstance(options, pd.DataFrame)
         options["underlying"] = underlying
         return options
-
-    @staticmethod
-    def products(products):
-        assert isinstance(products, (list, Symbol))
-        assert all([products(product, Product) for product in products]) if isinstance(products, list) else True
-        products = [products] if not isinstance(products, list) else products
-        yield from iter(products)
 
 
 
