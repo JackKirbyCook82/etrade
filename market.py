@@ -40,14 +40,6 @@ class ETradeMarketParsers(object):
     strike = lambda x: np.round(x, 2).astype(np.float32)
 
 
-class ETradeMarketVariables(object):
-    def __init__(self, *args, instrument, **kwargs):
-        index = {Variables.Instruments.STOCK: ["ticker"], Variables.Instruments.OPTION: ["ticker", "expire", "strike"]}
-        columns = {Variables.Instruments.STOCK: ["price", "volume", "current"], Variables.Instruments.OPTION: ["price", "strike", "underlying", "volume", "size", "interest", "current"]}
-        self.columns = columns[instrument]
-        self.index = index[instrument]
-
-
 class ETradeSecurityURL(WebURL):
     def domain(cls, *args, **kwargs): return "https://api.etrade.com"
 
@@ -183,16 +175,17 @@ class ETradeOptionPage(ETradeSecurityPage, register=Variables.Instruments.OPTION
         return options
 
 
-class ETradeProductDownloader(Pipelining, Sourcing, Sizing, Emptying, Logging):
+class ETradeProductDownloader(Pipelining, Sourcing, Logging, Sizing, Emptying):
     def __init_subclass__(cls, *args, **kwargs): pass
     def __init__(self, *args, **kwargs):
         Logging.__init__(self, *args, **kwargs)
         Pipelining.__init__(self, *args, **kwargs)
-        self.__variables = ETradeMarketVariables(*args, **kwargs)
         self.__page = ETradeExpirePage(*args, **kwargs)
 
     def execute(self, stocks, *args, expires, **kwargs):
-        for symbol, dataframe in self.symbols(stocks):
+        assert isinstance(stocks, pd.DataFrame)
+        for symbol, dataframe in self.source(stocks, Querys.Symbol):
+            if self.empty(dataframe): continue
             parameters = dict(ticker=symbol.ticker, expires=expires)
             products = self.download(dataframe, *args, **parameters, **kwargs)
             string = f"Downloaded: {repr(self)}|{str(symbol)}[{len(products):.0f}]"
@@ -204,18 +197,16 @@ class ETradeProductDownloader(Pipelining, Sourcing, Sizing, Emptying, Logging):
         assert isinstance(stocks, pd.DataFrame)
         assert len(set(stocks["ticker"].values)) == 1
         underlying = stocks.where(stocks["ticker"] == ticker).dropna(how="all", inplace=False)
-        underlying = underlying["price"].mean()
+        underlying = round(underlying["price"].mean(), 2)
         expires = self.page(*args, ticker=ticker, expires=expires, **kwargs)
-        products = [Querys.Product(ticker, expire, underlying) for expire in expires]
+        products = [Querys.Product([ticker, expire, underlying]) for expire in expires]
         return products
 
-    @property
-    def variables(self): return self.__variables
     @property
     def page(self): return self.__page
 
 
-class ETradeSecurityDownloader(Pipelining, Sourcing, Sizing, Emptying, Logging, ABC, metaclass=RegistryMeta):
+class ETradeSecurityDownloader(Pipelining, Logging, Sizing, Emptying, ABC, metaclass=RegistryMeta):
     def __init_subclass__(cls, *args, **kwargs): pass
     def __new__(cls, *args, **kwargs):
         if issubclass(cls, ETradeSecurityDownloader) and cls is not ETradeSecurityDownloader:
@@ -226,14 +217,8 @@ class ETradeSecurityDownloader(Pipelining, Sourcing, Sizing, Emptying, Logging, 
     def __init__(self, *args, instrument, **kwargs):
         Logging.__init__(self, *args, **kwargs)
         Pipelining.__init__(self, *args, **kwargs)
-        self.__variables = ETradeMarketVariables(*args, instrument=instrument, **kwargs)
         self.__page = ETradeSecurityPage[instrument](*args, **kwargs)
-        self.__instrument = instrument
 
-    @property
-    def instrument(self): return self.__instrument
-    @property
-    def variables(self): return self.__variables
     @property
     def page(self): return self.__page
 
@@ -244,7 +229,10 @@ class ETradeStockDownloader(ETradeSecurityDownloader, register=Variables.Instrum
         ETradeSecurityDownloader.__init__(self, *args, instrument=instrument, **kwargs)
 
     def execute(self, symbols, *args, **kwargs):
-        for symbol in self.symbols(symbols):
+        assert isinstance(symbols, list) or isinstance(symbols, Querys.Symbol)
+        symbols = symbols if isinstance(symbols, list) else [symbols]
+        assert all([isinstance(symbol, Querys.Symbol) for symbol in symbols])
+        for symbol in list(symbols):
             parameters = dict(ticker=symbol.ticker)
             stocks = self.download(*args, **parameters, **kwargs)
             size = self.size(stocks)
@@ -265,7 +253,10 @@ class ETradeOptionDownloader(ETradeSecurityDownloader, register=Variables.Instru
         ETradeSecurityDownloader.__init__(self, *args, instrument=Variables.Instruments.OPTION, **kwargs)
 
     def execute(self, products, *args, **kwargs):
-        for product in self.products(products):
+        assert isinstance(products, list) or isinstance(products, Querys.Product)
+        products = products if isinstance(products, list) else [products]
+        assert all([isinstance(product, Querys.Product) for product in products])
+        for product in list(products):
             parameters = dict(ticker=product.ticker, expire=product.expire, underlying=product.strike, strike=product.strike)
             options = self.download(*args, **parameters, **kwargs)
             size = self.size(options)
