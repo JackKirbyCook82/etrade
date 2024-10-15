@@ -184,7 +184,9 @@ class ETradeProductDownloader(Pipelining, Sourcing, Logging, Sizing, Emptying):
 
     def execute(self, stocks, *args, expires, **kwargs):
         assert isinstance(stocks, pd.DataFrame)
-        for symbol, dataframe in self.source(stocks, Querys.Symbol):
+        if self.empty(stocks): return
+        for symbol, dataframe in self.source(stocks, keys=list(Querys.Symbol)):
+            symbol = Querys.Symbol(symbol)
             if self.empty(dataframe): continue
             parameters = dict(ticker=symbol.ticker, expires=expires)
             products = self.download(dataframe, *args, **parameters, **kwargs)
@@ -232,6 +234,7 @@ class ETradeStockDownloader(ETradeSecurityDownloader, register=Variables.Instrum
         assert isinstance(symbols, list) or isinstance(symbols, Querys.Symbol)
         symbols = symbols if isinstance(symbols, list) else [symbols]
         assert all([isinstance(symbol, Querys.Symbol) for symbol in symbols])
+        if not bool(symbols): return
         for symbol in list(symbols):
             parameters = dict(ticker=symbol.ticker)
             stocks = self.download(*args, **parameters, **kwargs)
@@ -256,6 +259,7 @@ class ETradeOptionDownloader(ETradeSecurityDownloader, register=Variables.Instru
         assert isinstance(products, list) or isinstance(products, Querys.Product)
         products = products if isinstance(products, list) else [products]
         assert all([isinstance(product, Querys.Product) for product in products])
+        if not bool(products): return
         for product in list(products):
             parameters = dict(ticker=product.ticker, expire=product.expire, underlying=product.strike, strike=product.strike)
             options = self.download(*args, **parameters, **kwargs)
