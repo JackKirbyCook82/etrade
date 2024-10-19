@@ -20,7 +20,7 @@ from finance.variables import Variables, Querys
 from webscraping.webpages import WebJsonPage
 from webscraping.webdatas import WebJSON
 from webscraping.weburl import WebURL
-from support.mixins import Pipelining, Emptying, Sizing, Logging, Sourcing
+from support.mixins import Function, Emptying, Sizing, Logging
 from support.meta import RegistryMeta
 
 __version__ = "1.0.0"
@@ -175,25 +175,24 @@ class ETradeOptionPage(ETradeSecurityPage, register=Variables.Instruments.OPTION
         return options
 
 
-class ETradeProductDownloader(Pipelining, Sourcing, Logging, Sizing, Emptying):
+class ETradeProductDownloader(Function, Logging, Sizing, Emptying):
     def __init_subclass__(cls, *args, **kwargs): pass
     def __init__(self, *args, **kwargs):
+        Function.__init__(self, *args, **kwargs)
         Logging.__init__(self, *args, **kwargs)
-        Pipelining.__init__(self, *args, **kwargs)
         self.__page = ETradeExpirePage(*args, **kwargs)
 
-    def execute(self, stocks, *args, expires, **kwargs):
-        assert isinstance(stocks, pd.DataFrame)
+    def execute(self, source, *args, expires, **kwargs):
+        assert isinstance(source, tuple)
+        symbol, stocks = source
+        assert isinstance(symbol, Querys.Symbol) and isinstance(stocks, pd.DataFrame)
         if self.empty(stocks): return
-        for symbol, dataframe in self.source(stocks, keys=list(Querys.Symbol)):
-            symbol = Querys.Symbol(symbol)
-            if self.empty(dataframe): continue
-            parameters = dict(ticker=symbol.ticker, expires=expires)
-            products = self.download(dataframe, *args, **parameters, **kwargs)
-            string = f"Downloaded: {repr(self)}|{str(symbol)}[{len(products):.0f}]"
-            self.logger.info(string)
-            if not bool(products): continue
-            yield products
+        parameters = dict(ticker=symbol.ticker, expires=expires)
+        products = self.download(stocks, *args, **parameters, **kwargs)
+        string = f"Downloaded: {repr(self)}|{str(symbol)}[{len(products):.0f}]"
+        self.logger.info(string)
+        for product in iter(products):
+            yield product
 
     def download(self, stocks, *args, ticker, expires, **kwargs):
         assert isinstance(stocks, pd.DataFrame)
@@ -208,17 +207,16 @@ class ETradeProductDownloader(Pipelining, Sourcing, Logging, Sizing, Emptying):
     def page(self): return self.__page
 
 
-class ETradeSecurityDownloader(Pipelining, Logging, Sizing, Emptying, ABC, metaclass=RegistryMeta):
+class ETradeSecurityDownloader(Function, Logging, Sizing, Emptying, ABC, metaclass=RegistryMeta):
     def __init_subclass__(cls, *args, **kwargs): pass
     def __new__(cls, *args, **kwargs):
         if issubclass(cls, ETradeSecurityDownloader) and cls is not ETradeSecurityDownloader:
-            return Pipelining.__new__(cls, *args, **kwargs)
+            return Function.__new__(cls)
         instrument = kwargs.get("instrument", None)
         return ETradeSecurityDownloader[instrument](*args, **kwargs)
 
     def __init__(self, *args, instrument, **kwargs):
         Logging.__init__(self, *args, **kwargs)
-        Pipelining.__init__(self, *args, **kwargs)
         self.__page = ETradeSecurityPage[instrument](*args, **kwargs)
 
     @property
@@ -230,19 +228,17 @@ class ETradeStockDownloader(ETradeSecurityDownloader, register=Variables.Instrum
         assert instrument == Variables.Instruments.STOCK
         ETradeSecurityDownloader.__init__(self, *args, instrument=instrument, **kwargs)
 
-    def execute(self, symbols, *args, **kwargs):
-        assert isinstance(symbols, list) or isinstance(symbols, Querys.Symbol)
-        symbols = symbols if isinstance(symbols, list) else [symbols]
-        assert all([isinstance(symbol, Querys.Symbol) for symbol in symbols])
-        if not bool(symbols): return
-        for symbol in list(symbols):
-            parameters = dict(ticker=symbol.ticker)
-            stocks = self.download(*args, **parameters, **kwargs)
-            size = self.size(stocks)
-            string = f"Downloaded: {repr(self)}|{str(symbol)}[{size:.0f}]"
-            self.logger.info(string)
-            if self.empty(stocks): continue
-            yield stocks
+    def execute(self, source, *args, **kwargs):
+        assert isinstance(source, tuple)
+        symbol = source[0]
+        assert isinstance(symbol, Querys.Symbol)
+        parameters = dict(ticker=symbol.ticker)
+        stocks = self.download(*args, **parameters, **kwargs)
+        size = self.size(stocks)
+        string = f"Downloaded: {repr(self)}|{str(symbol)}[{size:.0f}]"
+        self.logger.info(string)
+        if self.empty(stocks): return
+        return stocks
 
     def download(self, *args, ticker, **kwargs):
         stocks = self.page(*args, ticker=ticker, **kwargs)
@@ -255,19 +251,17 @@ class ETradeOptionDownloader(ETradeSecurityDownloader, register=Variables.Instru
         assert instrument == Variables.Instruments.OPTION
         ETradeSecurityDownloader.__init__(self, *args, instrument=Variables.Instruments.OPTION, **kwargs)
 
-    def execute(self, products, *args, **kwargs):
-        assert isinstance(products, list) or isinstance(products, Querys.Product)
-        products = products if isinstance(products, list) else [products]
-        assert all([isinstance(product, Querys.Product) for product in products])
-        if not bool(products): return
-        for product in list(products):
-            parameters = dict(ticker=product.ticker, expire=product.expire, underlying=product.strike, strike=product.strike)
-            options = self.download(*args, **parameters, **kwargs)
-            size = self.size(options)
-            string = f"Downloaded: {repr(self)}|{str(product)}[{size:.0f}]"
-            self.logger.info(string)
-            if self.empty(options): continue
-            yield options
+    def execute(self, source, *args, **kwargs):
+        assert isinstance(source, tuple)
+        product = source[0]
+        assert isinstance(product, Querys.Product)
+        parameters = dict(ticker=product.ticker, expire=product.expire, underlying=product.strike, strike=product.strike)
+        options = self.download(*args, **parameters, **kwargs)
+        size = self.size(options)
+        string = f"Downloaded: {repr(self)}|{str(product)}[{size:.0f}]"
+        self.logger.info(string)
+        if self.empty(options): return
+        return options
 
     def download(self, *args, ticker, expire, strike, underlying, **kwargs):
         options = self.page(*args, ticker=ticker, expire=expire, strike=strike, **kwargs)
