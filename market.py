@@ -70,7 +70,7 @@ class ETradeOptionURL(ETradeSecurityURL):
     def options(*args, **kwargs): return {"optionCategory": "STANDARD", "chainType": "CALLPUT", "skipAdjusted": "true"}
 
 
-class ETradeStockData(WebJSON, locator="//QuoteResponse/QuoteData[]", collection=True):
+class ETradeStockData(WebJSON, locator="//QuoteResponse/QuoteData[]", multiple=True):
     class Ticker(WebJSON.Text, locator="//Product/symbol", key="ticker", parser=str): pass
     class Current(WebJSON.Text, locator="//dateTimeUTC", key="current", parser=ETradeMarketParsers.datetime): pass
     class Bid(WebJSON.Text, locator="//All/bid", key="bid", parser=np.float32): pass
@@ -79,7 +79,7 @@ class ETradeStockData(WebJSON, locator="//QuoteResponse/QuoteData[]", collection
     class Supply(WebJSON.Text, locator="//All/askSize", key="supply", parser=np.int32): pass
     class Volume(WebJSON.Text, locator="//All/totalVolume", key="volume", parser=np.int64): pass
 
-class ETradeExpireData(WebJSON, locator="//OptionExpireDateResponse/ExpirationDate[]", collection=True, optional=True):
+class ETradeExpireData(WebJSON, locator="//OptionExpireDateResponse/ExpirationDate[]", multiple=True, optional=True):
     class Year(WebJSON.Text, locator="//year", key="year", parser=np.int16): pass
     class Month(WebJSON.Text, locator="//month", key="month", parser=np.int16): pass
     class Day(WebJSON.Text, locator="//day", key="day", parser=np.int16): pass
@@ -88,7 +88,7 @@ class ETradeExpireData(WebJSON, locator="//OptionExpireDateResponse/ExpirationDa
         return Date(year=self["year"].data, month=self["month"].data, day=self["day"].data)
 
 
-class ETradeOptionData(WebJSON, locator="//OptionChainResponse/OptionPair[]", collection=True, optional=True):
+class ETradeOptionData(WebJSON, locator="//OptionChainResponse/OptionPair[]", multiple=True, optional=True):
     class Call(WebJSON, locator="//Call", key="call"):
         class Ticker(WebJSON.Text, locator="//symbol", key="ticker", parser=str): pass
         class Current(WebJSON.Text, locator="//timeStamp", key="current", parser=ETradeMarketParsers.datetime): pass
@@ -182,10 +182,8 @@ class ETradeProductDownloader(Function, Logging, Sizing, Emptying):
         Logging.__init__(self, *args, **kwargs)
         self.__page = ETradeExpirePage(*args, **kwargs)
 
-    def execute(self, source, *args, expires, **kwargs):
-        assert isinstance(source, tuple)
-        symbol, stocks = source
-        assert isinstance(symbol, Querys.Symbol) and isinstance(stocks, pd.DataFrame)
+    def execute(self, symbol, stocks, *args, expires, **kwargs):
+        assert isinstance(stocks, pd.DataFrame)
         if self.empty(stocks): return
         parameters = dict(ticker=symbol.ticker, expires=expires)
         products = self.download(stocks, *args, **parameters, **kwargs)
@@ -228,9 +226,7 @@ class ETradeStockDownloader(ETradeSecurityDownloader, register=Variables.Instrum
         assert instrument == Variables.Instruments.STOCK
         ETradeSecurityDownloader.__init__(self, *args, instrument=instrument, **kwargs)
 
-    def execute(self, source, *args, **kwargs):
-        assert isinstance(source, tuple)
-        symbol = source[0]
+    def execute(self, symbol, *args, **kwargs):
         assert isinstance(symbol, Querys.Symbol)
         parameters = dict(ticker=symbol.ticker)
         stocks = self.download(*args, **parameters, **kwargs)
@@ -251,9 +247,7 @@ class ETradeOptionDownloader(ETradeSecurityDownloader, register=Variables.Instru
         assert instrument == Variables.Instruments.OPTION
         ETradeSecurityDownloader.__init__(self, *args, instrument=Variables.Instruments.OPTION, **kwargs)
 
-    def execute(self, source, *args, **kwargs):
-        assert isinstance(source, tuple)
-        product = source[0]
+    def execute(self, product, *args, **kwargs):
         assert isinstance(product, Querys.Product)
         parameters = dict(ticker=product.ticker, expire=product.expire, underlying=product.strike, strike=product.strike)
         options = self.download(*args, **parameters, **kwargs)
