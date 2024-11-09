@@ -20,12 +20,12 @@ from finance.variables import Variables, Querys
 from webscraping.webpages import WebJsonPage
 from webscraping.webdatas import WebJSON
 from webscraping.weburl import WebURL
-from support.mixins import Function, Emptying, Sizing, Logging
+from support.mixins import Emptying, Sizing, Logging
 from support.meta import RegistryMeta
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["ETradeProductDownloader", "ETradeSecurityDownloader"]
+__all__ = ["ETradeProductDownloader", "ETradeStockDownloader", "ETradeOptionDownloader"]
 __copyright__ = "Copyright 2023, Jack Kirby Cook"
 __license__ = "MIT License"
 __logger__ = logging.getLogger(__name__)
@@ -175,11 +175,10 @@ class ETradeOptionPage(ETradeSecurityPage, register=Variables.Instruments.OPTION
         return options
 
 
-class ETradeProductDownloader(Function, Logging, Sizing, Emptying):
+class ETradeProductDownloader(Logging, Sizing, Emptying):
     def __init_subclass__(cls, *args, **kwargs): pass
     def __init__(self, *args, **kwargs):
-        Function.__init__(self, *args, **kwargs)
-        Logging.__init__(self, *args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.__page = ETradeExpirePage(*args, **kwargs)
 
     def execute(self, symbol, stocks, *args, expires, **kwargs):
@@ -189,8 +188,7 @@ class ETradeProductDownloader(Function, Logging, Sizing, Emptying):
         products = self.download(stocks, *args, **parameters, **kwargs)
         string = f"Downloaded: {repr(self)}|{str(symbol)}[{len(products):.0f}]"
         self.logger.info(string)
-        for product in iter(products):
-            yield product
+        yield from iter(products)
 
     def download(self, stocks, *args, ticker, expires, **kwargs):
         assert isinstance(stocks, pd.DataFrame)
@@ -199,32 +197,25 @@ class ETradeProductDownloader(Function, Logging, Sizing, Emptying):
         underlying = round(underlying["price"].mean(), 2)
         expires = self.page(*args, ticker=ticker, expires=expires, **kwargs)
         products = [Querys.Product([ticker, expire, underlying]) for expire in expires]
-        return products
+        yield from iter(products)
 
     @property
     def page(self): return self.__page
 
 
-class ETradeSecurityDownloader(Function, Logging, Sizing, Emptying, ABC, metaclass=RegistryMeta):
-    def __init_subclass__(cls, *args, **kwargs): pass
-    def __new__(cls, *args, **kwargs):
-        if issubclass(cls, ETradeSecurityDownloader) and cls is not ETradeSecurityDownloader:
-            return Function.__new__(cls)
-        instrument = kwargs.get("instrument", None)
-        return ETradeSecurityDownloader[instrument](*args, **kwargs)
-
+class ETradeSecurityDownloader(Logging, Sizing, Emptying, ABC):
     def __init__(self, *args, instrument, **kwargs):
-        Logging.__init__(self, *args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.__page = ETradeSecurityPage[instrument](*args, **kwargs)
 
     @property
     def page(self): return self.__page
 
 
-class ETradeStockDownloader(ETradeSecurityDownloader, register=Variables.Instruments.STOCK):
+class ETradeStockDownloader(ETradeSecurityDownloader):
     def __init__(self, *args, instrument=Variables.Instruments.STOCK, **kwargs):
         assert instrument == Variables.Instruments.STOCK
-        ETradeSecurityDownloader.__init__(self, *args, instrument=instrument, **kwargs)
+        super().__init__(*args, instrument=instrument, **kwargs)
 
     def execute(self, symbol, *args, **kwargs):
         assert isinstance(symbol, Querys.Symbol)
@@ -242,10 +233,10 @@ class ETradeStockDownloader(ETradeSecurityDownloader, register=Variables.Instrum
         return stocks
 
 
-class ETradeOptionDownloader(ETradeSecurityDownloader, register=Variables.Instruments.OPTION):
+class ETradeOptionDownloader(ETradeSecurityDownloader):
     def __init__(self, *args, instrument=Variables.Instruments.OPTION, **kwargs):
         assert instrument == Variables.Instruments.OPTION
-        ETradeSecurityDownloader.__init__(self, *args, instrument=Variables.Instruments.OPTION, **kwargs)
+        super().__init__(*args, instrument=Variables.Instruments.OPTION, **kwargs)
 
     def execute(self, product, *args, **kwargs):
         assert isinstance(product, Querys.Product)
