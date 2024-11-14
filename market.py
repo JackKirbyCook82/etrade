@@ -7,7 +7,6 @@ Created on Weds Jul 19 2023
 """
 
 import pytz
-import logging
 import regex as re
 import numpy as np
 import pandas as pd
@@ -28,7 +27,6 @@ __author__ = "Jack Kirby Cook"
 __all__ = ["ETradeProductDownloader", "ETradeStockDownloader", "ETradeOptionDownloader"]
 __copyright__ = "Copyright 2023, Jack Kirby Cook"
 __license__ = "MIT License"
-__logger__ = logging.getLogger(__name__)
 
 
 class ETradeMarketParsers(object):
@@ -182,12 +180,12 @@ class ETradeProductDownloader(Logging, Sizing, Emptying):
         self.__page = ETradeExpirePage(*args, **kwargs)
 
     def execute(self, symbol, stocks, *args, expires, **kwargs):
-        assert isinstance(stocks, pd.DataFrame)
         if self.empty(stocks): return
         parameters = dict(ticker=symbol.ticker, expires=expires)
         products = self.download(stocks, *args, **parameters, **kwargs)
         string = f"Downloaded: {repr(self)}|{str(symbol)}[{len(products):.0f}]"
         self.logger.info(string)
+        if not bool(products): return
         yield from iter(products)
 
     def download(self, stocks, *args, ticker, expires, **kwargs):
@@ -197,7 +195,7 @@ class ETradeProductDownloader(Logging, Sizing, Emptying):
         underlying = round(underlying["price"].mean(), 2)
         expires = self.page(*args, ticker=ticker, expires=expires, **kwargs)
         products = [Querys.Product([ticker, expire, underlying]) for expire in expires]
-        yield from iter(products)
+        return products
 
     @property
     def page(self): return self.__page
@@ -218,7 +216,7 @@ class ETradeStockDownloader(ETradeSecurityDownloader):
         super().__init__(*args, instrument=instrument, **kwargs)
 
     def execute(self, symbol, *args, **kwargs):
-        assert isinstance(symbol, Querys.Symbol)
+        if symbol is None: return
         parameters = dict(ticker=symbol.ticker)
         stocks = self.download(*args, **parameters, **kwargs)
         size = self.size(stocks)
@@ -239,7 +237,7 @@ class ETradeOptionDownloader(ETradeSecurityDownloader):
         super().__init__(*args, instrument=Variables.Instruments.OPTION, **kwargs)
 
     def execute(self, product, *args, **kwargs):
-        assert isinstance(product, Querys.Product)
+        if product is None: return
         parameters = dict(ticker=product.ticker, expire=product.expire, underlying=product.strike, strike=product.strike)
         options = self.download(*args, **parameters, **kwargs)
         size = self.size(options)
