@@ -19,7 +19,7 @@ from finance.variables import Variables, Querys
 from webscraping.webpages import WebJsonPage
 from webscraping.webdatas import WebJSON
 from webscraping.weburl import WebURL
-from support.mixins import Emptying, Sizing, Logging
+from support.mixins import Emptying, Sizing, Logging, Sourcing
 from support.meta import RegistryMeta
 
 __version__ = "1.0.0"
@@ -82,9 +82,6 @@ class ETradeExpireData(WebJSON, locator="//OptionExpireDateResponse/ExpirationDa
     class Month(WebJSON.Text, locator="//month", key="month", parser=np.int16): pass
     class Day(WebJSON.Text, locator="//day", key="day", parser=np.int16): pass
 
-    def execute(self, *args, **kwargs):
-        return Date(year=self["year"].data, month=self["month"].data, day=self["day"].data)
-
 
 class ETradeOptionData(WebJSON, locator="//OptionChainResponse/OptionPair[]", multiple=True, optional=True):
     class Call(WebJSON, locator="//Call", key="call"):
@@ -121,9 +118,10 @@ class ETradeExpirePage(WebJsonPage):
         return expires
 
     @staticmethod
-    def expires(contents, *args, **kwargs):
+    def expires(contents):
         for content in contents:
-            yield content(*args, **kwargs)
+            data = {attribute: content[attribute].data for attribute in ("year", "month", "day")}
+            yield Date(**data)
 
 
 class ETradeSecurityPage(WebJsonPage, metaclass=RegistryMeta): pass
@@ -131,7 +129,7 @@ class ETradeStockPage(ETradeSecurityPage, register=Variables.Instruments.STOCK):
     def __call__(self, *args, ticker, **kwargs):
         curl = ETradeStockURL(ticker=ticker)
         self.load(str(curl.address), params=dict(curl.query))
-        contents = ETradeStockData(self.source)
+        contents = ETradeStockData(self.source).data
         stocks = self.stocks(contents, *args, instrument=Variables.Instruments.STOCK, **kwargs)
         return stocks
 
@@ -152,7 +150,7 @@ class ETradeOptionPage(ETradeSecurityPage, register=Variables.Instruments.OPTION
     def __call__(self, *args, ticker, expire, strike, **kwargs):
         curl = ETradeOptionURL(ticker=ticker, expire=expire, strike=strike)
         self.load(str(curl.address), params=dict(curl.query))
-        contents = ETradeOptionData(self.source)
+        contents = ETradeOptionData(self.source).data
         puts = self.options(contents, *args, option=Variables.Options.PUT, **kwargs)
         calls = self.options(contents, *args, option=Variables.Options.CALL, **kwargs)
         options = pd.concat([puts, calls], axis=0)
@@ -173,20 +171,18 @@ class ETradeOptionPage(ETradeSecurityPage, register=Variables.Instruments.OPTION
         return options
 
 
-class ETradeProductDownloader(Logging, Sizing, Emptying):
+class ETradeProductDownloader(Logging, Sizing, Emptying, Sourcing):
     def __init_subclass__(cls, *args, **kwargs): pass
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.__page = ETradeExpirePage(*args, **kwargs)
 
-    def execute(self, symbol, stocks, *args, expires, **kwargs):
+    def execute(self, stocks, *args, expires, **kwargs):
         if self.empty(stocks): return
-        parameters = dict(ticker=symbol.ticker, expires=expires)
-        products = self.download(stocks, *args, **parameters, **kwargs)
-        string = f"Downloaded: {repr(self)}|{str(symbol)}[{len(products):.0f}]"
-        self.logger.info(string)
-        if not bool(products): return
-        yield from iter(products)
+        for symbol, dataframe in self.source(stocks, *args, query=Querys.Symbol, **kwargs):
+            parameters = dict(ticker=symbol.ticker, expires=expires)
+            products = self.download(dataframe, *args, **parameters, **kwargs)
+            string = f"Downloaded: {repr(self)}|{str(symbol)}[{len(products):.0f}]"
+            self.logger.info(string)
+            if not bool(products): continue
+            yield from iter(products)
 
     def download(self, stocks, *args, ticker, expires, **kwargs):
         assert isinstance(stocks, pd.DataFrame)
@@ -197,17 +193,11 @@ class ETradeProductDownloader(Logging, Sizing, Emptying):
         products = [Querys.Product([ticker, expire, underlying]) for expire in expires]
         return products
 
-    @property
-    def page(self): return self.__page
-
 
 class ETradeSecurityDownloader(Logging, Sizing, Emptying, ABC):
     def __init__(self, *args, instrument, **kwargs):
         super().__init__(*args, **kwargs)
-        self.__page = ETradeSecurityPage[instrument](*args, **kwargs)
-
-    @property
-    def page(self): return self.__page
+        self.page = ETradeSecurityPage[instrument](*args, **kwargs)
 
 
 class ETradeStockDownloader(ETradeSecurityDownloader):
@@ -217,10 +207,11 @@ class ETradeStockDownloader(ETradeSecurityDownloader):
 
     def execute(self, symbol, *args, **kwargs):
         if symbol is None: return
+        assert isinstance(symbol, Querys.Symbol)
         parameters = dict(ticker=symbol.ticker)
         stocks = self.download(*args, **parameters, **kwargs)
         size = self.size(stocks)
-        string = f"Downloaded: {repr(self)}|{str(symbol)}[{size:.0f}]"
+        string = f"Downloaded: {repr(self)}|{str(symbol)}[{int(size):.0f}]"
         self.logger.info(string)
         if self.empty(stocks): return
         return stocks
@@ -238,10 +229,11 @@ class ETradeOptionDownloader(ETradeSecurityDownloader):
 
     def execute(self, product, *args, **kwargs):
         if product is None: return
+        assert isinstance(product, Querys.Product)
         parameters = dict(ticker=product.ticker, expire=product.expire, underlying=product.strike, strike=product.strike)
         options = self.download(*args, **parameters, **kwargs)
         size = self.size(options)
-        string = f"Downloaded: {repr(self)}|{str(product)}[{size:.0f}]"
+        string = f"Downloaded: {repr(self)}|{str(product)}[{int(size):.0f}]"
         self.logger.info(string)
         if self.empty(options): return
         return options
