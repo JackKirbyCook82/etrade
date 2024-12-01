@@ -204,10 +204,11 @@ class ETradeStockDownloader(ETradeSecurityDownloader):
     def __init__(self, *args, instrument=Variables.Instruments.STOCK, **kwargs):
         assert instrument == Variables.Instruments.STOCK
         super().__init__(*args, instrument=instrument, **kwargs)
+        self.query = Querys.Symbol
 
     def execute(self, symbol, *args, **kwargs):
         if symbol is None: return
-        assert isinstance(symbol, Querys.Symbol)
+        symbol = self.query(symbol)
         parameters = dict(ticker=symbol.ticker)
         stocks = self.download(*args, **parameters, **kwargs)
         size = self.size(stocks)
@@ -226,10 +227,11 @@ class ETradeOptionDownloader(ETradeSecurityDownloader):
     def __init__(self, *args, instrument=Variables.Instruments.OPTION, **kwargs):
         assert instrument == Variables.Instruments.OPTION
         super().__init__(*args, instrument=Variables.Instruments.OPTION, **kwargs)
+        self.query = Querys.Product
 
     def execute(self, product, *args, **kwargs):
         if product is None: return
-        assert isinstance(product, Querys.Product)
+        product = self.query(product)
         parameters = dict(ticker=product.ticker, expire=product.expire, underlying=product.strike, strike=product.strike)
         options = self.download(*args, **parameters, **kwargs)
         size = self.size(options)
