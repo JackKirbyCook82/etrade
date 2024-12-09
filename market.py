@@ -119,7 +119,7 @@ class ETradeExpirePage(WebJsonPage):
 
     @staticmethod
     def expires(contents):
-        for content in contents:
+        for content in iter(contents):
             data = {attribute: content[attribute].data for attribute in ("year", "month", "day")}
             yield Date(**data)
 
@@ -129,13 +129,13 @@ class ETradeStockPage(ETradeSecurityPage, register=Variables.Instruments.STOCK):
     def __call__(self, *args, ticker, **kwargs):
         curl = ETradeStockURL(ticker=ticker)
         self.load(str(curl.address), params=dict(curl.query))
-        contents = ETradeStockData(self.source).data
+        contents = ETradeStockData(self.source)
         stocks = self.stocks(contents, *args, instrument=Variables.Instruments.STOCK, **kwargs)
         return stocks
 
     @staticmethod
     def stocks(contents, *args, instrument, **kwargs):
-        stocks = [{key: value(*args, **kwargs) for key, value in iter(content)} for content in iter(contents)]
+        stocks = [{key: value.data for key, value in iter(content)} for content in iter(contents)]
         stocks = pd.DataFrame.from_records(stocks)
         long = stocks.drop(["bid", "demand"], axis=1, inplace=False).rename(columns={"ask": "price", "supply": "size"})
         long["position"] = Variables.Positions.LONG
@@ -150,7 +150,7 @@ class ETradeOptionPage(ETradeSecurityPage, register=Variables.Instruments.OPTION
     def __call__(self, *args, ticker, expire, strike, **kwargs):
         curl = ETradeOptionURL(ticker=ticker, expire=expire, strike=strike)
         self.load(str(curl.address), params=dict(curl.query))
-        contents = ETradeOptionData(self.source).data
+        contents = ETradeOptionData(self.source)
         puts = self.options(contents, *args, option=Variables.Options.PUT, **kwargs)
         calls = self.options(contents, *args, option=Variables.Options.CALL, **kwargs)
         options = pd.concat([puts, calls], axis=0)
@@ -159,7 +159,7 @@ class ETradeOptionPage(ETradeSecurityPage, register=Variables.Instruments.OPTION
     @staticmethod
     def options(contents, *args, option, **kwargs):
         string = str(option.name).lower()
-        options = [{key: value(*args, **kwargs) for key, value in iter(content[string])} for content in iter(contents)]
+        options = [{key: value.data for key, value in iter(content[string])} for content in iter(contents)]
         options = pd.DataFrame.from_records(options)
         long = options.drop(["bid", "demand"], axis=1, inplace=False).rename(columns={"ask": "price", "supply": "size"})
         long["position"] = Variables.Positions.LONG
@@ -173,6 +173,9 @@ class ETradeOptionPage(ETradeSecurityPage, register=Variables.Instruments.OPTION
 
 class ETradeProductDownloader(Logging, Sizing, Emptying, Sourcing):
     def __init_subclass__(cls, *args, **kwargs): pass
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.page = ETradeExpirePage(*args, **kwargs)
 
     def execute(self, stocks, *args, expires, **kwargs):
         if self.empty(stocks): return
