@@ -19,7 +19,7 @@ from finance.variables import Variables, Querys
 from webscraping.webpages import WebJsonPage
 from webscraping.webdatas import WebJSON
 from webscraping.weburl import WebURL
-from support.mixins import Emptying, Sizing, Logging, Sourcing
+from support.mixins import Emptying, Sizing, Logging, Separating
 from support.meta import RegistryMeta
 
 __version__ = "1.0.0"
@@ -171,15 +171,18 @@ class ETradeOptionPage(ETradeSecurityPage, register=Variables.Instruments.OPTION
         return options
 
 
-class ETradeProductDownloader(Logging, Sizing, Emptying, Sourcing):
+class ETradeProductDownloader(Logging, Sizing, Emptying, Separating):
     def __init_subclass__(cls, *args, **kwargs): pass
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        try: super().__init__(*args, **kwargs)
+        except TypeError: super().__init__()
         self.page = ETradeExpirePage(*args, **kwargs)
+        self.query = Querys.Symbol
 
     def execute(self, stocks, *args, expires, **kwargs):
         if self.empty(stocks): return
-        for symbol, dataframe in self.source(stocks, *args, query=Querys.Symbol, **kwargs):
+        for group, dataframe in self.separate(stocks, *args, keys=list(self.query), **kwargs):
+            symbol = self.query(group)
             parameters = dict(ticker=symbol.ticker, expires=expires)
             products = self.download(dataframe, *args, **parameters, **kwargs)
             string = f"Downloaded: {repr(self)}|{str(symbol)}[{len(products):.0f}]"
@@ -197,9 +200,10 @@ class ETradeProductDownloader(Logging, Sizing, Emptying, Sourcing):
         return products
 
 
-class ETradeSecurityDownloader(Logging, Sizing, Emptying, ABC):
+class ETradeSecurityDownloader(Logging, Sizing, Emptying, Separating, ABC):
     def __init__(self, *args, instrument, **kwargs):
-        super().__init__(*args, **kwargs)
+        try: super().__init__(*args, **kwargs)
+        except TypeError: super().__init__()
         self.page = ETradeSecurityPage[instrument](*args, **kwargs)
 
 
