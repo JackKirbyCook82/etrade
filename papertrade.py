@@ -6,7 +6,6 @@ Created on Tues Nov 19 2024
 
 """
 
-from webscraping.webpages import WebBrowserPage
 from webscraping.webdatas import WebELMT
 
 __version__ = "1.0.0"
@@ -46,7 +45,7 @@ class ETradeOrderData(WebELMT, locator=r"//div[contains(@class, 'OrderEntryConte
 class ETradeAnalysisData(WebELMT, locator=r"//div[contains(@class, 'StrategyAnalysis--root')]", key="analysis"):
     class MaxProfit(WebELMT.Text, locator=r"//div[/span/div/span[Text()=='Max Profit']]/span[2]", key="maxprofit"): pass
     class MaxLoss(WebELMT.Text, locator=r"//div[/span/div/span[Text()=='Max Loss']]/span[2]", key="maxloss"): pass
-    class Risk(WebELMT.Text, locator=r"//div[span[text()='Probability for Any Profit']]/span[2]", key="risk"): pass
+    class MaxRisk(WebELMT.Text, locator=r"//div[span[text()='Probability for Any Profit']]/span[2]", key="maxrisk"): pass
 
 
 class ETradePreviewData(WebELMT, locator=r"//div[@data-id='OrderTicket']/div[contains(@class, 'OrderPreview---root')]", key="preview"):
@@ -54,10 +53,6 @@ class ETradePreviewData(WebELMT, locator=r"//div[@data-id='OrderTicket']/div[con
     class Debit(WebELMT.Text, locator=r"//div[div[text()='Estimated Total Debit (you spend)']]/div[2]", key="debit", optional=True): pass
     class Credit(WebELMT.Text, locator=r"//div[div[text()='Estimated Total Credit (you receive)']]/div[2]", key="credit", optional=True): pass
 
-
-class ETradeTradingPage(WebBrowserPage):
-    def __call__(self, *args, **kwargs):
-        pass
 
 
 

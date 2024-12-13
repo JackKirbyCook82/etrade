@@ -176,13 +176,14 @@ class ETradeProductDownloader(Logging, Sizing, Emptying, Separating):
     def __init__(self, *args, **kwargs):
         try: super().__init__(*args, **kwargs)
         except TypeError: super().__init__()
-        self.page = ETradeExpirePage(*args, **kwargs)
-        self.query = Querys.Symbol
+        self.__page = ETradeExpirePage(*args, **kwargs)
+        self.__query = Querys.Symbol
 
     def execute(self, stocks, *args, expires, **kwargs):
+        assert isinstance(stocks, pd.DataFrame)
         if self.empty(stocks): return
-        for group, dataframe in self.separate(stocks, *args, keys=list(self.query), **kwargs):
-            symbol = self.query(group)
+        for parameters, dataframe in self.separate(stocks, *args, fields=self.fields, **kwargs):
+            symbol = self.query(parameters)
             parameters = dict(ticker=symbol.ticker, expires=expires)
             products = self.download(dataframe, *args, **parameters, **kwargs)
             string = f"Downloaded: {repr(self)}|{str(symbol)}[{len(products):.0f}]"
@@ -199,19 +200,29 @@ class ETradeProductDownloader(Logging, Sizing, Emptying, Separating):
         products = [Querys.Product([ticker, expire, underlying]) for expire in expires]
         return products
 
+    @property
+    def fields(self): return list(self.__query)
+    @property
+    def query(self): return self.__query
+    @property
+    def page(self): return self.__page
 
-class ETradeSecurityDownloader(Logging, Sizing, Emptying, Separating, ABC):
-    def __init__(self, *args, instrument, **kwargs):
+
+class ETradeSecurityDownloader(Logging, Sizing, Emptying, ABC):
+    def __init__(self, *args, instrument, query, **kwargs):
         try: super().__init__(*args, **kwargs)
         except TypeError: super().__init__()
-        self.page = ETradeSecurityPage[instrument](*args, **kwargs)
+        self.__page = ETradeSecurityPage[instrument](*args, **kwargs)
+        self.__query = query
+
+    @property
+    def page(self): return self.__page
 
 
 class ETradeStockDownloader(ETradeSecurityDownloader):
     def __init__(self, *args, instrument=Variables.Instruments.STOCK, **kwargs):
         assert instrument == Variables.Instruments.STOCK
-        super().__init__(*args, instrument=instrument, **kwargs)
-        self.query = Querys.Symbol
+        super().__init__(*args, instrument=instrument, query=Querys.Symbol, **kwargs)
 
     def execute(self, symbol, *args, **kwargs):
         if symbol is None: return
@@ -233,8 +244,7 @@ class ETradeStockDownloader(ETradeSecurityDownloader):
 class ETradeOptionDownloader(ETradeSecurityDownloader):
     def __init__(self, *args, instrument=Variables.Instruments.OPTION, **kwargs):
         assert instrument == Variables.Instruments.OPTION
-        super().__init__(*args, instrument=Variables.Instruments.OPTION, **kwargs)
-        self.query = Querys.Product
+        super().__init__(*args, instrument=Variables.Instruments.OPTION, query=Querys.Product, **kwargs)
 
     def execute(self, product, *args, **kwargs):
         if product is None: return
