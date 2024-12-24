@@ -18,9 +18,10 @@ from datetime import timezone as Timezone
 
 from finance.variables import Variables, Querys
 from webscraping.webpages import WebJsonPage
-from webscraping.webdatas import WebJSONs
+from webscraping.webdatas import WebJSON
 from webscraping.weburl import WebURL
 from support.mixins import Emptying, Sizing, Logging, Separating
+from support.meta import RegistryMeta
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -45,9 +46,11 @@ class ETradeExpireURL(ETradeSecurityURL):
     @staticmethod
     def parms(args, ticker, **kwargs): return {"symbol": str(ticker), "expiryType": "ALL"}
 
+
 class ETradeStockURL(ETradeSecurityURL):
     @staticmethod
     def path(*args, ticker, **kwargs): return ["v1", "market", "quote", f"{ticker}.json"]
+
 
 class ETradeOptionURL(ETradeSecurityURL):
     @staticmethod
@@ -67,28 +70,71 @@ class ETradeOptionURL(ETradeSecurityURL):
     def options(*args, **kwargs): return {"optionCategory": "STANDARD", "chainType": "CALLPUT", "skipAdjusted": "true"}
 
 
-class ETradeExpireData(WebJSONs.JSON, locator="//OptionExpireDateResponse/ExpirationDate[]", key="expire", multiple=True, optional=True):
-    class Year(WebJSONs.Text, locator="//year", key="year", parser=np.int16): pass
-    class Month(WebJSONs.Text, locator="//month", key="month", parser=np.int16): pass
-    class Day(WebJSONs.Text, locator="//day", key="day", parser=np.int16): pass
+class ETradeExpireData(WebJSON, locator="//OptionExpireDateResponse/ExpirationDate[]", key="expire", multiple=True, optional=True):
+    class Year(WebJSON.Text, locator="//year", key="year", parser=np.int16): pass
+    class Month(WebJSON.Text, locator="//month", key="month", parser=np.int16): pass
+    class Day(WebJSON.Text, locator="//day", key="day", parser=np.int16): pass
+
+
+class ETradeStockData(WebJSON, locator="//QuoteResponse/QuoteData[]", key="stock", multiple=True, optional=True):
+    class Ticker(WebJSON.Text, locator="//Product/symbol", key="ticker", parser=str): pass
+    class Current(WebJSON.Text, locator="//dateTimeUTC", key="current", parser=ETradeMarketParsers.datetime): pass
+    class Bid(WebJSON.Text, locator="//All/bid", key="bid", parser=np.float32): pass
+    class Demand(WebJSON.Text, locator="//All/bidSize", key="demand", parser=np.int32): pass
+    class Ask(WebJSON.Text, locator="//All/ask", key="ask", parser=np.float32): pass
+    class Supply(WebJSON.Text, locator="//All/askSize", key="supply", parser=np.int32): pass
+    class Volume(WebJSON.Text, locator="//All/totalVolume", key="volume"): pass
+
+
+class ETradeOptionData(WebJSON):
+    class Ticker(WebJSON.Text, locator="//symbol", key="ticker", parser=str): pass
+    class Current(WebJSON.Text, locator="//timeStamp", key="current", parser=ETradeMarketParsers.datetime): pass
+    class Expire(WebJSON.Text, locator="//quoteDetail", key="expire", parser=ETradeMarketParsers.expires): pass
+    class Strike(WebJSON.Text, locator="//strikePrice", key="strike", parser=ETradeMarketParsers.strike): pass
+    class Bid(WebJSON.Text, locator="//bid", key="bid", parser=np.float32): pass
+    class Ask(WebJSON.Text, locator="//ask", key="ask", parser=np.float32): pass
+    class Demand(WebJSON.Text, locator="//bidSize", key="demand", parser=np.int32): pass
+    class Supply(WebJSON.Text, locator="//askSize", key="supply", parser=np.int32): pass
+    class Volume(WebJSON.Text, locator="//volume", key="volume", parser=np.int64): pass
+    class Interest(WebJSON.Text, locator="//openInterest", key="interest", parser=np.int32): pass
+
+class ETradeOptionsData(WebJSON, locator="//OptionChainResponse/OptionPair[]", key="option", multiple=True, optional=True):
+    class Call(ETradeOptionData, locator="//Call", key="call"): pass
+    class Put(ETradeOptionData, locator="//Put", key="put"): pass
+
+
+class ETradeExpirePage(WebJsonPage):
+    def execute(self, *args, ticker, **kwargs):
+        parameters = dict(ticker=ticker)
+        url = ETradeExpireURL(**parameters)
+        self.load(url)
+        jsondata = ETradeExpireData(self.source.json)
+        contents = jsondata(**parameters)
+        expires = self.parse(contents, **parameters)
+        included = lambda expire: expire in kwargs.get("expires", expires)
+        expires = [expire for expire in expires if included(expire)]
+        return expires
 
     @staticmethod
-    def execute(contents, *args, **kwargs):
+    def parse(contents, *args, **kwargs):
         assert isinstance(contents, list) and all([isinstance(content, dict) for content in contents])
         expires = [Date(**{key: value(*args, **kwargs) for key, value in content.items()}) for content in contents]
         return expires
 
-class ETradeStockData(WebJSONs.JSON, locator="//QuoteResponse/QuoteData[]", key="stock", multiple=True, optional=True):
-    class Ticker(WebJSONs.Text, locator="//Product/symbol", key="ticker", parser=str): pass
-    class Current(WebJSONs.Text, locator="//dateTimeUTC", key="current", parser=ETradeMarketParsers.datetime): pass
-    class Bid(WebJSONs.Text, locator="//All/bid", key="bid", parser=np.float32): pass
-    class Demand(WebJSONs.Text, locator="//All/bidSize", key="demand", parser=np.int32): pass
-    class Ask(WebJSONs.Text, locator="//All/ask", key="ask", parser=np.float32): pass
-    class Supply(WebJSONs.Text, locator="//All/askSize", key="supply", parser=np.int32): pass
-    class Volume(WebJSONs.Text, locator="//All/totalVolume", key="volume"): pass
+
+class ETradeSecurityPage(WebJsonPage, ABC, metaclass=RegistryMeta): pass
+class ETradeStockPage(ETradeSecurityPage, register=Variables.Instruments.STOCK):
+    def execute(self, *args, ticker, **kwargs):
+        parameters = dict(ticker=ticker)
+        url = ETradeStockURL(**parameters)
+        self.load(url)
+        jsondata = ETradeStockData(self.source.json)
+        contents = jsondata(**parameters)
+        stocks = self.parse(contents, **parameters)
+        return stocks
 
     @staticmethod
-    def execute(contents, *args, **kwargs):
+    def parse(contents, *args, **kwargs):
         assert isinstance(contents, list) and all([isinstance(content, dict) for content in contents])
         contents = [{key: value(*args, **kwargs) for key, value in content.items()} for content in contents]
         stocks = pd.DataFrame.from_records(contents)
@@ -100,20 +146,22 @@ class ETradeStockData(WebJSONs.JSON, locator="//QuoteResponse/QuoteData[]", key=
         stocks["instrument"] = Variables.Instruments.STOCK
         return stocks
 
-class ETradeOptionData(WebJSONs.JSON, multiple=True, optional=True):
-    class Ticker(WebJSONs.Text, locator="//symbol", key="ticker", parser=str): pass
-    class Current(WebJSONs.Text, locator="//timeStamp", key="current", parser=ETradeMarketParsers.datetime): pass
-    class Expire(WebJSONs.Text, locator="//quoteDetail", key="expire", parser=ETradeMarketParsers.expires): pass
-    class Strike(WebJSONs.Text, locator="//strikePrice", key="strike", parser=ETradeMarketParsers.strike): pass
-    class Bid(WebJSONs.Text, locator="//bid", key="bid", parser=np.float32): pass
-    class Ask(WebJSONs.Text, locator="//ask", key="ask", parser=np.float32): pass
-    class Demand(WebJSONs.Text, locator="//bidSize", key="demand", parser=np.int32): pass
-    class Supply(WebJSONs.Text, locator="//askSize", key="supply", parser=np.int32): pass
-    class Volume(WebJSONs.Text, locator="//volume", key="volume", parser=np.int64): pass
-    class Interest(WebJSONs.Text, locator="//openInterest", key="interest", parser=np.int32): pass
+
+class ETradeOptionPage(ETradeSecurityPage, register=Variables.Instruments.OPTION):
+    def execute(self, *args, ticker, expire, strike, **kwargs):
+        parameters = dict(ticker=ticker, expire=expire, strike=strike)
+        url = ETradeOptionURL(**parameters)
+        self.load(url)
+        jsondata = ETradeOptionData(self.source.json)
+        contents = jsondata(**parameters)
+        options = dict(put=Variables.Options.PUT, call=Variables.Options.CALL).items()
+        options = itertools.product(options, contents)
+        options = [self.parse(content[key], option=option, **parameters) for (key, option), content in options]
+        options = pd.concat(options, axis=0)
+        return options
 
     @staticmethod
-    def execute(contents, *args, option, **kwargs):
+    def parse(contents, *args, option, **kwargs):
         assert isinstance(contents, list) and all([isinstance(content, dict) for content in contents])
         contents = [{key: value(*args, **kwargs) for key, value in content.items()} for content in contents]
         options = pd.DataFrame.from_records(contents)
@@ -126,52 +174,11 @@ class ETradeOptionData(WebJSONs.JSON, multiple=True, optional=True):
         options["option"] = option
         return options
 
-class ETradeOptionsData(WebJSONs.JSON, locator="//OptionChainResponse/OptionPair[]", key="option"):
-    class Call(ETradeOptionData, locator="//Call", key="call"): pass
-    class Put(ETradeOptionData, locator="//Put", key="put"): pass
-
-    @staticmethod
-    def execute(contents, *args, **kwargs):
-        assert isinstance(contents, list) and all([isinstance(content, dict) for content in contents])
-        options = dict(put=Variables.Options.PUT, call=Variables.Options.CALL).items()
-        options = itertools.product(options, contents)
-        options = [content[key](*args, option=option, **kwargs) for (key, option), content in options]
-        options = pd.concat(options, axis=0)
-        return options
-
-
-class ETradeExpirePage(WebJsonPage, data=ETradeExpireData):
-    def execute(self, *args, ticker, **kwargs):
-        parameters = dict(ticker=ticker)
-        url = ETradeExpireURL(**parameters)
-        self.load(url)
-        expires = self["expire"](*args, **kwargs)
-        expires = [expire for expire in expires if expire in kwargs.get("expires", expires)]
-        return expires
-
-class ETradeSecurityPage(WebJsonPage, ABC): pass
-class ETradeStockPage(ETradeSecurityPage, data=ETradeStockData):
-    def execute(self, *args, ticker, **kwargs):
-        parameters = dict(ticker=ticker)
-        url = ETradeStockURL(**parameters)
-        self.load(url)
-        stocks = self["stock"](*args, **kwargs)
-        return stocks
-
-class ETradeOptionPage(ETradeSecurityPage, data=ETradeOptionData):
-    def execute(self, *args, ticker, expire, strike, **kwargs):
-        parameters = dict(ticker=ticker, expire=expire, strike=strike)
-        url = ETradeOptionURL(**parameters)
-        self.load(url)
-        options = self["options"](*args, **kwargs)
-        return options
-
 
 class ETradeProductDownloader(Logging, Sizing, Emptying, Separating):
     def __init_subclass__(cls, *args, **kwargs): pass
     def __init__(self, *args, **kwargs):
-        try: super().__init__(*args, **kwargs)
-        except TypeError: super().__init__()
+        super().__init__(*args, **kwargs)
         self.__page = ETradeExpirePage(*args, **kwargs)
         self.__query = Querys.Symbol
 
@@ -203,10 +210,10 @@ class ETradeProductDownloader(Logging, Sizing, Emptying, Separating):
     @property
     def page(self): return self.__page
 
+
 class ETradeSecurityDownloader(Logging, Sizing, Emptying, ABC):
     def __init__(self, *args, instrument, query, **kwargs):
-        try: super().__init__(*args, **kwargs)
-        except TypeError: super().__init__()
+        super().__init__(*args, **kwargs)
         self.__page = ETradeSecurityPage[instrument](*args, **kwargs)
         self.__instrument = instrument
         self.__query = query
@@ -217,6 +224,7 @@ class ETradeSecurityDownloader(Logging, Sizing, Emptying, ABC):
     def query(self): return self.__query
     @property
     def page(self): return self.__page
+
 
 class ETradeStockDownloader(ETradeSecurityDownloader):
     def __init__(self, *args, **kwargs):
@@ -238,6 +246,7 @@ class ETradeStockDownloader(ETradeSecurityDownloader):
         stocks = self.page(*args, **kwargs)
         assert isinstance(stocks, pd.DataFrame)
         return stocks
+
 
 class ETradeOptionDownloader(ETradeSecurityDownloader):
     def __init__(self, *args, **kwargs):
