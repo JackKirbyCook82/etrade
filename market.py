@@ -76,7 +76,7 @@ class ETradeExpireData(WebJSON, locator="//OptionExpireDateResponse/ExpirationDa
     class Day(WebJSON.Text, locator="//day", key="day", parser=np.int16): pass
 
 
-class ETradeStockData(WebJSON, locator="//QuoteResponse/QuoteData[]", key="stock", multiple=True, optional=True):
+class ETradeStockData(WebJSON, locator="//QuoteResponse/QuoteData[]", key="stock"):
     class Ticker(WebJSON.Text, locator="//Product/symbol", key="ticker", parser=str): pass
     class Current(WebJSON.Text, locator="//dateTimeUTC", key="current", parser=ETradeMarketParsers.datetime): pass
     class Bid(WebJSON.Text, locator="//All/bid", key="bid", parser=np.float32): pass
@@ -109,6 +109,7 @@ class ETradeExpirePage(WebJsonPage):
         url = ETradeExpireURL(**parameters)
         self.load(url)
         jsondata = ETradeExpireData(self.source.json)
+
         contents = jsondata(**parameters)
         expires = self.parse(contents, **parameters)
         included = lambda expire: expire in kwargs.get("expires", expires)
@@ -129,6 +130,7 @@ class ETradeStockPage(ETradeSecurityPage, register=Variables.Instruments.STOCK):
         url = ETradeStockURL(**parameters)
         self.load(url)
         jsondata = ETradeStockData(self.source.json)
+
         contents = jsondata(**parameters)
         stocks = self.parse(contents, **parameters)
         return stocks
@@ -153,6 +155,7 @@ class ETradeOptionPage(ETradeSecurityPage, register=Variables.Instruments.OPTION
         url = ETradeOptionURL(**parameters)
         self.load(url)
         jsondata = ETradeOptionData(self.source.json)
+
         contents = jsondata(**parameters)
         options = dict(put=Variables.Options.PUT, call=Variables.Options.CALL).items()
         options = itertools.product(options, contents)
