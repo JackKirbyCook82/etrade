@@ -6,11 +6,13 @@ Created on Tues Nov 19 2024
 
 """
 
+import regex as re
+import numpy as np
 from itertools import chain
+from datetime import datetime as Datetime
 
 from finance.variables import Variables
 from webscraping.webpages import WebBrowserPage
-from webscraping.webdatas import WebELMT
 from support.mixins import Logging
 
 __version__ = "1.0.0"
@@ -20,44 +22,56 @@ __copyright__ = "Copyright 2024, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
+# expire_parser = lambda x: Datetime.strptime(x, "%b-%m-%y" if ("-" in str(x)) else "%b%y").date()
+# strike_parser = lambda x: np.round(x, 2).astype(np.float32)
+
+
 class ETradeTerminalData(WebELMT, locator=r"div[@id='application']", key="terminal"):
     class Ticket(WebELMT.Button, locator=r"//button[@data-id='ViewPort_Navigation_tradeButton']", key="ticket"): pass
 
 
 class ETradeTicketData(WebELMT, locator=r"//div[@data-id='OrderTicket']", key="ticket"):
-    class Value(WebELMT.Text, locator=r"//div[contains(@class, 'OrderEntryHeader') and contains(@class, 'details')]/span[1]", key="value"): pass
-    class Funds(WebELMT.Text, locator=r"//div[contains(@class, 'OrderEntryHeader') and contains(@class, 'details')]/span[2]", key="funds"): pass
+    class Value(WebELMT.Text, locator=r"//div[contains(@class, 'OrderEntryHeader') and contains(@class, 'details')]/span[1]", key="value", parser=np.float32): pass
+    class Funds(WebELMT.Text, locator=r"//div[contains(@class, 'OrderEntryHeader') and contains(@class, 'details')]/span[2]", key="funds", parser=np.float32): pass
     class Order(WebELMT.Clickable, locator=r"//ul[contains(@class, 'OrderEntryNavigation')]/li[1]", key="order"): pass
     class Analysis(WebELMT.Clickable, locator=r"//ul[contains(@class, 'OrderEntryNavigation')]/li[2]", key="analysis"): pass
     class Preview(WebELMT.Button, locator=r"//button[span[text()='Preview']]", key="preview"): pass
 
 
-class ETradeOrderData(WebELMT, locator=r"//div[contains(@class, 'OrderEntryContent---root')]", key="order"):
-    class Ticker(WebELMT.Input, locator=r"//input[@data-id='OrderTicketQuote_symbolSearchInput']", key="ticker"): pass
-    class Spread(WebELMT.Dropdown, locator=r"//div[@class='OrderTicketQuote_strategyDropdown']", key="spread"): pass
+class ETradeOrderData(WebELMT, locator=r"//div[contains(@class, 'OrderEntryContent')]", key="order"):
+    class Ticker(WebELMT.Input, locator=r"//input[@data-id='OrderTicketQuote_symbolSearchInput']", key="ticker", parser=str): pass
     class Option(WebELMT.Button, locator=r"//button[@data-id='OrderTicket_addOptionButton']", key="option"): pass
     class Stock(WebELMT.Button, locator=r"//button[@data-id='OrderTicket_addEquityButton']", key="stock"): pass
     class Securities(WebELMT, locator="r//div[@data-id='OrderTicket_Leg']", key="securities", multiple=True, optional=True):
-        class Position(WebELMT.Toggle, locator=r"//button[@data-id='OrderTicket_Leg_actionToggle']", key="position"): pass
-        class Quantity(WebELMT.Input, locator=r"//input[@data-id='OrderTicket_Leg_qtyInput']", key="quantity"): pass
-        class Option(WebELMT.Toggle, locator=r"//button[@data-id='OrderTicket_Leg_typeToggle']", key="option"): pass
-        class Expire(WebELMT.Toggle, locator=r"//div[@data-id='OrderTicket_Leg_expirationDropdown']", key="expire"): pass
-        class Strike(WebELMT.Toggle, locator=r"//div[@data-id='OrderTicket_Leg_strikeDropdown']", key="strike"): pass
-        class Remove(WebELMT.Button, locator=r"//button[@data-id='OrderTicket_Leg_removeButton']", key="remove"): pass
-    class Pricing(WebELMT.Toggle, locator=r"//div[@data-id='OrderTicketSettings_priceTypeDropdown']/button", key="pricing"): pass
-    class Price(WebELMT.Input, locator=r"//input[contains(@class, 'PriceField') and contains(@class, 'NumberInput')]", key="price"): pass
+        class Action(WebELMT.Toggle, locator=r"//button[@data-id='OrderTicket_Leg_actionToggle']", key="action", parser=Variables.ActionTypes): pass
+        class Quantity(WebELMT.Input, locator=r"//input[@data-id='OrderTicket_Leg_qtyInput']", key="quantity", parser=np.int32): pass
+        class Option(WebELMT.Toggle, locator=r"//button[@data-id='OrderTicket_Leg_typeToggle']", key="option", parser=Variables.Options): pass
+        class Expire(WebELMT.Dropbown, locator=(r"//div[@data-id='OrderTicket_Leg_expirationDropdown']", r"//ul/li[contains(@class, 'MenuItem')]"), key="expire", parser=expire_parser): pass
+        class Strike(WebELMT.DropDown, locator=(r"//div[@data-id='OrderTicket_Leg_strikeDropdown']", r"//ul/li[contains(@class, 'MenuItem')]"), key="strike", parser=strike_parser): pass
+    class Remove(WebELMT.Button, locator=r"//button[@data-id='OrderTicket_Leg_removeButton']", key="remove"): pass
+    class Pricing(WebELMT.Dropdown, locator=(r"//div[@data-id='OrderTicketSettings_priceTypeDropdown']/button", r"//ul/li[contains(@class, 'MenuItem')]"), key="pricing", parser=Variables.PriceTypes): pass
+    class Price(WebELMT.Input, locator=r"//input[contains(@class, 'PriceField') and contains(@class, 'NumberInput')]", key="price", parser=float): pass
+
+class ETradeAnalysisData(WebELMT, locator=r"//div[contains(@class, 'StrategyAnalysis')]", key="analysis"):
+    class Profit(WebELMT.Text, locator=r"//div[/span/div/span[Text()=='Max Profit']]/span[2]", key="profit", parser=np.float32): pass
+    class Loss(WebELMT.Text, locator=r"//div[/span/div/span[Text()=='Max Loss']]/span[2]", key="loss", parser=np.float32): pass
+    class Risk(WebELMT.Text, locator=r"//div[span[text()='Probability for Any Profit']]/span[2]", key="risk", parser=np.float32): pass
 
 
-class ETradeAnalysisData(WebELMT, locator=r"//div[contains(@class, 'StrategyAnalysis--root')]", key="analysis"):
-    class Profit(WebELMT.Text, locator=r"//div[/span/div/span[Text()=='Max Profit']]/span[2]", key="profit"): pass
-    class Loss(WebELMT.Text, locator=r"//div[/span/div/span[Text()=='Max Loss']]/span[2]", key="loss"): pass
-    class Risk(WebELMT.Text, locator=r"//div[span[text()='Probability for Any Profit']]/span[2]", key="risk"): pass
+class ETradePreviewData(WebELMT, locator=r"//div[@data-id='OrderTicket']/div[contains(@class, 'OrderPreview')]", key="preview"):
+    class Credit(WebELMT.Text, locator=r"//div[div[text()='Estimated Total Credit (you receive)']]/div[2]", key="credit", optional=True, parser=np.float32): pass
+    class Debit(WebELMT.Text, locator=r"//div[div[text()='Estimated Total Debit (you spend)']]/div[2]", key="debit", optional=True, parser=np.float32): pass
+    class Securities(WebELMT.Text, locator=r"//div[contains(@class, 'LegDescriptions')]//div[contains(@class, 'description')]", key="securities", multiple=True, optional=True):
+        pass
 
-
-class ETradePreviewData(WebELMT, locator=r"//div[@data-id='OrderTicket']/div[contains(@class, 'OrderPreview---root')]", key="preview"):
-    class Securities(WebELMT.Text, locator="r//div[contains(@class, 'LegDescriptions--description')]]", key="securities", multiple=True): pass
-    class Debit(WebELMT.Text, locator=r"//div[div[text()='Estimated Total Debit (you spend)']]/div[2]", key="debit", optional=True): pass
-    class Credit(WebELMT.Text, locator=r"//div[div[text()='Estimated Total Credit (you receive)']]/div[2]", key="credit", optional=True): pass
+#        def execute(self, *args, **kwargs):
+#            contents = super().execute(*args, **kwargs)
+#            instrument = lambda string: str(Variables.Instruments.STOCK) if ("shares" in str(string)) else str(Variables.Instruments.OPTION)
+#            contents = str(contents).lower().replace("to", instrument(contents)).replace("shares", "").upper()
+#            pattern = "^(?P<actiontype>BUY|SELL)\s(?P<quantity>\d+)\s(?P<ticker>[A-Z]+)\s((?P<expire>[A-Za-z\d\-]+)\s(?P<strike>\d+)\s(?P<option>PUT|CALL))?\s(?P<instrument>STOCK|OPTION)\s(?P<tradetype>OPEN|CLOSE)$"
+#            variables = dict(actiontype=Variables.ActionTypes, quantity=int, ticker=str, expire=expire_parser, strike=strike_parser, option=Variables.Options, instrument=Variables.Instruments, tradetype=Variables.TradeTypes)
+#            contents = {key: variables[key](value) for key, value in re.match(pattern, contents).groupdict().items()}
+#            return contents
 
 
 class ETradeTerminalPage(WebBrowserPage):
@@ -75,17 +89,22 @@ class ETradeTicketPage(WebBrowserPage):
 class ETradeOrderPage(WebBrowserPage):
     def execute(self, *args, order, **kwargs):
         elements = ETradeOrderData(self.source.element)
-        elements["ticker"].fill(order.ticker)
-        elements["spread"].select(order.spread)
-        securities = chain(order.stocks, order.options)
+        for security in elements["securities"]: security["remove"].click()
+
+        elements["ticker"].fill(str(order.ticker))
+
+        securities = chain(list(order.stocks), list(order.options))
         for index, security in enumerate(securities):
             elements[str(security.instrument)].click()
-            elements["securities"][index]["position"].select(security.position)
+
+            # REFRESH
+            elements["securities"][index]["action"].select(security.action)
             elements["securities"][index]["quantity"].fill(security.quantity)
             if security.instrument is Variables.Instruments.STOCK: continue
             elements["securities"][index]["option"].select(security.option)
             elements["expire"][index]["expire"].select(security.expire)
             elements["strike"][index]["strike"].select(security.strike)
+
         elements["pricing"].select(order.pricing)
         elements["price"].select(order.price)
 
