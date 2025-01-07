@@ -29,12 +29,12 @@ __copyright__ = "Copyright 2023, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
-timestamp_parser = lambda x: Datetime.fromtimestamp(int(x), Timezone.utc).astimezone(pytz.timezone("US/Central"))
-datetime_parser = lambda x: np.datetime64(timestamp_parser(x))
-date_parser = lambda x: np.datetime64(timestamp_parser(x).date(), "D")
-quote_parser = lambda x: Datetime.strptime(re.findall("(?<=:)[0-9:]+(?=:CALL|:PUT)", x)[0], "%Y:%m:%d")
-expire_parser = lambda x: np.datetime64(quote_parser(x).date(), "D")
-strike_parser = lambda x: np.round(x, 2).astype(np.float32)
+timestamp_parser = lambda content: Datetime.fromtimestamp(int(content), Timezone.utc).astimezone(pytz.timezone("US/Central"))
+datetime_parser = lambda content: np.datetime64(timestamp_parser(content))
+date_parser = lambda content: np.datetime64(timestamp_parser(content).date(), "D")
+quote_parser = lambda content: Datetime.strptime(re.findall("(?<=:)[0-9:]+(?=:CALL|:PUT)", content)[0], "%Y:%m:%d")
+expire_parser = lambda content: np.datetime64(quote_parser(content).date(), "D")
+strike_parser = lambda content: np.round(content, 2).astype(np.float32)
 
 
 class ETradeSecurityURL(WebURL, domain="https://api.etrade.com"): pass
@@ -101,7 +101,7 @@ class ETradeStockData(WebJSON, locator="//QuoteResponse/QuoteData[]"):
         return stocks
 
 
-class ETradeOptionData(WebJSON):
+class ETradeOptionData(WebJSON, ABC):
     class Option(WebJSON.Text, locator="//optionType", key="option", parser=Variables.Options): pass
     class Ticker(WebJSON.Text, locator="//symbol", key="ticker", parser=str): pass
     class Current(WebJSON.Text, locator="//timeStamp", key="current", parser=datetime_parser): pass
@@ -145,7 +145,7 @@ class ETradeExpirePage(WebJsonPage):
         parameters = dict(ticker=ticker)
         url = ETradeExpireURL(**parameters)
         self.load(url)
-        jsondatas = ETradeExpireData(self.source.json)
+        jsondatas = ETradeExpireData(self.source.json, *args, **kwargs)
         expires = [jsondata(**parameters) for jsondata in jsondatas]
         included = lambda expire: expire in kwargs.get("expires", expires)
         expires = [expire for expire in expires if included(expire)]
@@ -158,7 +158,7 @@ class ETradeStockPage(ETradeSecurityPage, register=Variables.Instruments.STOCK):
         parameters = dict(ticker=ticker)
         url = ETradeStockURL(**parameters)
         self.load(url)
-        jsondata = ETradeStockData(self.source.json)
+        jsondata = ETradeStockData(self.source.json, *args, **kwargs)
         stocks = jsondata(**parameters)
         return stocks
 
@@ -168,13 +168,13 @@ class ETradeOptionPage(ETradeSecurityPage, register=Variables.Instruments.OPTION
         parameters = dict(ticker=ticker, expire=expire, strike=strike)
         url = ETradeOptionsURL(**parameters)
         self.load(url)
-        jsondatas = ETradeOptionsData(self.source.json)
+        jsondatas = ETradeOptionsData(self.source.json, *args, **kwargs)
         options = [jsondata(**parameters) for jsondata in jsondatas]
         options = pd.concat(options, axis=0)
         return options
 
 
-class ETradeProductDownloader(Logging, Sizing, Emptying, Separating):
+class ETradeProductDownloader(Separating, Sizing, Emptying, Logging):
     def __init_subclass__(cls, *args, **kwargs): pass
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
