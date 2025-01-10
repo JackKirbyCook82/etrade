@@ -13,7 +13,7 @@ from datetime import datetime as Datetime
 
 from finance.variables import Variables
 from webscraping.webpages import WebBrowserPage
-from webscraping.webdynamic import WebELMT
+from webscraping.webdatas import WebELMT
 from support.mixins import Logging
 
 __version__ = "1.0.0"

@@ -17,7 +17,7 @@ from datetime import timezone as Timezone
 
 from finance.variables import Variables, Querys
 from webscraping.webpages import WebJsonPage
-from webscraping.webstatic import WebJSON
+from webscraping.webdatas import WebJSON
 from webscraping.weburl import WebURL
 from support.mixins import Emptying, Sizing, Logging, Separating
 from support.meta import RegistryMeta
