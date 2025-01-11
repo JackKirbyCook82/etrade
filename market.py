@@ -145,7 +145,7 @@ class ETradeExpirePage(WebJsonPage):
         parameters = dict(ticker=ticker)
         url = ETradeExpireURL(**parameters)
         self.load(url)
-        jsondatas = ETradeExpireData(self.source.json, *args, **kwargs)
+        jsondatas = ETradeExpireData(self.json, *args, **kwargs)
         expires = [jsondata(**parameters) for jsondata in jsondatas]
         included = lambda expire: expire in kwargs.get("expires", expires)
         expires = [expire for expire in expires if included(expire)]
@@ -158,7 +158,7 @@ class ETradeStockPage(ETradeSecurityPage, register=Variables.Instruments.STOCK):
         parameters = dict(ticker=ticker)
         url = ETradeStockURL(**parameters)
         self.load(url)
-        jsondata = ETradeStockData(self.source.json, *args, **kwargs)
+        jsondata = ETradeStockData(self.json, *args, **kwargs)
         stocks = jsondata(**parameters)
         return stocks
 
@@ -168,7 +168,7 @@ class ETradeOptionPage(ETradeSecurityPage, register=Variables.Instruments.OPTION
         parameters = dict(ticker=ticker, expire=expire, strike=strike)
         url = ETradeOptionsURL(**parameters)
         self.load(url)
-        jsondatas = ETradeOptionsData(self.source.json, *args, **kwargs)
+        jsondatas = ETradeOptionsData(self.json, *args, **kwargs)
         options = [jsondata(**parameters) for jsondata in jsondatas]
         options = pd.concat(options, axis=0)
         return options

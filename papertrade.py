@@ -18,7 +18,7 @@ from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = []
+__all__ = ["ETradeTerminalWindow"]
 __copyright__ = "Copyright 2024, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -27,7 +27,7 @@ expire_parser = lambda content: Datetime.strptime(str(content).replace("-", ""),
 strike_parser = lambda content: np.round(content, 2).astype(np.float32)
 
 
-class ETradeTerminalData(WebELMT, locator=r"div[@id='application']", key="terminal"):
+class ETradeTerminalData(WebELMT, locator=r"//div[@id='application']", key="terminal"):
     class Ticket(WebELMT.Button, locator=r"//button[@data-id='ViewPort_Navigation_tradeButton']", key="ticket"): pass
 
 
@@ -39,12 +39,12 @@ class ETradeTicketData(WebELMT, locator=r"//div[@data-id='OrderTicket']", key="t
     class Preview(WebELMT.Button, locator=r"//button[span[text()='Preview']]", key="preview"): pass
 
 
-class ETradeOrderData(WebELMT, locator=r"//div[contains(@class, 'OrderEntryContent')]", key="order"):
+class ETradeOrderData(WebELMT, locator=r"//div[contains(@class, 'OrderEntryContent---root')]", key="order"):
     class Ticker(WebELMT.Input, locator=r"//input[@data-id='OrderTicketQuote_symbolSearchInput']", key="ticker", parser=str): pass
     class AddOption(WebELMT.Button, locator=r"//button[@data-id='OrderTicket_addOptionButton']", key="option"): pass
     class AddStock(WebELMT.Button, locator=r"//button[@data-id='OrderTicket_addEquityButton']", key="stock"): pass
-    class RemoveSecurity(WebELMT.Button, locator=r"//button[@data-id='OrderTicket_Leg_removeButton']", key="remove"): pass
-    class Securities(WebELMT, locator="r//div[@data-id='OrderTicket_Leg']", key="securities", multiple=True, optional=True):
+    class Securities(WebELMT, locator=r"//div[@data-id='OrderTicket_Leg']", key="securities", multiple=True, optional=False):
+        class Remove(WebELMT.Button, locator=r"//button[@data-id='OrderTicket_Leg_removeButton']", key="remove"): pass
         class Action(WebELMT.Toggle, locator=r"//button[@data-id='OrderTicket_Leg_actionToggle']", key="action", parser=Variables.Actions): pass
         class Quantity(WebELMT.Input, locator=r"//input[@data-id='OrderTicket_Leg_qtyInput']", key="quantity", parser=np.int32): pass
         class Option(WebELMT.Toggle, locator=r"//button[@data-id='OrderTicket_Leg_typeToggle']", key="option", parser=Variables.Options): pass
@@ -75,20 +75,11 @@ class ETradePreviewData(WebELMT, locator=r"//div[@data-id='OrderTicket']/div[con
 
 
 class ETradeTerminalPage(WebBrowserPage):
-    def execute(self, *args, **kwargs):
-        elements = ETradeTerminalData(self.source.element, *args, **kwargs)
-        elements["ticket"].click()
-
-
-class ETradeTicketPage(WebBrowserPage):
-    def execute(self, *args, **kwargs):
-        elements = ETradeTicketData(self.source.element, *args, **kwargs)
-        elements["order"].click()
-
-
-class ETradeOrderPage(WebBrowserPage):
     def execute(self, *args, order, **kwargs):
-        elements = ETradeOrderData(self.source.element, *args, **kwargs)
+        self.navigate("Power E*TRADE | Trading")
+        ETradeTerminalData(self.elmt, *args, **kwargs)["ticket"].click()
+        ETradeTicketData(self.elmt, *args, **kwargs)["order"].click()
+        elements = ETradeOrderData(self.elmt, *args, **kwargs)
         for security in elements["securities"]: security["remove"].click()
         elements["ticker"].fill(str(order.ticker))
         securities = chain(list(order.stocks), list(order.options))
@@ -104,45 +95,21 @@ class ETradeOrderPage(WebBrowserPage):
         elements["price"].select(order.price)
 
 
-class ETradeAnalysisPage(WebBrowserPage):
-    def execute(self, *args, **kwargs):
-        elements = ETradeAnalysisData(self.source.element, *args, **kwargs)
-
-
-class ETradePreviewPage(WebBrowserPage):
-    def execute(self, *args, **kwargs):
-        elements = ETradePreviewData(self.source.element, *args, **kwargs)
-
-
 class ETradeTerminalWindow(Logging):
+    def __init_subclass__(cls, *args, **kwargs): pass
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.__terminal = ETradeTerminalPage(*args, **kwargs)
-        self.__ticket = ETradeTicketPage(*args, **kwargs)
-        self.__order = ETradeOrderPage(*args, **kwargs)
-        self.__analysis = ETradeAnalysisPage(*args, **kwargs)
-        self.__preview = ETradePreviewPage(*args, **kwargs)
+        self.__page = ETradeTerminalPage(*args, **kwargs)
 
     def execute(self, order, *args, **kwargs):
         if order is None: return
-        self.terminal(*args, **kwargs)
-        self.ticker(*args, **kwargs)
-        self.order(*args, order=order, **kwargs)
-        self.analysis(*args, **kwargs)
-        self.preview(*args, **kwargs)
+        self.page(*args, order=order, **kwargs)
         string = f"Ordered: {repr(self)}|{str(order)}"
         self.logger.info(string)
 
     @property
-    def terminal(self): return self.__terminal
-    @property
-    def ticket(self): return self.__ticket
-    @property
-    def order(self): return self.__order
-    @property
-    def analysis(self): return self.__analysis
-    @property
-    def preview(self): return self.__preview
+    def page(self): return self.__page
+
 
 
 
