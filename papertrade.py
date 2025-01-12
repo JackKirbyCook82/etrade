@@ -8,7 +8,6 @@ Created on Tues Nov 19 2024
 
 import regex as re
 import numpy as np
-from itertools import chain
 from datetime import datetime as Datetime
 
 from finance.variables import Variables
@@ -41,8 +40,8 @@ class ETradeTicketData(WebELMT, locator=r"//div[@data-id='OrderTicket']", key="t
 
 class ETradeOrderData(WebELMT, locator=r"//div[contains(@class, 'OrderEntryContent---root')]", key="order"):
     class Ticker(WebELMT.Input, locator=r"//input[@data-id='OrderTicketQuote_symbolSearchInput']", key="ticker", parser=str): pass
-    class AddOption(WebELMT.Button, locator=r"//button[@data-id='OrderTicket_addOptionButton']", key="option"): pass
-    class AddStock(WebELMT.Button, locator=r"//button[@data-id='OrderTicket_addEquityButton']", key="stock"): pass
+    class Option(WebELMT.Button, locator=r"//button[@data-id='OrderTicket_addOptionButton']", key="option"): pass
+    class Stock(WebELMT.Button, locator=r"//button[@data-id='OrderTicket_addEquityButton']", key="stock"): pass
     class Securities(WebELMT, locator=r"//div[@data-id='OrderTicket_Leg']", key="securities", multiple=True, optional=False):
         class Remove(WebELMT.Button, locator=r"//button[@data-id='OrderTicket_Leg_removeButton']", key="remove"): pass
         class Action(WebELMT.Toggle, locator=r"//button[@data-id='OrderTicket_Leg_actionToggle']", key="action", parser=Variables.Actions): pass
@@ -50,7 +49,7 @@ class ETradeOrderData(WebELMT, locator=r"//div[contains(@class, 'OrderEntryConte
         class Option(WebELMT.Toggle, locator=r"//button[@data-id='OrderTicket_Leg_typeToggle']", key="option", parser=Variables.Options): pass
         class Expire(WebELMT.Dropdown, locator=r"//div[@data-id='OrderTicket_Leg_expirationDropdown']", locators={"menu": r"//ul/li[contains(@class, 'MenuItem')]"}, key="expire", parser=expire_parser): pass
         class Strike(WebELMT.Dropdown, locator=r"//div[@data-id='OrderTicket_Leg_strikeDropdown']", locators={"menu": r"//ul/li[contains(@class, 'MenuItem')]"}, key="strike", parser=strike_parser): pass
-    class Order(WebELMT.Dropdown, locator=r"//div[@data-id='OrderTicketSettings_priceTypeDropdown']/button", locators={"menu": r"//ul/li[contains(@class, 'MenuItem')]"}, key="order", parser=Variables.Orders): pass
+    class Terms(WebELMT.Dropdown, locator=r"//div[@data-id='OrderTicketSettings_priceTypeDropdown']/button", locators={"menu": r"//ul/li[contains(@class, 'MenuItem')]"}, key="terms", parser=Variables.Terms): pass
     class Price(WebELMT.Input, locator=r"//input[contains(@class, 'PriceField') and contains(@class, 'NumberInput')]", key="price", parser=float): pass
 
 
@@ -81,18 +80,17 @@ class ETradeTerminalPage(WebBrowserPage):
         ETradeTicketData(self.elmt, *args, **kwargs)["order"].click()
         elements = ETradeOrderData(self.elmt, *args, **kwargs)
         for security in elements["securities"]: security["remove"].click()
-        elements["ticker"].fill(str(order.ticker))
-        securities = chain(list(order.stocks), list(order.options))
-        for index, security in enumerate(securities):
+        elements["ticker"].fill(order.contract.ticker)
+        for index, security in enumerate(order.securities):
             elements[str(security.instrument)].click()
             elements["securities"][index]["action"].select(security.action)
-            elements["securities"][index]["quantity"].fill(security.quantity)
+            elements["securities"][index]["quantity"].fill(int(security.quantity))
             if security.instrument is Variables.Instruments.STOCK: continue
             elements["securities"][index]["option"].select(security.option)
-            elements["expire"][index]["expire"].select(security.expire)
+            elements["expire"][index]["expire"].select(order.contract.expire)
             elements["strike"][index]["strike"].select(security.strike)
-        elements["order"].select(order.pricing)
-        elements["price"].select(order.price)
+        elements["terms"].select(order.transaction.terms)
+        elements["price"].select(order.transaction.price)
 
 
 class ETradeTerminalWindow(Logging):
