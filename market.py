@@ -19,7 +19,7 @@ from finance.variables import Variables, Querys
 from webscraping.webpages import WebJsonPage
 from webscraping.webdatas import WebJSON
 from webscraping.weburl import WebURL
-from support.mixins import Emptying, Sizing, Logging, Separating
+from support.mixins import Emptying, Sizing, Logging, Segregating
 from support.meta import RegistryMeta
 
 __version__ = "1.0.0"
@@ -86,7 +86,6 @@ class ETradeStockData(WebJSON, locator="//QuoteResponse/QuoteData[]"):
     class Demand(WebJSON.Text, locator="//All/bidSize", key="demand", parser=np.int32): pass
     class Ask(WebJSON.Text, locator="//All/ask", key="ask", parser=np.float32): pass
     class Supply(WebJSON.Text, locator="//All/askSize", key="supply", parser=np.int32): pass
-    class Volume(WebJSON.Text, locator="//All/totalVolume", key="volume", parser=np.int64): pass
 
     def execute(self, *args, **kwargs):
         contents = super().execute(*args, **kwargs)
@@ -111,8 +110,6 @@ class ETradeOptionData(WebJSON, ABC):
     class Ask(WebJSON.Text, locator="//ask", key="ask", parser=np.float32): pass
     class Demand(WebJSON.Text, locator="//bidSize", key="demand", parser=np.int32): pass
     class Supply(WebJSON.Text, locator="//askSize", key="supply", parser=np.int32): pass
-    class Volume(WebJSON.Text, locator="//volume", key="volume", parser=np.int64): pass
-    class Interest(WebJSON.Text, locator="//openInterest", key="interest", parser=np.int32): pass
 
     def execute(self, *args, **kwargs):
         contents = super().execute(*args, **kwargs)
@@ -174,97 +171,86 @@ class ETradeOptionPage(ETradeSecurityPage, register=Variables.Instruments.OPTION
         return options
 
 
-class ETradeProductDownloader(Separating, Sizing, Emptying, Logging):
+class ETradeProductDownloader(Segregating, Sizing, Emptying, Logging):
     def __init_subclass__(cls, *args, **kwargs): pass
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, query=Querys.Symbol, **kwargs)
         self.__page = ETradeExpirePage(*args, **kwargs)
-        self.__query = Querys.Symbol
 
-    def execute(self, stocks, *args, expires, **kwargs):
+    def execute(self, stocks, *args, **kwargs):
         assert isinstance(stocks, pd.DataFrame)
         if self.empty(stocks): return
-        for parameters, dataframe in self.separate(stocks, *args, fields=self.fields, **kwargs):
-            symbol = self.query(parameters)
-            parameters = dict(ticker=symbol.ticker, expires=expires)
-            products = self.download(dataframe, *args, **parameters, **kwargs)
-            string = f"Downloaded: {repr(self)}|{str(symbol)}[{len(products):.0f}]"
+        for query, dataframe in self.segregate(stocks, *args, **kwargs):
+            products = self.download(dataframe, *args, **kwargs)
+            string = f"Downloaded: {repr(self)}|{str(query)}[{len(products):.0f}]"
             self.logger.info(string)
             if not bool(products): continue
             yield from iter(products)
 
-    def download(self, stocks, *args, ticker, **kwargs):
+    def download(self, stocks, *args, expires, **kwargs):
         assert isinstance(stocks, pd.DataFrame)
         assert len(set(stocks["ticker"].values)) == 1
-        underlying = stocks.where(stocks["ticker"] == ticker).dropna(how="all", inplace=False)
-        underlying = round(underlying["price"].mean(), 2)
-        expires = self.page(*args, ticker=ticker, **kwargs)
+        ticker = list(set(stocks["ticker"].values))[0]
+        underlying = round(stocks["price"].mean(), 2)
+        parameters = dict(ticker=ticker, expires=expires)
+        expires = self.page(*args, **parameters, **kwargs)
         products = [Querys.Product([ticker, expire, underlying]) for expire in expires]
         return products
 
-    @property
-    def fields(self): return list(self.__query)
-    @property
-    def query(self): return self.__query
     @property
     def page(self): return self.__page
 
 
 class ETradeSecurityDownloader(Logging, Sizing, Emptying, ABC):
-    def __init__(self, *args, instrument, query, **kwargs):
+    def __init__(self, *args, instrument, **kwargs):
         super().__init__(*args, **kwargs)
         self.__page = ETradeSecurityPage[instrument](*args, **kwargs)
         self.__instrument = instrument
-        self.__query = query
 
     @property
     def instrument(self): return self.__instrument
-    @property
-    def query(self): return self.__query
     @property
     def page(self): return self.__page
 
 
 class ETradeStockDownloader(ETradeSecurityDownloader):
     def __init__(self, *args, **kwargs):
-        parameters = dict(instrument=Variables.Instruments.STOCK, query=Querys.Symbol)
+        parameters = dict(instrument=Variables.Instruments.STOCK)
         super().__init__(*args, **parameters, **kwargs)
 
     def execute(self, symbol, *args, **kwargs):
         if symbol is None: return
-        symbol = self.query(symbol)
-        parameters = dict(ticker=symbol.ticker)
-        stocks = self.download(*args, **parameters, **kwargs)
+        stocks = self.download(symbol, *args, **kwargs)
         size = self.size(stocks)
         string = f"Downloaded: {repr(self)}|{str(symbol)}[{int(size):.0f}]"
         self.logger.info(string)
         if self.empty(stocks): return
         return stocks
 
-    def download(self, *args, **kwargs):
-        stocks = self.page(*args, **kwargs)
+    def download(self, symbol, *args, **kwargs):
+        parameters = dict(ticker=symbol.ticker)
+        stocks = self.page(*args, **parameters, **kwargs)
         assert isinstance(stocks, pd.DataFrame)
         return stocks
 
 
 class ETradeOptionDownloader(ETradeSecurityDownloader):
     def __init__(self, *args, **kwargs):
-        parameters = dict(instrument=Variables.Instruments.OPTION, query=Querys.Product)
+        parameters = dict(instrument=Variables.Instruments.OPTION)
         super().__init__(*args, **parameters, **kwargs)
 
     def execute(self, product, *args, **kwargs):
         if product is None: return
-        product = self.query(product)
-        parameters = dict(ticker=product.ticker, expire=product.expire, underlying=product.strike, strike=product.strike)
-        options = self.download(*args, **parameters, **kwargs)
+        options = self.download(product, *args, **kwargs)
         size = self.size(options)
         string = f"Downloaded: {repr(self)}|{str(product)}[{int(size):.0f}]"
         self.logger.info(string)
         if self.empty(options): return
         return options
 
-    def download(self, *args, underlying, **kwargs):
-        options = self.page(*args, **kwargs)
+    def download(self, product, *args, underlying, **kwargs):
+        parameters = dict(ticker=product.ticker, expire=product.expire, underlying=product.strike, strike=product.strike)
+        options = self.page(*args, **parameters, **kwargs)
         assert isinstance(options, pd.DataFrame)
         options["underlying"] = underlying
         return options
