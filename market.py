@@ -6,12 +6,15 @@ Created on Weds Jul 19 2023
 
 """
 
+import pytz
 import numpy as np
 import pandas as pd
 from abc import ABC
 from datetime import date as Date
+from datetime import datetime as Datetime
+from datetime import timezone as Timezone
 
-from finance.variables import Querys
+from finance.variables import Querys, Variables
 from webscraping.webpages import WebJSONPage
 from webscraping.webdatas import WebJSON
 from webscraping.weburl import WebURL
@@ -22,6 +25,13 @@ __author__ = "Jack Kirby Cook"
 __all__ = []
 __copyright__ = "Copyright 2023, Jack Kirby Cook"
 __license__ = "MIT License"
+
+
+timestamp_parser = lambda integer: Datetime.fromtimestamp(integer, Timezone.utc).astimezone(pytz.timezone("US/Central"))
+current_parser = lambda integer: np.datetime64(timestamp_parser(integer))
+contract_parser = lambda string: Querys.Contract.fromOSI(str(string).replace("---", ""))
+strike_parser = lambda content: np.round(content, 2).astype(np.float32)
+expire_parser = lambda string: contract_parser(string).expire
 
 
 class ETradeURL(WebURL, domain="https://api.etrade.com"): pass
@@ -66,8 +76,8 @@ class ETradeExpireData(WebJSON, locator="//OptionExpireDateResponse/ExpirationDa
 
 
 class ETradeStockData(WebJSON, locator="//QuoteResponse/QuoteData[]", multiple=True, optional=True):
-    class Ticker(WebJSON.Text, locator="//Product/symbol", key="ticker", parser=str.upper): pass
-    class Current(WebJSON.Text, locator="//dateTimeUTC", key="current", parser=PARSERS.CURRENT): pass
+    class Ticker(WebJSON.Text, locator="//Product/symbol", key="ticker", parser=str): pass
+    class Current(WebJSON.Text, locator="//dateTimeUTC", key="current", parser=current_parser): pass
 
     def execute(self, *args, **kwargs):
         contents = super().execute(*args, **kwargs)
@@ -87,10 +97,10 @@ class ETradeStockQuoteData(ETradeStockData):
 
 class ETradeOptionData(WebJSON, ABC):
     class Ticker(WebJSON.Text, locator="//symbol", key="ticker", parser=str): pass
-    class Expire(WebJSON.Text, locator="//quoteDetail", key="expire", parser=PARSERS.EXPIRE): pass
-    class Strike(WebJSON.Text, locator="//strikePrice", key="strike", parser=np.float32): pass
-    class Option(WebJSON.Text, locator="//optionType", key="option", parser=PARSERS.OPTION): pass
-    class Current(WebJSON.Text, locator="//timeStamp", key="current", parser=PARSERS.CURRENT): pass
+    class Expire(WebJSON.Text, locator="//quoteDetail", key="expire", parser=expire_parser): pass
+    class Strike(WebJSON.Text, locator="//strikePrice", key="strike", parser=strike_parser): pass
+    class Option(WebJSON.Text, locator="//optionType", key="option", parser=Variables.Securities.Option): pass
+    class Current(WebJSON.Text, locator="//timeStamp", key="current", parser=current_parser): pass
 
     def execute(self, *args, **kwargs):
         contents = super().execute(*args, **kwargs)
