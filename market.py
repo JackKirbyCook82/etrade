@@ -18,7 +18,7 @@ from finance.variables import Querys, Variables
 from webscraping.webpages import WebJSONPage
 from webscraping.webdatas import WebJSON
 from webscraping.weburl import WebURL
-from support.mixins import Emptying, Sizing, Mixin
+from support.mixins import Emptying, Sizing, Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -142,7 +142,7 @@ class ETradeStockPage(WebJSONPage, url=ETradeStockURL, data=[ETradeStockTradeDat
 class ETradeOptionPage(WebJSONPage, url=ETradeOptionURL, data=[ETradeOptionsTradeData, ETradeOptionQuoteData]): pass
 
 
-class ETradeSettlementDownloader(Mixin, title="Downloaded"):
+class ETradeSettlementDownloader(Logging, title="Downloaded"):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.__page = ETradeExpirePage(*args, **kwargs)
@@ -154,8 +154,7 @@ class ETradeSettlementDownloader(Mixin, title="Downloaded"):
         for symbol in list(symbols):
             expires = [expire for expire in self.download(symbol, *args, **kwargs) if expire in expires]
             settlements = [Querys.Settlement(symbol.ticker, expire) for expire in expires]
-            string = f"{str(symbol)}[{len(settlements):.0f}]"
-            self.console(string)
+            self.console(f"{str(symbol)}[{len(settlements):.0f}]")
             if not bool(settlements): continue
             yield settlements
 
@@ -169,7 +168,7 @@ class ETradeSettlementDownloader(Mixin, title="Downloaded"):
     def page(self): return self.__page
 
 
-class ETradeStockDownloader(Sizing, Emptying, title="Downloaded"):
+class ETradeStockDownloader(Sizing, Emptying, Logging, title="Downloaded"):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.__page = ETradeStockPage(*args, **kwargs)
@@ -181,8 +180,7 @@ class ETradeStockDownloader(Sizing, Emptying, title="Downloaded"):
         for symbol in list(symbols):
             stocks = self.download(symbol, *args, **kwargs)
             size = self.size(stocks)
-            string = f"{str(symbol)}[{int(size):.0f}]"
-            self.console(string)
+            self.console(f"{str(symbol)}[{int(size):.0f}]")
             if self.empty(stocks): return
             return stocks
 
@@ -197,7 +195,7 @@ class ETradeStockDownloader(Sizing, Emptying, title="Downloaded"):
     def page(self): return self.__page
 
 
-class ETradeOptionDownloader(Sizing, Emptying, title="Downloaded"):
+class ETradeOptionDownloader(Sizing, Emptying, Logging, title="Downloaded"):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.__page = ETradeOptionPage(*args, **kwargs)
@@ -209,8 +207,7 @@ class ETradeOptionDownloader(Sizing, Emptying, title="Downloaded"):
         for settlement in list(settlements):
             options = self.download(settlement, *args, **kwargs)
             size = self.size(options)
-            string = f"{str(settlement)}[{int(size):.0f}]"
-            self.console(string)
+            self.console(f"{str(settlement)}[{int(size):.0f}]")
             if self.empty(options): return
             return options
 
