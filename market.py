@@ -13,6 +13,7 @@ from abc import ABC
 from datetime import date as Date
 from datetime import datetime as Datetime
 from datetime import timezone as Timezone
+from collections import namedtuple as ntuple
 
 from finance.variables import Querys, Variables
 from webscraping.webpages import WebJSONPage
@@ -137,9 +138,29 @@ class ETradeOptionsQuoteData(ETradeOptionsData):
     class Put(ETradeOptionQuoteData, locator="//Put", key="put"): pass
 
 
-class ETradeExpirePage(WebJSONPage, url=ETradeExpireURL, data=ETradeExpireData): pass
-class ETradeStockPage(WebJSONPage, url=ETradeStockURL, data=[ETradeStockTradeData, ETradeStockQuoteData]): pass
-class ETradeOptionPage(WebJSONPage, url=ETradeOptionURL, data=[ETradeOptionsTradeData, ETradeOptionQuoteData]): pass
+class ETradeExpirePage(WebJSONPage, url=ETradeExpireURL, web=ETradeExpireData):
+    def execute(self, *args, **kwargs):
+        data = ETradeExpireData(self.json, *args, **kwargs)
+        content = data(*args, **kwargs)
+        return content
+
+class ETradeStockPage(WebJSONPage, url=ETradeStockURL):
+    def execute(self, *args, **kwargs):
+        Stocks = ntuple("Stocks", "trade quote")
+        sourcing = Stocks(ETradeStockTradeData, ETradeStockQuoteData)
+        data = Stocks(sourcing.trade(self.json, *args, **kwargs), sourcing.quote(self.json, *args, **kwargs))
+        content = Stocks(data.trade(*args, **kwargs), data.quote(*args, **kwargs))
+        stocks = content.trade.merge(content.quote, how="outer", on=list(Querys.Symbol), sort=False, suffixes=("", "_"))
+        return stocks
+
+class ETradeOptionPage(WebJSONPage, url=ETradeOptionURL):
+    def execute(self, *args, **kwargs):
+        Options = ntuple("Options", "trade quote")
+        sourcing = Options(ETradeOptionsTradeData, ETradeOptionQuoteData)
+        data = Options(sourcing.trade(self.json, *args, **kwargs), sourcing.quote(self.json, *args, **kwargs))
+        content = Options(data.trade(*args, **kwargs), data.quote(*args, **kwargs))
+        options = content.trade.merge(content.quote, how="outer", on=list(Querys.Settlement), sort=False, suffixes=("", "_"))
+        return options
 
 
 class ETradeSettlementDownloader(Logging, title="Downloaded"):
@@ -186,9 +207,7 @@ class ETradeStockDownloader(Sizing, Emptying, Logging, title="Downloaded"):
 
     def download(self, symbol, *args, **kwargs):
         parameters = dict(ticker=symbol.ticker)
-        trade, quote = self.page(*args, **parameters, **kwargs)
-        assert isinstance(trade, pd.DataFrame) and isinstance(quote, pd.DataFrame)
-        stocks = trade.merge(quote, how="outer", on=list(Querys.Symbol), sort=False, suffixes=("", "_"))
+        stocks = self.page(*args, **parameters, **kwargs)
         return stocks
 
     @property
@@ -214,9 +233,7 @@ class ETradeOptionDownloader(Sizing, Emptying, Logging, title="Downloaded"):
     def download(self, settlement, *args, underlying={}, **kwargs):
         assert isinstance(underlying, dict)
         parameters = dict(ticker=settlement.ticker, expire=settlement.expire, strike=underlying[settlement.ticker])
-        trade, quote = self.page(*args, **parameters, **kwargs)
-        assert isinstance(trade, pd.DataFrame) and isinstance(quote, pd.DataFrame)
-        options = trade.merge(quote, how="outer", on=list(Querys.Contract), sort=False, suffixes=("", "_"))
+        options = self.page(*args, **parameters, **kwargs)
         options["underlying"] = underlying[settlement.ticker]
         return options
 
