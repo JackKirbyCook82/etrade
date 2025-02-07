@@ -13,9 +13,8 @@ from abc import ABC
 from datetime import date as Date
 from datetime import datetime as Datetime
 from datetime import timezone as Timezone
-from collections import namedtuple as ntuple
 
-from finance.variables import Querys, Variables
+from finance.variables import Querys, Variables, OSI
 from webscraping.webpages import WebJSONPage
 from webscraping.webdatas import WebJSON
 from webscraping.weburl import WebURL
@@ -23,15 +22,16 @@ from support.mixins import Emptying, Sizing, Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["ETradeSettlementDownloader", "ETradeStockDownloader", "ETradeOptionDownloader"]
+__all__ = ["ETradeProductDownloader", "ETradeStockDownloader", "ETradeOptionDownloader"]
 __copyright__ = "Copyright 2023, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
-timestamp_parser = lambda integer: Datetime.fromtimestamp(integer, Timezone.utc).astimezone(pytz.timezone("US/Central"))
-current_parser = lambda integer: np.datetime64(timestamp_parser(integer))
-contract_parser = lambda string: Querys.Contract.fromOSI(str(string).replace("---", ""))
-strike_parser = lambda content: np.round(content, 2).astype(np.float32)
+timestamp_parser = lambda string: Datetime.fromtimestamp(int(string), Timezone.utc).astimezone(pytz.timezone("US/Central"))
+current_parser = lambda string: np.datetime64(timestamp_parser(string))
+osi_parser = lambda string: OSI(str(string).replace("-", ""))
+contract_parser = lambda string: Querys.Contract(list(osi_parser(string)))
+strike_parser = lambda content: np.round(float(content), 2).astype(np.float32)
 expire_parser = lambda string: contract_parser(string).expire
 
 
@@ -53,7 +53,7 @@ class ETradeOptionURL(ETradeURL, path=["v1", "market", "optionchains" + ".json"]
     @staticmethod
     def expires(*args, expire, **kwargs): return {"expiryYear": f"{expire.year:04.0f}", "expiryMonth": f"{expire.month:02.0f}", "expiryDay": f"{expire.day:02.0f}", "expiryType": "ALL"}
     @staticmethod
-    def strikes(*args, strike, **kwargs): return {"strikePriceNear": str(int(strike)), "noOfStrikes": "1000", "priceType": "ALL"}
+    def strikes(*args, price, **kwargs): return {"strikePriceNear": str(int(price)), "noOfStrikes": "1000", "priceType": "ALL"}
     @staticmethod
     def options(*args, **kwargs): return {"optionCategory": "STANDARD", "chainType": "CALLPUT", "skipAdjusted": "true"}
 
@@ -76,18 +76,18 @@ class ETradeExpireData(WebJSON, locator="//OptionExpireDateResponse/ExpirationDa
         return Date(**contents)
 
 
-class ETradeStockData(WebJSON, locator="//QuoteResponse/QuoteData[]", multiple=True, optional=True):
+class ETradeStockData(WebJSON, locator="//QuoteResponse/QuoteData[]", multiple=False, optional=False):
     class Ticker(WebJSON.Text, locator="//Product/symbol", key="ticker", parser=str): pass
     class Current(WebJSON.Text, locator="//dateTimeUTC", key="current", parser=current_parser): pass
 
     def execute(self, *args, **kwargs):
         contents = super().execute(*args, **kwargs)
         assert isinstance(contents, dict)
-        stocks = pd.DataFrame.from_records([contents])
+        stocks = pd.Series(contents)
         return stocks
 
 class ETradeStockTradeData(ETradeStockData):
-    class Price(WebJSON.Text, locator="//lastTrade", key="price", parser=np.float32): pass
+    class Price(WebJSON.Text, locator="//All/lastTrade", key="price", parser=np.float32): pass
 
 class ETradeStockQuoteData(ETradeStockData):
     class Bid(WebJSON.Text, locator="//All/bid", key="bid", parser=np.float32): pass
@@ -96,9 +96,9 @@ class ETradeStockQuoteData(ETradeStockData):
     class Supply(WebJSON.Text, locator="//All/askSize", key="supply", parser=np.int32): pass
 
 
-class ETradeOptionData(WebJSON, ABC):
+class ETradeOptionData(WebJSON, ABC, multiple=False, optional=False):
     class Ticker(WebJSON.Text, locator="//symbol", key="ticker", parser=str): pass
-    class Expire(WebJSON.Text, locator="//quoteDetail", key="expire", parser=expire_parser): pass
+    class Expire(WebJSON.Text, locator="//osiKey", key="expire", parser=expire_parser): pass
     class Strike(WebJSON.Text, locator="//strikePrice", key="strike", parser=strike_parser): pass
     class Option(WebJSON.Text, locator="//optionType", key="option", parser=Variables.Securities.Option): pass
     class Current(WebJSON.Text, locator="//timeStamp", key="current", parser=current_parser): pass
@@ -140,50 +140,54 @@ class ETradeOptionsQuoteData(ETradeOptionsData):
 
 class ETradeExpirePage(WebJSONPage, url=ETradeExpireURL, web=ETradeExpireData):
     def execute(self, *args, **kwargs):
-        data = ETradeExpireData(self.json, *args, **kwargs)
-        content = data(*args, **kwargs)
-        return content
+        expires = ETradeExpireData(self.json, *args, **kwargs)
+        assert isinstance(expires, list)
+        expires = [expire(*args, **kwargs) for expire in expires]
+        return expires
 
 class ETradeStockPage(WebJSONPage, url=ETradeStockURL):
     def execute(self, *args, **kwargs):
-        Stocks = ntuple("Stocks", "trade quote")
-        sourcing = Stocks(ETradeStockTradeData, ETradeStockQuoteData)
-        data = Stocks(sourcing.trade(self.json, *args, **kwargs), sourcing.quote(self.json, *args, **kwargs))
-        content = Stocks(data.trade(*args, **kwargs), data.quote(*args, **kwargs))
-        stocks = content.trade.merge(content.quote, how="outer", on=list(Querys.Symbol), sort=False, suffixes=("", "_"))
+        trade = ETradeStockTradeData(self.json, *args, **kwargs)
+        quote = ETradeStockQuoteData(self.json, *args, **kwargs)
+        trade = trade(*args, **kwargs)
+        quote = quote(*args, **kwargs)
+        stocks = trade.combine_first(quote)
         return stocks
 
 class ETradeOptionPage(WebJSONPage, url=ETradeOptionURL):
     def execute(self, *args, **kwargs):
-        Options = ntuple("Options", "trade quote")
-        sourcing = Options(ETradeOptionsTradeData, ETradeOptionQuoteData)
-        data = Options(sourcing.trade(self.json, *args, **kwargs), sourcing.quote(self.json, *args, **kwargs))
-        content = Options(data.trade(*args, **kwargs), data.quote(*args, **kwargs))
-        options = content.trade.merge(content.quote, how="outer", on=list(Querys.Settlement), sort=False, suffixes=("", "_"))
+        trade = ETradeOptionsTradeData(self.json, *args, **kwargs)
+        quote = ETradeOptionsQuoteData(self.json, *args, **kwargs)
+        assert isinstance(trade, list) and isinstance(quote, list)
+        trade = pd.concat([data(*args, **kwargs) for data in trade], axis=0)
+        quote = pd.concat([data(*args, **kwargs) for data in quote], axis=0)
+        header = list(trade.columns) + [column for column in list(quote.columns) if column not in list(trade.columns)]
+        options = trade.merge(quote, how="outer", on=list(Querys.Contract), sort=False, suffixes=("", "_"))[header]
         return options
 
 
-class ETradeSettlementDownloader(Logging, title="Downloaded"):
+class ETradeProductDownloader(Logging, title="Downloaded"):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.__page = ETradeExpirePage(*args, **kwargs)
 
-    def execute(self, symbols, *args, expires, **kwargs):
-        assert isinstance(symbols, (list, Querys.Symbol))
-        assert all([isinstance(symbol, Querys.Symbol) for symbol in symbols]) if isinstance(symbols, list) else True
-        symbols = list(symbols) if isinstance(symbols, list) else [symbols]
-        for symbol in list(symbols):
-            expires = [expire for expire in self.download(symbol, *args, **kwargs) if expire in expires]
-            settlements = [Querys.Settlement(symbol.ticker, expire) for expire in expires]
-            self.console(f"{str(symbol)}[{len(settlements):.0f}]")
-            if not bool(settlements): continue
-            yield settlements
+    def execute(self, trades, *args, **kwargs):
+        assert isinstance(trades, (list, Querys.Trade))
+        assert all([isinstance(trade, Querys.Trade) for trade in trades]) if isinstance(trades, list) else True
+        trades = list(trades) if isinstance(trades, list) else [trades]
+        for trade in list(trades):
+            products = self.download(trade, *args, **kwargs)
+            self.console(f"{str(trade)}[{len(products):.0f}]")
+            if not bool(products): continue
+            yield products
 
-    def download(self, symbol, *args, **kwargs):
-        parameters = dict(ticker=symbol.ticker)
-        expires = self.page(*args, **parameters, **kwargs)
-        assert isinstance(expires, list)
-        return expires
+    def download(self, trade, *args, expires, **kwargs):
+        parameters = dict(ticker=trade.ticker, price=trade.price)
+        downloaded = self.page(*args, **parameters, **kwargs)
+        assert isinstance(downloaded, list)
+        expires = [expire for expire in downloaded if expire in expires]
+        products = [Querys.Product([trade.ticker, expire, trade.price]) for expire in expires]
+        return products
 
     @property
     def page(self): return self.__page
@@ -219,22 +223,21 @@ class ETradeOptionDownloader(Sizing, Emptying, Logging, title="Downloaded"):
         super().__init__(*args, **kwargs)
         self.__page = ETradeOptionPage(*args, **kwargs)
 
-    def execute(self, settlements, *args, **kwargs):
-        assert isinstance(settlements, (list, Querys.Settlement))
-        assert all([isinstance(settlement, Querys.Settlement) for settlement in settlements]) if isinstance(settlements, list) else True
-        settlements = list(settlements) if isinstance(settlements, list) else [settlements]
-        for settlement in list(settlements):
-            options = self.download(settlement, *args, **kwargs)
+    def execute(self, products, *args, **kwargs):
+        assert isinstance(products, (list, Querys.Product))
+        assert all([isinstance(product, Querys.Product) for product in products]) if isinstance(products, list) else True
+        products = list(products) if isinstance(products, list) else [products]
+        for product in list(products):
+            options = self.download(product, *args, **kwargs)
             size = self.size(options)
-            self.console(f"{str(settlement)}[{int(size):.0f}]")
+            self.console(f"{str(product)}[{int(size):.0f}]")
             if self.empty(options): return
             return options
 
-    def download(self, settlement, *args, underlying={}, **kwargs):
-        assert isinstance(underlying, dict)
-        parameters = dict(ticker=settlement.ticker, expire=settlement.expire, strike=underlying[settlement.ticker])
+    def download(self, product, *args, **kwargs):
+        parameters = dict(ticker=product.ticker, expire=product.expire, price=product.price)
         options = self.page(*args, **parameters, **kwargs)
-        options["underlying"] = underlying[settlement.ticker]
+        options["underlying"] = np.round(product.price, 2).astype(np.float32)
         return options
 
     @property
