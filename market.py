@@ -179,7 +179,7 @@ class ETradeProductDownloader(Logging, title="Downloaded"):
             products = self.download(trade, *args, **kwargs)
             self.console(f"{str(trade)}[{len(products):.0f}]")
             if not bool(products): continue
-            yield products
+            yield from iter(products)
 
     def download(self, trade, *args, expires, **kwargs):
         parameters = dict(ticker=trade.ticker, price=trade.price)
@@ -207,7 +207,7 @@ class ETradeStockDownloader(Sizing, Emptying, Logging, title="Downloaded"):
             size = self.size(stocks)
             self.console(f"{str(symbol)}[{int(size):.0f}]")
             if self.empty(stocks): return
-            return stocks
+            yield stocks
 
     def download(self, symbol, *args, **kwargs):
         parameters = dict(ticker=symbol.ticker)
@@ -232,7 +232,7 @@ class ETradeOptionDownloader(Sizing, Emptying, Logging, title="Downloaded"):
             size = self.size(options)
             self.console(f"{str(product)}[{int(size):.0f}]")
             if self.empty(options): return
-            return options
+            yield options
 
     def download(self, product, *args, **kwargs):
         parameters = dict(ticker=product.ticker, expire=product.expire, price=product.price)
