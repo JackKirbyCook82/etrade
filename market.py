@@ -36,9 +36,9 @@ expire_parser = lambda string: contract_parser(string).expire
 
 
 class ETradeURL(WebURL, domain="https://api.etrade.com"): pass
-class ETradeExpireURL(ETradeURL, path=["v1", "market", "optionexpiredate" + ".json"], parms={"expiryType": "ALL"}):
+class ETradeExpireURL(ETradeURL, path=["v1", "market", "optionexpiredate" + ".json"], parameters={"expiryType": "ALL"}):
     @staticmethod
-    def parms(*args, ticker, **kwargs): return {"symbol": f"{str(ticker).upper()}"}
+    def parameters(*args, ticker, **kwargs): return {"symbol": f"{str(ticker).upper()}"}
 
 
 class ETradeStockURL(ETradeURL, path=["v1", "market", "quote"]):
@@ -58,7 +58,7 @@ class ETradeOptionURL(ETradeURL, path=["v1", "market", "optionchains" + ".json"]
     def options(*args, **kwargs): return {"optionCategory": "STANDARD", "chainType": "CALLPUT", "skipAdjusted": "true"}
 
     @classmethod
-    def parms(cls, *args, ticker, **kwargs):
+    def parameters(cls, *args, ticker, **kwargs):
         options = cls.options(*args, **kwargs)
         expires = cls.expires(*args, **kwargs)
         strikes = cls.strikes(*args, **kwargs)
