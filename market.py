@@ -83,7 +83,7 @@ class ETradeStockData(WebJSON, locator="//QuoteResponse/QuoteData[]", multiple=F
     def execute(self, *args, **kwargs):
         contents = super().execute(*args, **kwargs)
         assert isinstance(contents, dict)
-        stocks = pd.Series(contents)
+        stocks = pd.DataFrame.from_records([contents])
         return stocks
 
 class ETradeStockTradeData(ETradeStockData):
@@ -143,6 +143,7 @@ class ETradeExpirePage(WebJSONPage, url=ETradeExpireURL, web=ETradeExpireData):
         expires = ETradeExpireData(self.json, *args, **kwargs)
         assert isinstance(expires, list)
         expires = [expire(*args, **kwargs) for expire in expires]
+        expires = [expire for expire in expires if expire in kwargs.get("expires", expires)]
         return expires
 
 class ETradeStockPage(WebJSONPage, url=ETradeStockURL):
@@ -166,6 +167,32 @@ class ETradeOptionPage(WebJSONPage, url=ETradeOptionURL):
         return options
 
 
+class ETradeStockDownloader(Sizing, Emptying, Logging, title="Downloaded"):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__page = ETradeStockPage(*args, **kwargs)
+
+    def execute(self, symbols, *args, **kwargs):
+        assert isinstance(symbols, (list, Querys.Symbol))
+        assert all([isinstance(symbol, Querys.Symbol) for symbol in symbols]) if isinstance(symbols, list) else True
+        symbols = list(symbols) if isinstance(symbols, list) else [symbols]
+        for symbol in list(symbols):
+            stocks = self.download(symbol, *args, **kwargs)
+            size = self.size(stocks)
+            self.console(f"{str(symbol)}[{int(size):.0f}]")
+            if self.empty(stocks): return
+            yield stocks.squeeze()
+
+    def download(self, symbol, *args, **kwargs):
+        parameters = dict(ticker=symbol.ticker)
+        stocks = self.page(*args, **parameters, **kwargs)
+        assert isinstance(stocks, pd.DataFrame)
+        return stocks
+
+    @property
+    def page(self): return self.__page
+
+
 class ETradeProductDownloader(Logging, title="Downloaded"):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -182,37 +209,11 @@ class ETradeProductDownloader(Logging, title="Downloaded"):
             yield from iter(products)
 
     def download(self, trade, *args, expires, **kwargs):
-        parameters = dict(ticker=trade.ticker, price=trade.price)
-        downloaded = self.page(*args, **parameters, **kwargs)
-        assert isinstance(downloaded, list)
-        expires = [expire for expire in downloaded if expire in expires]
+        parameters = dict(ticker=trade.ticker, expires=expires, price=trade.price)
+        expires = self.page(*args, **parameters, **kwargs)
+        assert isinstance(expires, list)
         products = [Querys.Product([trade.ticker, expire, trade.price]) for expire in expires]
         return products
-
-    @property
-    def page(self): return self.__page
-
-
-class ETradeStockDownloader(Sizing, Emptying, Logging, title="Downloaded"):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.__page = ETradeStockPage(*args, **kwargs)
-
-    def execute(self, symbols, *args, **kwargs):
-        assert isinstance(symbols, (list, Querys.Symbol))
-        assert all([isinstance(symbol, Querys.Symbol) for symbol in symbols]) if isinstance(symbols, list) else True
-        symbols = list(symbols) if isinstance(symbols, list) else [symbols]
-        for symbol in list(symbols):
-            stocks = self.download(symbol, *args, **kwargs)
-            size = self.size(stocks)
-            self.console(f"{str(symbol)}[{int(size):.0f}]")
-            if self.empty(stocks): return
-            yield stocks
-
-    def download(self, symbol, *args, **kwargs):
-        parameters = dict(ticker=symbol.ticker)
-        stocks = self.page(*args, **parameters, **kwargs)
-        return stocks
 
     @property
     def page(self): return self.__page
