@@ -206,7 +206,7 @@ class ETradeProductDownloader(Logging, title="Downloaded"):
             products = self.download(trade, *args, **kwargs)
             self.console(f"{str(trade)}[{len(products):.0f}]")
             if not bool(products): continue
-            yield from iter(products)
+            yield list(products)
 
     def download(self, trade, *args, expires, **kwargs):
         parameters = dict(ticker=trade.ticker, expires=expires, price=trade.price)
