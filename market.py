@@ -32,7 +32,7 @@ __license__ = "MIT License"
 timestamp_parser = lambda string: Datetime.fromtimestamp(int(string), Timezone.utc).astimezone(pytz.timezone("US/Central"))
 current_parser = lambda string: np.datetime64(timestamp_parser(string))
 osi_parser = lambda string: OSI(str(string).replace("-", ""))
-contract_parser = lambda string: Querys.Contract(list(osi_parser(string)))
+contract_parser = lambda string: Querys.Contract(list(osi_parser(string).values()))
 strike_parser = lambda content: np.round(float(content), 2).astype(np.float32)
 expire_parser = lambda string: contract_parser(string).expire
 
@@ -44,7 +44,7 @@ class ETradeStockURL(ETradeMarketURL, path=["v1", "market", "quote"]):
 
 class ETradeOptionURL(ETradeMarketURL, path=["v1", "market", "optionchains" + ".json"], parameters={"noOfStrikes": "1000", "priceType": "ALL"}):
     @classmethod
-    def parameters(cls, *args, ticker, expire, **kwargs):
+    def parameters(cls, *args, **kwargs):
         tickers = cls.tickers(*args, **kwargs)
         expires = cls.expires(*args, **kwargs)
         return tickers | expires
@@ -52,7 +52,7 @@ class ETradeOptionURL(ETradeMarketURL, path=["v1", "market", "optionchains" + ".
     @staticmethod
     def tickers(*args, ticker, **kwargs): return {"symbol": str(ticker).upper()}
     @staticmethod
-    def expires(*args, expire, **kwargs): return {"expiryYear": f"{expire.year:04.0f}", "expiryMonth": f"{expire.month:02.0f}", "expiryDay": f"{expire.day:02.0f}", "expiryType": "ALL"}
+    def expires(*args, expire, **kwargs): return {"expiryYear": f"{expire.year:04.0f}", "expiryMonth": f"{expire.month:02.0f}", "expiryDay": f"{expire.day:02.0f}"}
 
 class ETradeExpireURL(ETradeMarketURL, path=["v1", "market", "optionexpiredate" + ".json"], parameters={"expiryType": "ALL"}):
     @staticmethod
@@ -131,7 +131,7 @@ class ETradeExpireData(WebJSON, locator="//OptionExpireDateResponse/ExpirationDa
         return Date(**contents)
 
 
-class ETradeMarketPage(WebJSON):
+class ETradeMarketPage(WebJSONPage):
     def __init_subclass__(cls, *args, url, trade, quote, **kwargs):
         super().__init_subclass__(*args, **kwargs)
         cls.__trade__ = trade
@@ -164,20 +164,21 @@ class ETradeStockPage(ETradeMarketPage, url=ETradeStockURL, trade=ETradeStocksTr
 class ETradeOptionPage(ETradeMarketPage, url=ETradeOptionURL, trade=ETradeOptionsTradeData, quote=ETradeOptionsQuoteData): pass
 
 class ETradeExpirePage(WebJSONPage):
-    def execute(self, *args, expires, **kwargs):
+    def execute(self, *args, expiry=None, **kwargs):
         url = ETradeExpireURL(*args, **kwargs)
         self.load(url, *args, **kwargs)
         datas = ETradeExpireData(self.json, *args, **kwargs)
         assert isinstance(datas, list)
         contents = [data(*args, **kwargs) for data in datas]
-        contents = [content for content in contents if content in expires]
+        expiry = expiry if expiry is not None else contents
+        contents = [content for content in contents if content in expiry]
         return contents
 
 
 class ETradeSecurityDownloader(Sizing, Emptying, Partition, Logging, ABC, title="Downloaded"):
     def __init_subclass__(cls, *args, **kwargs):
         super().__init_subclass__(*args, **kwargs)
-        cls.__pagetype__ = kwargs.get("pagetype", getattr(cls, "__pagetype__", None))
+        cls.__pagetype__ = kwargs.get("page", getattr(cls, "__pagetype__", None))
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -204,7 +205,7 @@ class ETradeSecurityDownloader(Sizing, Emptying, Partition, Logging, ABC, title=
     def page(self): return self.__page
 
 
-class ETradeStockDownloader(ETradeSecurityDownloader, stock=ETradeStockPage):
+class ETradeStockDownloader(ETradeSecurityDownloader, page=ETradeStockPage):
     def execute(self, symbols, *args, **kwargs):
         symbols = self.querys(symbols, Querys.Symbol)
         if not bool(symbols): return
@@ -225,7 +226,7 @@ class ETradeStockDownloader(ETradeSecurityDownloader, stock=ETradeStockPage):
             yield stocks
 
 
-class ETradeOptionDownloader(ETradeSecurityDownloader, option=ETradeOptionPage):
+class ETradeOptionDownloader(ETradeSecurityDownloader, page=ETradeOptionPage):
     def execute(self, symbols, expires, *args, **kwargs):
         symbols = self.querys(symbols, Querys.Symbol)
         if not bool(symbols): return
@@ -255,8 +256,7 @@ class ETradeExpireDownloader(Logging, title="Downloaded"):
             parameters = {"ticker": str(symbol.ticker)}
             expires = self.download(*args, **parameters, **kwargs)
             assert isinstance(expires, list)
-            size = self.size(expires)
-            self.console(f"{str(symbols)}[{int(size):.0f}]")
+            self.console(f"{str(symbol)}[{len(expires):.0f}]")
             if not bool(expires): return
             yield expires
 
