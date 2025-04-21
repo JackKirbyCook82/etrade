@@ -132,8 +132,9 @@ class ETradeExpireData(WebJSON, locator="//OptionExpireDateResponse/ExpirationDa
 
 
 class ETradeMarketPage(WebJSONPage):
-    def __init_subclass__(cls, *args, url, trade, quote, **kwargs):
+    def __init_subclass__(cls, *args, header, url, trade, quote, **kwargs):
         super().__init_subclass__(*args, **kwargs)
+        cls.__header__ = header
         cls.__trade__ = trade
         cls.__quote__ = quote
         cls.__url__ = url
@@ -149,10 +150,12 @@ class ETradeMarketPage(WebJSONPage):
         header = list(trade.columns) + [column for column in list(quote.columns) if column not in list(trade.columns)]
         average = lambda cols: np.round((cols["ask"] + cols["bid"]) / 2, 2).astype(np.float32)
         missing = lambda cols: np.isnan(cols["price"])
-        options = trade.merge(quote, how="outer", on=list(Querys.Contract), sort=False, suffixes=("", "_"))[header]
+        options = trade.merge(quote, how="outer", on=list(self.header), sort=False, suffixes=("", "_"))[header]
         options["price"] = options.apply(lambda cols: average(cols) if missing(cols) else cols["price"], axis=1)
         return options
 
+    @property
+    def header(self): return type(self).__header__
     @property
     def trade(self): return type(self).__trade__
     @property
@@ -160,8 +163,8 @@ class ETradeMarketPage(WebJSONPage):
     @property
     def url(self): return type(self).__url__
 
-class ETradeStockPage(ETradeMarketPage, url=ETradeStockURL, trade=ETradeStocksTradeData, quote=ETradeStocksQuoteData): pass
-class ETradeOptionPage(ETradeMarketPage, url=ETradeOptionURL, trade=ETradeOptionsTradeData, quote=ETradeOptionsQuoteData): pass
+class ETradeStockPage(ETradeMarketPage, url=ETradeStockURL, trade=ETradeStocksTradeData, quote=ETradeStocksQuoteData, header=Querys.Symbol): pass
+class ETradeOptionPage(ETradeMarketPage, url=ETradeOptionURL, trade=ETradeOptionsTradeData, quote=ETradeOptionsQuoteData, header=Querys.Contract): pass
 
 class ETradeExpirePage(WebJSONPage):
     def execute(self, *args, expiry=None, **kwargs):
