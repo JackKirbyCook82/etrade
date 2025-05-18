@@ -221,7 +221,6 @@ class ETradeStockDownloader(ETradeSecurityDownloader, page=ETradeStockPage):
                 function = lambda series: symbols[Querys.Symbol(series.to_dict())]
                 values = stocks[list(Querys.Symbol)].apply(function, axis=1, result_type="expand")
                 stocks = pd.concat([stocks, values], axis=1)
-            symbols = self.groups(stocks, by=Querys.Symbol)
             symbols = ",".join(list(map(str, symbols)))
             size = self.size(stocks)
             self.console(f"{str(symbols)}[{int(size):.0f}]")
