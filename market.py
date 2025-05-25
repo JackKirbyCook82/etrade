@@ -69,7 +69,7 @@ class ETradeStocksData(WebJSON, locator="//QuoteResponse/QuoteData[]", multiple=
         return stocks
 
 class ETradeStocksTradeData(ETradeStocksData):
-    class Price(WebJSON.Text, locator="//All/lastTrade", key="price", parser=np.float32): pass
+    class Last(WebJSON.Text, locator="//All/lastTrade", key="last", parser=np.float32): pass
 
 class ETradeStocksQuoteData(ETradeStocksData):
     class Bid(WebJSON.Text, locator="//All/bid", key="bid", parser=np.float32): pass
@@ -94,7 +94,7 @@ class ETradeOptionData(WebJSON, ABC, multiple=False, optional=False):
         return options
 
 class ETradeOptionTradeData(ETradeOptionData):
-    class Price(WebJSON.Text, locator="//lastPrice", key="price", parser=np.float32): pass
+    class Last(WebJSON.Text, locator="//lastPrice", key="last", parser=np.float32): pass
 
 class ETradeOptionQuoteData(ETradeOptionData):
     class Bid(WebJSON.Text, locator="//bid", key="bid", parser=np.float32): pass
@@ -149,9 +149,9 @@ class ETradeMarketPage(WebJSONPage):
         quote = pd.concat([data(*args, **kwargs) for data in quote], axis=0)
         header = list(trade.columns) + [column for column in list(quote.columns) if column not in list(trade.columns)]
         average = lambda cols: np.round((cols["ask"] + cols["bid"]) / 2, 2).astype(np.float32)
-        missing = lambda cols: np.isnan(cols["price"])
+        missing = lambda cols: np.isnan(cols["last"])
         options = trade.merge(quote, how="outer", on=list(self.header), sort=False, suffixes=("", "_"))[header]
-        options["price"] = options.apply(lambda cols: average(cols) if missing(cols) else cols["price"], axis=1)
+        options["last"] = options.apply(lambda cols: average(cols) if missing(cols) else cols["last"], axis=1)
         return options
 
     @property
