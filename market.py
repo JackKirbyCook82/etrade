@@ -59,7 +59,9 @@ class ETradeExpireURL(ETradeMarketURL, path=["v1", "market", "optionexpiredate" 
     def parameters(*args, ticker, **kwargs): return {"symbol": str(ticker).upper()}
 
 
-class ETradeStockData(WebJSON, ABC, multiple=True, optional=False):
+class ETradeStocksData(WebJSON, locator="//QuoteResponse/QuoteData", multiple=True, optional=False):
+    class Quoting(WebJSON.Text, locator="//quoteStatus", key="quoting", parser=Variables.Markets.Quoting): pass
+    class Timing(WebJSON.Text, locator="//dateTimeUTC", key="timing", parser=datetime_parser): pass
     class Ticker(WebJSON.Text, locator="//Product/symbol", key="ticker", parser=str): pass
     class Last(WebJSON.Text, locator="//All/lastTrade", key="last", parser=np.float32): pass
     class Bid(WebJSON.Text, locator="//All/bid", key="bid", parser=np.float32): pass
@@ -67,18 +69,10 @@ class ETradeStockData(WebJSON, ABC, multiple=True, optional=False):
     class Demand(WebJSON.Text, locator="//All/bidSize", key="demand", parser=np.int32): pass
     class Supply(WebJSON.Text, locator="//All/askSize", key="supply", parser=np.int32): pass
 
-
-class ETradeStocksData(WebJSON, locator="//QuoteResponse", multiple=False, optional=False):
-    class Quoting(WebJSON.Text, locator="//quoteStatus", key="quoting", parser=Variables.Markets.Quoting): pass
-    class Timing(WebJSON.Text, locator="//datetimeUTC", key="timing", parser=datetime_parser): pass
-    class Stocks(ETradeStockData, locator="//QuoteData[]", key="stock"): pass
-
     def execute(self, *args, **kwargs):
-        stocks = self["stock"](*args, **kwargs)
-        assert isinstance(stocks, list)
-        stocks = pd.DataFrame.from_records(stocks)
-        stocks["quoting"] = self["quoting"](*args, **kwargs)
-        stocks["timing"] = self["timing"](*args, **kwargs)
+        stocks = super().execute(*args, **kwargs)
+        assert isinstance(stocks, dict)
+        stocks = pd.DataFrame.from_records([stocks])
         return stocks
 
 
@@ -93,6 +87,12 @@ class ETradeOptionData(WebJSON, ABC, multiple=False, optional=False):
     class Demand(WebJSON.Text, locator="//bidSize", key="demand", parser=np.int32): pass
     class Supply(WebJSON.Text, locator="//askSize", key="supply", parser=np.int32): pass
 
+    def execute(self, *args, **kwargs):
+        options = super().execute(*args, **kwargs)
+        assert isinstance(options, dict)
+        options = pd.DataFrame.from_records([options])
+        return options
+
 
 class ETradeOptionsData(WebJSON, ABC, locator="//OptionChainResponse", multiple=False, optional=False):
     class Quoting(WebJSON.Text, locator="//quoteType", key="quoting", parser=Variables.Markets.Quoting): pass
@@ -101,12 +101,15 @@ class ETradeOptionsData(WebJSON, ABC, locator="//OptionChainResponse", multiple=
         class Call(ETradeOptionData, locator="//Call", key="call"): pass
         class Put(ETradeOptionData, locator="//Put", key="put"): pass
 
+        def execute(self, *args, **kwargs):
+            calls = self["call"](*args, **kwargs)
+            puts = self["put"](*args, **kwargs)
+            options = pd.concat([calls, puts], axis=0)
+            return options
+
     def execute(self, *args, **kwargs):
-        calls = [data["call"](*args, **kwargs) for data in self["option"]]
-        puts = [data["put"](*args, **kwargs) for data in self["option"]]
-        options = pd.DataFrame.from_records(calls + puts)
-        function = lambda column: np.round(column, 2)
-        options["strike"] = options["strike"].apply(function).astype(np.float32)
+        options = [data(*args, **kwargs) for data in self["option"]]
+        options = pd.concat(options, axis=0)
         options["quoting"] = self["quoting"](*args, **kwargs)
         options["timing"] = self["timing"](*args, **kwargs)
         return options
@@ -128,7 +131,8 @@ class ETradeStockPage(WebJSONPage):
         url = ETradeStockURL(*args, **kwargs)
         self.load(url, *args, **kwargs)
         stocks = ETradeStocksData(self.json, *args, **kwargs)
-        assert isinstance(stocks, pd.DataFrame)
+        stocks = [data(*args, **kwargs) for data in iter(stocks)]
+        stocks = pd.concat(stocks, axis=0)
         return stocks
 
 class ETradeOptionPage(WebJSONPage):
@@ -136,6 +140,7 @@ class ETradeOptionPage(WebJSONPage):
         url = ETradeOptionURL(*args, **kwargs)
         self.load(url, *args, **kwargs)
         options = ETradeOptionsData(self.json, *args, **kwargs)
+        options = options(*args, **kwargs)
         assert isinstance(options, pd.DataFrame)
         return options
 
