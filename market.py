@@ -12,8 +12,8 @@ import pandas as pd
 from abc import ABC
 from itertools import product
 from datetime import date as Date
-from datetime import datetime as Datetime
 from datetime import timezone as Timezone
+from datetime import datetime as Datetime
 
 from finance.variables import Querys, Variables, OSI
 from webscraping.webpages import WebJSONPage
@@ -29,8 +29,7 @@ __copyright__ = "Copyright 2023, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
-timestamp_parser = lambda string: Datetime.fromtimestamp(int(string), Timezone.utc).astimezone(pytz.timezone("US/Central"))
-datetime_parser = lambda string: np.datetime64(timestamp_parser(string))
+timestamp_parser = lambda integer: Datetime.fromtimestamp(int(integer), tz=Timezone.utc).astimezone(pytz.timezone("US/Central"))
 osi_parser = lambda string: OSI(str(string).replace("-", ""))
 contract_parser = lambda string: Querys.Contract(list(osi_parser(string).values()))
 strike_parser = lambda content: np.round(float(content), 2).astype(np.float32)
@@ -61,7 +60,7 @@ class ETradeExpireURL(ETradeMarketURL, path=["v1", "market", "optionexpiredate" 
 
 class ETradeStocksData(WebJSON, locator="//QuoteResponse/QuoteData", multiple=True, optional=False):
     class Quoting(WebJSON.Text, locator="//quoteStatus", key="quoting", parser=Variables.Markets.Quoting): pass
-    class Timing(WebJSON.Text, locator="//dateTimeUTC", key="timing", parser=datetime_parser): pass
+    class Timing(WebJSON.Text, locator="//dateTimeUTC", key="timing", parser=timestamp_parser): pass
     class Ticker(WebJSON.Text, locator="//Product/symbol", key="ticker", parser=str): pass
     class Last(WebJSON.Text, locator="//All/lastTrade", key="last", parser=np.float32): pass
     class Bid(WebJSON.Text, locator="//All/bid", key="bid", parser=np.float32): pass
@@ -96,7 +95,7 @@ class ETradeOptionData(WebJSON, ABC, multiple=False, optional=False):
 
 class ETradeOptionsData(WebJSON, ABC, locator="//OptionChainResponse", multiple=False, optional=False):
     class Quoting(WebJSON.Text, locator="//quoteType", key="quoting", parser=Variables.Markets.Quoting): pass
-    class Timing(WebJSON.Text, locator="//timeStamp", key="timing", parser=datetime_parser): pass
+    class Timing(WebJSON.Text, locator="//timeStamp", key="timing", parser=timestamp_parser): pass
     class Options(WebJSON, locator="OptionPair[]", key="option", multiple=True, optional=False):
         class Call(ETradeOptionData, locator="//Call", key="call"): pass
         class Put(ETradeOptionData, locator="//Put", key="put"): pass
