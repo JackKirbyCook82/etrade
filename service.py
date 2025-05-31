@@ -6,14 +6,13 @@ Created on Thurs May 29 2025
 
 """
 
-from webscraping.webservices import WebService
-from webscraping.webreaders import WebReader
+from webscraping.webreaders import WebService
 from webscraping.webdrivers import WebDriver
 from webscraping.webdatas import WebELMT
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = []
+__all__ = ["ETradeWebService"]
 __copyright__ = "Copyright 2025, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -31,19 +30,13 @@ class ETradeAcceptData(WebELMT.Button, locator=r"//input[@id='acceptSubmit']", k
 class ETradeSecurity(WebELMT.Value, locator=r"//input[@type='text']", key="security"): pass
 
 
-class ETradeWebService(WebService, WebReader, authorize=AUTHORIZE, request=REQUEST, access=ACCESS, base=BASE):
+class ETradeWebService(WebService, authorize=AUTHORIZE, request=REQUEST, access=ACCESS, base=BASE):
     def __init__(self, *args, executable, authorize, timeout=60, port=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.__executable = executable
         self.__timeout = int(timeout)
         self.__authorize = authorize
         self.__port = port
-
-    def start(self): self.session = self.service()
-    def load(self, url, *args, **kwargs):
-        parameters = {"header_auth": True}
-        self.console(str(url), title="Loading")
-        super().load(url, *args, parameters=parameters, **kwargs)
 
     def security(self, url, *args, **kwargs):
         with WebDriver(executable=self.executable, delay=self.delay, timeout=self.timeout, port=self.port) as source:
