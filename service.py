@@ -24,16 +24,18 @@ ACCESS = "https://api.etrade.com/oauth/access_token"
 BASE = "https://api.etrade.com"
 
 
-class ETradeUsernameData(WebELMT.Input, locator=r"", key="username"): pass
-class ETradePasswordData(WebELMT.Input, locator=r"", key="password"): pass
-class ETradeLoginData(WebELMT.Button, locator=r"", key="login"): pass
-class ETradeSecurity(WebELMT.Text, locator=r"", key="security"): pass
+class ETradeUsernameData(WebELMT.Input, locator=r"//input[@id='USER']", key="username"): pass
+class ETradePasswordData(WebELMT.Input, locator=r"//input[@id='password']", key="password"): pass
+class ETradeLoginData(WebELMT.Button, locator=r"//button[@id='mfaLogonButton']", key="login"): pass
+class ETradeAcceptData(WebELMT.Button, locator=r"//input[@id='acceptSubmit']", key="accept"): pass
+class ETradeSecurity(WebELMT.Value, locator=r"//input[@type='text']", key="security"): pass
 
 
 class ETradeWebService(WebService, WebReader, authorize=AUTHORIZE, request=REQUEST, access=ACCESS, base=BASE):
-    def __init__(self, *args, executable, authorize, port=None, **kwargs):
+    def __init__(self, *args, executable, authorize, timeout=60, port=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.__executable = executable
+        self.__timeout = int(timeout)
         self.__authorize = authorize
         self.__port = port
 
@@ -44,15 +46,17 @@ class ETradeWebService(WebService, WebReader, authorize=AUTHORIZE, request=REQUE
         super().load(url, *args, parameters=parameters, **kwargs)
 
     def security(self, url, *args, **kwargs):
-        with WebDriver(executable=self.executable, delay=self.delay, port=self.port) as source:
+        with WebDriver(executable=self.executable, delay=self.delay, timeout=self.timeout, port=self.port) as source:
             source.load(str(url), *args, **kwargs)
-            username = ETradeUsernameData(source.elmt, *args, **kwargs)
-            password = ETradePasswordData(source.elmt, *args, **kwargs)
-            login = ETradeLoginData(source.elmt, *args, **kwargs)
+            username = ETradeUsernameData(source.elmt, *args, timeout=self.timeout, **kwargs)
+            password = ETradePasswordData(source.elmt, *args, timeout=self.timeout, **kwargs)
+            login = ETradeLoginData(source.elmt, *args, timeout=self.timeout, **kwargs)
             username.fill(self.authorize.username)
             password.fill(self.authorize.password)
             login.click()
-            security = ETradeSecurity(source.elmt, *args, **kwargs)
+            accept = ETradeAcceptData(source.elmt, *args, timeout=self.timeout, **kwargs)
+            accept.click()
+            security = ETradeSecurity(source.elmt, *args, timeout=self.timeout, **kwargs)
             return security(*args, **kwargs)
 
     @property
@@ -60,6 +64,9 @@ class ETradeWebService(WebService, WebReader, authorize=AUTHORIZE, request=REQUE
     @property
     def authorize(self): return self.__authorize
     @property
+    def timeout(self): return self.__timeout
+    @property
     def port(self): return self.__port
+
 
 
