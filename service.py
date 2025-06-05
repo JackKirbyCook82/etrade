@@ -12,7 +12,7 @@ from webscraping.webdatas import WebELMT
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["ETradeWebService"]
+__all__ = ["ETradeService"]
 __copyright__ = "Copyright 2025, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -30,7 +30,7 @@ class ETradeAcceptData(WebELMT.Button, locator=r"//input[@id='acceptSubmit']", k
 class ETradeSecurity(WebELMT.Value, locator=r"//input[@type='text']", key="security"): pass
 
 
-class ETradeWebService(WebService, authorize=AUTHORIZE, request=REQUEST, access=ACCESS, base=BASE):
+class ETradeService(WebService, authorize=AUTHORIZE, request=REQUEST, access=ACCESS, base=BASE):
     def __init__(self, *args, executable, authorize, timeout=60, port=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.__executable = executable
@@ -40,7 +40,7 @@ class ETradeWebService(WebService, authorize=AUTHORIZE, request=REQUEST, access=
 
     def security(self, url, *args, **kwargs):
         with WebDriver(executable=self.executable, delay=self.delay, timeout=self.timeout, port=self.port) as source:
-            source.load(str(url), *args, **kwargs)
+            source.load(*args, url=str(url), **kwargs)
             username = ETradeUsernameData(source.elmt, *args, timeout=self.timeout, **kwargs)
             password = ETradePasswordData(source.elmt, *args, timeout=self.timeout, **kwargs)
             login = ETradeLoginData(source.elmt, *args, timeout=self.timeout, **kwargs)

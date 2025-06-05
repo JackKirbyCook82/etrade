@@ -72,6 +72,8 @@ class ETradeStocksData(WebJSON, locator="//QuoteResponse/QuoteData", multiple=Tr
         stocks = super().execute(*args, **kwargs)
         assert isinstance(stocks, dict)
         stocks = pd.DataFrame.from_records([stocks])
+        stocks["instrument"] = Variables.Securities.Instrument.STOCK
+        stocks["option"] = Variables.Securities.Option.EMPTY
         return stocks
 
 
@@ -90,6 +92,7 @@ class ETradeOptionData(WebJSON, ABC, multiple=False, optional=False):
         options = super().execute(*args, **kwargs)
         assert isinstance(options, dict)
         options = pd.DataFrame.from_records([options])
+        options["instrument"] = Variables.Securities.Instrument.OPTION
         return options
 
 
