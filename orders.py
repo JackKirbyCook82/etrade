@@ -6,12 +6,12 @@
 
 """
 
+import secrets
 import numpy as np
 import pandas as pd
 from abc import ABC
-from collections import namedtuple as ntuple
 
-from finance.variables import Querys, Variables, Securities
+from finance.variables import Querys, Variables, Securities, OSI
 from webscraping.weburl import WebURL, WebPayload
 from webscraping.webpages import WebJSONPage
 from support.mixins import Emptying, Logging, Naming
@@ -23,34 +23,36 @@ __license__ = "MIT License"
 
 
 tenure_formatter = lambda order: {Variables.Markets.Tenure.DAY: "GOOD_FOR_DAY", Variables.Markets.Tenure.FILLKILL: "FILL_OR_KILL"}[order.tenure]
-action_formatter = lambda instrument: {Variables.Markets.Action.BUY: "BUY", Variables.Markets.Action.SELL: "SELL"}[instrument.action]
+action_formatter = lambda instrument: {Variables.Securities.Position.LONG: "BUY", Variables.Securities.Position.SHORT: "SELL"}[instrument.position]
 
 
-class ETradeProduct(Naming, ABC, fields=["ticker", "instrument", "option"]):
-    def __new__(cls, security, *args, **kwargs):
-        security = dict(instrument=security.instrument, option=security.option, position=security.position)
-        return super().__new__(cls, *args, **security, **kwargs)
+class ETradeProduct(Naming, ABC, fields=["ticker", "instrument", "option"]): pass
+class ETradeOption(ETradeProduct, fields=["expire", "strike"]):
+    def __str__(self): return str(OSI([self.ticker, self.expire, self.option, self.strike]))
 
-class ETradeOption(ETradeProduct, fields=["expire", "strike"]): pass
-class ETradeStock(ETradeProduct): pass
+class ETradeStock(ETradeProduct):
+    def __str__(self): return str(self.ticker)
 
 class ETradeInstrument(Naming, fields=["position", "quantity", "product"]):
+    def __str__(self): return str(self.product)
     def __new__(cls, security, *args, quantity, **kwargs):
         if security.instrument == Variables.Securities.Instrument.OPTION:
-            parameters = dict(instrument=security.instrument, option=security.option, quantity=quantity * 1)
+            quantity = quantity * 1
+            parameters = dict(instrument=security.instrument, option=security.option)
             product = ETradeOption(*args, **parameters, **kwargs)
         elif security.instrument == Variables.Securities.Instrument.STOCK:
-            parameters = dict(instrument=security.instrument, quantity=quantity * 100)
+            quantity = quantity * 100
+            parameters = dict(instrument=security.instrument)
             product = ETradeStock(*args, **parameters, **kwargs)
         else: raise ValueError(security.instrument)
-        parameters = dict(position=security.position, product=product)
+        parameters = dict(position=security.position, quantity=quantity, product=product)
         return super().__new__(cls, *args, **parameters, **kwargs)
 
 class ETradeValuation(Naming, fields=["npv"]):
     def __str__(self): return f"${self.npv.min():.0f} -> ${self.npv.max():.0f}"
 
-class ETradeOrder(Naming, ABC, fields=["term", "tenure", "limit", "stop", "instruments"]):
-    pass
+class ETradeOrder(Naming, fields=["term", "tenure", "limit", "stop", "quantity", "instruments"]): pass
+class ETradePreview(Naming, fields=["identity", "order"]): pass
 
 
 class ETradeOrderURL(WebURL, domain="https://api.etrade.com", path=["v1", "accounts"]): pass
@@ -58,17 +60,13 @@ class ETradePreviewURL(ETradeOrderURL):
     @staticmethod
     def path(*args, account, **kwargs): return [str(account), "orders", "preview"]
 
-class ETradePlaceURL(ETradeOrderURL):
-    @staticmethod
-    def path(*args, account, **kwargs): return [str(account), "orders", "place"]
 
-
-class ETradeOrderPayload(WebPayload, key="order", locator="Order", fields={"allOrNone": "true", "marketSession": "REGULAR", "pricing": "NET_DEBIT"}, multiple=False, optional=False):
+class ETradeOrderPayload(WebPayload, key="order", locator="Order", fields={"allOrNone": "true", "marketSession": "REGULAR", "pricing": "NET_DEBIT"}, multiple=True, optional=False):
     limit = lambda order: {"limitPrice": f"{order.limit:.02f}"} if order.term in (Variables.Markets.Term.LIMIT, Variables.Markets.Term.STOPLIMIT) else {}
     stop = lambda order: {"stopPrice": f"{order.stop:.02f}"} if order.term in (Variables.Markets.Term.STOP, Variables.Markets.Term.STOPLIMIT) else {}
     tenure = lambda order: {"orderTerm": tenure_formatter(order)}
 
-    class Instrument(WebPayload, key="instrument", locator="Instrument", multiple=True, optional=False):
+    class Instrument(WebPayload, key="instruments", locator="Instrument", multiple=True, optional=False):
         action = lambda instrument: {"orderAction": action_formatter(instrument)}
         quantity = lambda instrument: {"quantity": str(instrument.quantity)}
 
@@ -79,56 +77,33 @@ class ETradeOrderPayload(WebPayload, key="order", locator="Order", fields={"allO
             strike = lambda product: {"strikePrice": product.strike} if isinstance(product, ETradeOption) else {}
             ticker = lambda product: {"symbol": str(product.ticker)}
 
-
 class ETradePreviewPayload(WebPayload, key="preview", locator="PreviewOrderRequest", dependents=[ETradeOrderPayload], fields={"orderType": "SPREADS"}, multiple=False, optional=False):
-    identity = lambda order: {"clientOrderId": None}
-
-class ETradePlacePayload(WebPayload, key="place", locator="PlaceOrderRequest", dependents=[ETradeOrderPayload], fields={"orderType": "SPREADS"}, multiple=False, optional=False):
-    preview = lambda order: {"PreviewIds": {"previewId": None}}
-    identity = lambda order: {"clientOrderId": None}
+    identity = lambda preview: {"clientOrderId": str(preview.identity)}
 
 
-class ETradeOrderPage(WebJSONPage):
-    def __init_subclass__(cls, *args, **kwargs):
-        super().__init_subclass__(*args, **kwargs)
-        cls.__payload__ = kwargs.get("payload", getattr(cls, "__payload__", None))
-        cls.__url__ = kwargs.get("url", getattr(cls, "__url__", None))
-
-    def execute(self, *args, order, **kwargs):
-        url = self.url(*args, **kwargs)
-        payload = self.payload(order, *args, **kwargs)
-        self.load(url, *args, payload=dict(payload), **kwargs)
-
-    @property
-    def payload(self): return type(self).__payload__
-    @property
-    def url(self): return type(self).__url__
-
-class ETradePreviewPage(ETradeOrderPage, url=ETradePreviewURL, payload=ETradePreviewPayload): pass
-class ETradePlacePage(ETradeOrderPage, url=ETradePreviewURL, payload=ETradePlacePayload): pass
+class ETradePreviewPage(WebJSONPage):
+    def execute(self, *args, preview, **kwargs):
+        url = ETradePreviewURL(*args, account="123456789", **kwargs)
+        payload = ETradePreviewPayload(preview, *args, **kwargs)
+        self.load(url, *args, payload=payload.json, **kwargs)
 
 
 class ETradeOrderUploader(Emptying, Logging, title="Uploaded"):
     def __init__(self, *args, **kwargs):
-        Orders = ntuple("Pages", "preview, place")
-        preview = ETradePreviewPage(*args, **kwargs)
-        place = ETradePlacePage(*args, **kwargs)
-        self.__pages = Orders(preview, place)
+        super().__init__(*args, **kwargs)
+        self.__page = ETradePreviewPage(*args, **kwargs)
 
     def execute(self, prospects, *args, **kwargs):
         assert isinstance(prospects, pd.DataFrame)
         if self.empty(prospects): return
+        for preview, valuation in self.calculator(prospects, *args, **kwargs):
+            self.upload(preview, *args, **kwargs)
+            securities = ", ".join(list(map(str, preview.order.instruments)))
+            self.console(f"{str(securities)}[{preview.order.quantity:.0f}] @ {str(valuation)}")
 
-        print(prospects)
-        raise Exception()
-
-        for order, valuation in self.calculator(prospects, *args, **kwargs):
-            self.upload(order, *args, **kwargs)
-            securities = ", ".join(list(map(str, order.options + order.stocks)))
-            self.console(f"{str(securities)}[{order.quantity:.0f}] @ {str(valuation)}")
-
-    def upload(self, order, *args, **kwargs):
-        pass
+    def upload(self, preview, *args, **kwargs):
+        assert preview.order.term in (Variables.Markets.Term.MARKET, Variables.Markets.Term.LIMIT)
+        self.page(*args, preview=preview, **kwargs)
 
     @staticmethod
     def calculator(prospects, *args, term, tenure, **kwargs):
@@ -142,14 +117,15 @@ class ETradeOrderUploader(Emptying, Logging, title="Uploaded"):
             breakeven = prospect[("spot", Variables.Scenario.BREAKEVEN)]
             current = prospect[("spot", Variables.Scenario.CURRENT)]
             assert current >= breakeven and quantity >= 1
-            options = [ETradeInstrument(security, strike=strike, **settlement) for security, strike in options.items()]
-            stocks = [ETradeInstrument(security, **settlement) for security, strike in stocks]
+            options = [ETradeInstrument(security, strike=strike, quantity=1, **settlement) for security, strike in options.items()]
+            stocks = [ETradeInstrument(security, quantity=100, **settlement) for security, strike in stocks]
             valuation = ETradeValuation(npv=prospect.xs("npv", axis=0, level=0, drop_level=True))
             order = ETradeOrder(instruments=options + stocks, term=term, tenure=tenure, limit=-breakeven, stop=None, quantity=1)
-            yield order, valuation
+            preview = ETradePreview(identity=secrets.token_hex(16), order=order)
+            yield preview, valuation
 
     @property
-    def pages(self): return self.__pages
+    def page(self): return self.__page
 
 
 
