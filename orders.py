@@ -14,6 +14,7 @@ from abc import ABC
 from finance.variables import Querys, Variables, Securities, OSI
 from webscraping.weburl import WebURL, WebPayload
 from webscraping.webpages import WebJSONPage
+from webscraping.webdatas import WebJSON
 from support.mixins import Emptying, Logging, Naming
 
 __author__ = "Jack Kirby Cook"
@@ -55,10 +56,21 @@ class ETradeOrder(Naming, fields=["term", "tenure", "limit", "stop", "quantity",
 class ETradePreview(Naming, fields=["identity", "order"]): pass
 
 
+class ETradeAccountURL(WebURL, domain="https://api.etrade.com", path=["v1", "accounts", "list"]): pass
 class ETradeOrderURL(WebURL, domain="https://api.etrade.com", path=["v1", "accounts"]): pass
 class ETradePreviewURL(ETradeOrderURL):
     @staticmethod
     def path(*args, account, **kwargs): return [str(account), "orders", "preview"]
+
+
+class ETradeAccountData(WebJSON, locator="//AccountListResponse/Accounts", multiple=True, optional=False):
+    class Key(WebJSON.Text, locator="//Account/accountId", key="key", parser=str): pass
+    class Value(WebJSON.Text, locator="//Account/accountIdKey", key="value", parser=str): pass
+
+    def execute(self, *args, **kwargs):
+        contents = super().execute(*args, **kwargs)
+        assert isinstance(contents, dict)
+        return {contents["key"]: contents["value"]}
 
 
 class ETradeOrderPayload(WebPayload, key="order", locator="Order", fields={"allOrNone": "true", "marketSession": "REGULAR", "pricing": "NET_DEBIT"}, multiple=True, optional=False):
@@ -82,16 +94,21 @@ class ETradePreviewPayload(WebPayload, key="preview", locator="PreviewOrderReque
 
 
 class ETradePreviewPage(WebJSONPage):
-    def execute(self, *args, preview, **kwargs):
-        url = ETradePreviewURL(*args, account="123456789", **kwargs)
+    def execute(self, *args, authorize, preview, **kwargs):
+        url = ETradeAccountURL(*args, **kwargs)
+        self.load(url, *args, **kwargs)
+        accounts = ETradeAccountData(self.json, *args, **kwargs)
+        account = str(accounts[authorize.account])
+        url = ETradePreviewURL(*args, account=account, **kwargs)
         payload = ETradePreviewPayload(preview, *args, **kwargs)
         self.load(url, *args, payload=payload.json, **kwargs)
 
 
 class ETradeOrderUploader(Emptying, Logging, title="Uploaded"):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, authorize, **kwargs):
         super().__init__(*args, **kwargs)
         self.__page = ETradePreviewPage(*args, **kwargs)
+        self.__authorize = authorize
 
     def execute(self, prospects, *args, **kwargs):
         assert isinstance(prospects, pd.DataFrame)
@@ -103,7 +120,8 @@ class ETradeOrderUploader(Emptying, Logging, title="Uploaded"):
 
     def upload(self, preview, *args, **kwargs):
         assert preview.order.term in (Variables.Markets.Term.MARKET, Variables.Markets.Term.LIMIT)
-        self.page(*args, preview=preview, **kwargs)
+        parameters = dict(preview=preview, authorize=self.authorize)
+        self.page(*args, **parameters, **kwargs)
 
     @staticmethod
     def calculator(prospects, *args, term, tenure, **kwargs):
@@ -126,6 +144,7 @@ class ETradeOrderUploader(Emptying, Logging, title="Uploaded"):
 
     @property
     def page(self): return self.__page
-
+    @property
+    def authorize(self): return self.__authorize
 
 
