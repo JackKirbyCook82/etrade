@@ -56,21 +56,10 @@ class ETradeOrder(Naming, fields=["term", "tenure", "limit", "stop", "quantity",
 class ETradePreview(Naming, fields=["identity", "order"]): pass
 
 
-class ETradeAccountURL(WebURL, domain="https://api.etrade.com", path=["v1", "accounts", "list"]): pass
 class ETradeOrderURL(WebURL, domain="https://api.etrade.com", path=["v1", "accounts"]): pass
 class ETradePreviewURL(ETradeOrderURL):
     @staticmethod
-    def path(*args, account, **kwargs): return [str(account.keycode), "orders", "preview"]
-
-
-class ETradeAccountData(WebHTML, locator="//AccountListResponse/Accounts", multiple=True, optional=False):
-    class Key(WebHTML.Text, locator="//Account/accountId", key="key", parser=str): pass
-    class Value(WebHTML.Text, locator="//Account/accountIdKey", key="value", parser=str): pass
-
-    def execute(self, *args, **kwargs):
-        contents = super().execute(*args, **kwargs)
-        assert isinstance(contents, dict)
-        return {contents["key"]: contents["value"]}
+    def path(*args, webapi, **kwargs): return [str(webapi.account), "orders", "preview"]
 
 
 class ETradeOrderPayload(WebPayload, key="order", locator="Order", fields={"allOrNone": "true", "marketSession": "REGULAR", "pricing": "NET_DEBIT"}, multiple=True, optional=False):
@@ -94,15 +83,12 @@ class ETradePreviewPayload(WebPayload, key="preview", locator="PreviewOrderReque
 
 
 class ETradePreviewPage(WebHTMLPage):
-    def __init__(self, *args, account, **kwargs):
+    def __init__(self, *args, webapi, **kwargs):
         super().__init__(*args, **kwargs)
-        self.__account = account
+        self.__webapi = webapi
 
     def execute(self, *args, preview, **kwargs):
-        url = ETradeAccountURL(*args, **kwargs)
-        self.load(url, *args, **kwargs)
-
-        url = ETradePreviewURL(*args, account=self.account, **kwargs)
+        url = ETradePreviewURL(*args, webapi=self.webapi, **kwargs)
         payload = ETradePreviewPayload(preview, *args, **kwargs)
 
         print(url)
@@ -112,7 +98,7 @@ class ETradePreviewPage(WebHTMLPage):
         self.load(url, *args, payload=payload.json, **kwargs)
 
     @property
-    def account(self): return self.__account
+    def webapi(self): return self.__webapi
 
 
 class ETradeOrderUploader(Emptying, Logging, title="Uploaded"):

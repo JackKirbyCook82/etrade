@@ -36,13 +36,13 @@ class ETradeSecurityData(WebELMT.Value, locator=r"//input[@type='text']", key="s
 
 
 class ETradeDriverPage(WebELMTPage):
-    def execute(self, url, *args, authorize, timeout, **kwargs):
+    def execute(self, url, *args, webapi, timeout, **kwargs):
         self.load(*args, url=str(url), **kwargs)
         username = ETradeUsernameData(self.elmt, *args, timeout=timeout, **kwargs)
         password = ETradePasswordData(self.elmt, *args, timeout=timeout, **kwargs)
         login = ETradeLoginData(self.elmt, *args, timeout=timeout, **kwargs)
-        username.fill(authorize.username)
-        password.fill(authorize.password)
+        username.fill(webapi.username)
+        password.fill(webapi.password)
         with self.delayer: login.click()
         accept = ETradeAcceptData(self.elmt, *args, timeout=timeout, **kwargs)
         with self.delayer: accept.click()
@@ -50,19 +50,7 @@ class ETradeDriverPage(WebELMTPage):
         return security(*args, **kwargs)
 
 
-class ETradeService(WebService, ABC, authorize=AUTHORIZE, request=REQUEST, access=ACCESS, base=BASE):
-    def __init__(self, *args, delayer, authorize, **kwargs):
-        assert hasattr(authorize, "username") and hasattr(authorize, "password")
-        super().__init__(*args, **kwargs)
-        self.__authorize = authorize
-        self.__delayer = delayer
-
-    @property
-    def authorize(self): return self.__authorize
-    @property
-    def delayer(self): return self.__delayer
-
-
+class ETradeService(WebService, ABC, authorize=AUTHORIZE, request=REQUEST, access=ACCESS, base=BASE): pass
 class ETradeDriverService(ETradeService):
     def __init__(self, *args, executable, timeout=60, **kwargs):
         super().__init__(*args, **kwargs)
@@ -73,7 +61,7 @@ class ETradeDriverService(ETradeService):
         parameters = dict(executable=self.executable, timeout=self.timeout, delayer=self.delayer)
         with WebDriver(**parameters) as source:
             page = ETradeDriverPage(*args, source=source, **kwargs)
-            parameters = dict(timeout=self.timeout, authorize=self.authorize)
+            parameters = dict(timeout=self.timeout, webapi=self.webapi)
             security = page(url, *args, **parameters, **kwargs)
             return security
 
