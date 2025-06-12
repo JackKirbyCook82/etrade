@@ -93,7 +93,6 @@ class ETradePreviewPage(WebHTMLPage):
 
         print(url)
         print(payload)
-        raise Exception()
 
         self.load(url, *args, payload=payload.json, **kwargs)
 
@@ -113,6 +112,8 @@ class ETradeOrderUploader(Emptying, Logging, title="Uploaded"):
             self.upload(preview, *args, **kwargs)
             securities = ", ".join(list(map(str, preview.order.instruments)))
             self.console(f"{str(securities)}[{preview.order.quantity:.0f}] @ {str(valuation)}")
+
+            raise Exception()
 
     def upload(self, preview, *args, **kwargs):
         assert preview.order.term in (Variables.Markets.Term.MARKET, Variables.Markets.Term.LIMIT)
