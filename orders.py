@@ -6,7 +6,7 @@
 
 """
 
-import secrets
+import random
 import numpy as np
 import pandas as pd
 from abc import ABC
@@ -50,7 +50,7 @@ class ETradeInstrument(Naming, fields=["position", "quantity", "product"]):
         return super().__new__(cls, *args, **parameters, **kwargs)
 
 class ETradeValuation(Naming, fields=["npv"]):
-    def __str__(self): return f"${self.npv.min():.0f} -> ${self.npv.max():.0f}"
+    def __str__(self): return f"${self.npv.min():.0f}"
 
 class ETradeOrder(Naming, fields=["term", "tenure", "limit", "stop", "instruments"]): pass
 class ETradePreview(Naming, fields=["identity", "order"]): pass
@@ -132,6 +132,8 @@ class ETradeOrderUploader(Emptying, Logging, title="Uploaded"):
             securities = ", ".join(list(map(str, preview.order.instruments)))
             self.console(f"{str(securities)}[{preview.order.quantity:.0f}] @ {str(valuation)}")
 
+            raise Exception()
+
     def upload(self, preview, *args, **kwargs):
         assert preview.order.term in (Variables.Markets.Term.MARKET, Variables.Markets.Term.LIMIT)
         parameters = dict(account=self.account, preview=preview)
@@ -149,10 +151,10 @@ class ETradeOrderUploader(Emptying, Logging, title="Uploaded"):
             stocks = [Securities.Stocks(stock) for stock in strategy.stocks]
             assert spot >= breakeven and quantity >= 1
             options = [ETradeInstrument(security, strike=strike, quantity=quantity, **settlement) for security, strike in options.items()]
-            stocks = [ETradeInstrument(security, quantity=quantity * 100, **settlement) for security, strike in stocks]
+            stocks = [ETradeInstrument(security, quantity=quantity * 100, **settlement) for security in stocks]
             valuation = ETradeValuation(npv=prospect["npv"])
             order = ETradeOrder(instruments=options + stocks, term=term, tenure=tenure, limit=-breakeven, stop=None)
-            preview = ETradePreview(identity=secrets.token_hex(16), order=order)
+            preview = ETradePreview(identity=random.randint(1000000000, 9999999999), order=order)
             yield preview, valuation
 
     @property
