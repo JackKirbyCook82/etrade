@@ -58,7 +58,7 @@ class ETradeExpireURL(ETradeMarketURL, path=["v1", "market", "optionexpiredate" 
     def parameters(*args, ticker, **kwargs): return {"symbol": str(ticker).upper()}
 
 
-class ETradeStocksData(WebJSON, locator="//QuoteResponse/QuoteData", multiple=True, optional=False):
+class ETradeStocksData(WebJSON, locator="//QuoteResponse/QuoteData[]", multiple=True, optional=False):
     class Quoting(WebJSON.Text, locator="//quoteStatus", key="quoting", parser=Variables.Markets.Quoting): pass
     class Timing(WebJSON.Text, locator="//dateTimeUTC", key="timing", parser=timestamp_parser): pass
     class Ticker(WebJSON.Text, locator="//Product/symbol", key="ticker", parser=str): pass
