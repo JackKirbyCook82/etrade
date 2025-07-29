@@ -60,7 +60,7 @@ class ETradeAccountURL(WebURL, domain="https://api.etrade.com", path=["v1", "acc
 class ETradeOrderURL(WebURL, domain="https://api.etrade.com", path=["v1", "accounts"]): pass
 class ETradePreviewURL(ETradeOrderURL):
     @staticmethod
-    def path(*args, webapi, **kwargs): return [str(webapi.account), "orders", "preview" + ".json"]
+    def path(*args, account, **kwargs): return [str(account), "orders", "preview" + ".json"]
 
 
 class ETradeAccountData(WebJSON, locator="//AccountListResponse/Accounts/Account[]", multiple=True, optional=False):
