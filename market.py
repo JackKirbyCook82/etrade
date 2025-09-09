@@ -15,7 +15,7 @@ from datetime import date as Date
 from datetime import timezone as Timezone
 from datetime import datetime as Datetime
 
-from finance.variables import Querys, Variables, OSI
+from finance.concepts import Querys, Concepts, OSI
 from webscraping.webpages import WebJSONPage
 from webscraping.webdatas import WebJSON
 from webscraping.weburl import WebURL
@@ -59,7 +59,7 @@ class ETradeExpireURL(ETradeMarketURL, path=["v1", "market", "optionexpiredate" 
 
 
 class ETradeStocksData(WebJSON, locator="//QuoteResponse/QuoteData[]", multiple=True, optional=False):
-    class Quoting(WebJSON.Text, locator="//quoteStatus", key="quoting", parser=Variables.Markets.Quoting): pass
+    class Quoting(WebJSON.Text, locator="//quoteStatus", key="quoting", parser=Concepts.Markets.Quoting): pass
     class Timing(WebJSON.Text, locator="//dateTimeUTC", key="timing", parser=timestamp_parser): pass
     class Ticker(WebJSON.Text, locator="//Product/symbol", key="ticker", parser=str): pass
     class Last(WebJSON.Text, locator="//All/lastTrade", key="last", parser=np.float32): pass
@@ -72,8 +72,8 @@ class ETradeStocksData(WebJSON, locator="//QuoteResponse/QuoteData[]", multiple=
         stocks = super().execute(*args, **kwargs)
         assert isinstance(stocks, dict)
         stocks = pd.DataFrame.from_records([stocks])
-        stocks["instrument"] = Variables.Securities.Instrument.STOCK
-        stocks["option"] = Variables.Securities.Option.EMPTY
+        stocks["instrument"] = Concepts.Securities.Instrument.STOCK
+        stocks["option"] = Concepts.Securities.Option.EMPTY
         return stocks
 
 
@@ -81,7 +81,7 @@ class ETradeOptionData(WebJSON, ABC, multiple=False, optional=False):
     class Ticker(WebJSON.Text, locator="//symbol", key="ticker", parser=str): pass
     class Expire(WebJSON.Text, locator="//osiKey", key="expire", parser=expire_parser): pass
     class Strike(WebJSON.Text, locator="//strikePrice", key="strike", parser=strike_parser): pass
-    class Option(WebJSON.Text, locator="//optionType", key="option", parser=Variables.Securities.Option): pass
+    class Option(WebJSON.Text, locator="//optionType", key="option", parser=Concepts.Securities.Option): pass
     class Last(WebJSON.Text, locator="//lastPrice", key="last", parser=np.float32): pass
     class Bid(WebJSON.Text, locator="//bid", key="bid", parser=np.float32): pass
     class Ask(WebJSON.Text, locator="//ask", key="ask", parser=np.float32): pass
@@ -92,12 +92,12 @@ class ETradeOptionData(WebJSON, ABC, multiple=False, optional=False):
         options = super().execute(*args, **kwargs)
         assert isinstance(options, dict)
         options = pd.DataFrame.from_records([options])
-        options["instrument"] = Variables.Securities.Instrument.OPTION
+        options["instrument"] = Concepts.Securities.Instrument.OPTION
         return options
 
 
 class ETradeOptionsData(WebJSON, ABC, locator="//OptionChainResponse", multiple=False, optional=False):
-    class Quoting(WebJSON.Text, locator="//quoteType", key="quoting", parser=Variables.Markets.Quoting): pass
+    class Quoting(WebJSON.Text, locator="//quoteType", key="quoting", parser=Concepts.Markets.Quoting): pass
     class Timing(WebJSON.Text, locator="//timeStamp", key="timing", parser=timestamp_parser): pass
     class Options(WebJSON, locator="OptionPair[]", key="option", multiple=True, optional=False):
         class Call(ETradeOptionData, locator="//Call", key="call"): pass

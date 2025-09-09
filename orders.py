@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from abc import ABC
 
-from finance.variables import Querys, Variables, Securities, OSI
+from finance.concepts import Querys, Concepts, Securities, OSI
 from webscraping.webpages import WebJSONPage, WebHTMLPage
 from webscraping.weburl import WebURL, WebPayload
 from webscraping.webdatas import WebJSON
@@ -23,8 +23,8 @@ __copyright__ = "Copyright 2023, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
-tenure_formatter = lambda order: {Variables.Markets.Tenure.DAY: "GOOD_FOR_DAY", Variables.Markets.Tenure.FILLKILL: "FILL_OR_KILL"}[order.tenure]
-action_formatter = lambda instrument: {Variables.Securities.Position.LONG: "BUY", Variables.Securities.Position.SHORT: "SELL"}[instrument.position]
+tenure_formatter = lambda order: {Concepts.Markets.Tenure.DAY: "GOOD_FOR_DAY", Concepts.Markets.Tenure.FILLKILL: "FILL_OR_KILL"}[order.tenure]
+action_formatter = lambda instrument: {Concepts.Securities.Position.LONG: "BUY", Concepts.Securities.Position.SHORT: "SELL"}[instrument.position]
 
 
 class ETradeProduct(Naming, ABC, fields=["ticker", "instrument", "option"]): pass
@@ -37,11 +37,11 @@ class ETradeStock(ETradeProduct):
 class ETradeInstrument(Naming, fields=["position", "quantity", "product"]):
     def __str__(self): return str(self.product)
     def __new__(cls, security, *args, quantity, **kwargs):
-        if security.instrument == Variables.Securities.Instrument.OPTION:
+        if security.instrument == Concepts.Securities.Instrument.OPTION:
             quantity = quantity * 1
             parameters = dict(instrument=security.instrument, option=security.option)
             product = ETradeOption(*args, **parameters, **kwargs)
-        elif security.instrument == Variables.Securities.Instrument.STOCK:
+        elif security.instrument == Concepts.Securities.Instrument.STOCK:
             quantity = quantity * 100
             parameters = dict(instrument=security.instrument)
             product = ETradeStock(*args, **parameters, **kwargs)
@@ -75,8 +75,8 @@ class ETradeAccountData(WebJSON, locator="//AccountListResponse/Accounts/Account
 
 
 class ETradeOrderPayload(WebPayload, key="order", locator="Order", fields={"allOrNone": "true", "marketSession": "REGULAR", "pricing": "NET_DEBIT"}, multiple=True, optional=False):
-    limit = lambda order: {"limitPrice": f"{order.limit:.02f}"} if order.term in (Variables.Markets.Term.LIMIT, Variables.Markets.Term.STOPLIMIT) else {}
-    stop = lambda order: {"stopPrice": f"{order.stop:.02f}"} if order.term in (Variables.Markets.Term.STOP, Variables.Markets.Term.STOPLIMIT) else {}
+    limit = lambda order: {"limitPrice": f"{order.limit:.02f}"} if order.term in (Concepts.Markets.Term.LIMIT, Concepts.Markets.Term.STOPLIMIT) else {}
+    stop = lambda order: {"stopPrice": f"{order.stop:.02f}"} if order.term in (Concepts.Markets.Term.STOP, Concepts.Markets.Term.STOPLIMIT) else {}
     tenure = lambda order: {"orderTerm": tenure_formatter(order)}
 
     class Instrument(WebPayload, key="instruments", locator="Instrument", multiple=True, optional=False):
@@ -85,7 +85,7 @@ class ETradeOrderPayload(WebPayload, key="order", locator="Order", fields={"allO
 
         class Product(WebPayload, key="product", locator="Product", multiple=False, optional=False):
             expire = lambda product: {"expiryYear": str(product.expire.year), "expiryMonth": str(product.expire.month), "expiryDay": str(product.expire.day)} if isinstance(product, ETradeOption) else {}
-            instrument = lambda product: {"securityType": {Variables.Securities.Instrument.OPTION: "OPTN", Variables.Securities.Instrument.STOCK: "EQ"}[product.instrument]}
+            instrument = lambda product: {"securityType": {Concepts.Securities.Instrument.OPTION: "OPTN", Concepts.Securities.Instrument.STOCK: "EQ"}[product.instrument]}
             option = lambda product: {"callPut": str(product.option).upper()} if isinstance(product, ETradeOption) else {}
             strike = lambda product: {"strikePrice": product.strike} if isinstance(product, ETradeOption) else {}
             ticker = lambda product: {"symbol": str(product.ticker)}
@@ -135,13 +135,13 @@ class ETradeOrderUploader(Emptying, Logging, title="Uploaded"):
             raise Exception()
 
     def upload(self, preview, *args, **kwargs):
-        assert preview.order.term in (Variables.Markets.Term.MARKET, Variables.Markets.Term.LIMIT)
+        assert preview.order.term in (Concepts.Markets.Term.MARKET, Concepts.Markets.Term.LIMIT)
         parameters = dict(account=self.account, preview=preview)
         self.page(*args, **parameters, **kwargs)
 
     @staticmethod
     def calculator(prospects, *args, term, tenure, **kwargs):
-        assert term in (Variables.Markets.Term.MARKET, Variables.Markets.Term.LIMIT)
+        assert term in (Concepts.Markets.Term.MARKET, Concepts.Markets.Term.LIMIT)
         for index, prospect in prospects.iterrows():
             strategy, quantity = prospect[["strategy", "quantity"]].values
             spot, breakeven = prospect[["spot", "breakeven"]].values
