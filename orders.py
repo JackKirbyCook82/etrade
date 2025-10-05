@@ -16,6 +16,7 @@ from webscraping.webpages import WebJSONPage, WebHTMLPage
 from webscraping.weburl import WebURL, WebPayload
 from webscraping.webdatas import WebJSON
 from support.mixins import Emptying, Logging, Naming
+from support.decorators import Signature
 
 __author__ = "Jack Kirby Cook"
 __all__ = ["ETradeOrderUploader"]
@@ -120,6 +121,7 @@ class ETradeOrderUploader(Emptying, Logging, title="Uploaded"):
         self.__account = str(account)
         self.__page = page
 
+    @Signature("prospects->")
     def execute(self, prospects, *args, **kwargs):
         assert isinstance(prospects, pd.DataFrame)
         if self.empty(prospects): return

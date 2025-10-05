@@ -21,6 +21,7 @@ from webscraping.webdatas import WebJSON
 from webscraping.weburl import WebURL
 from support.mixins import Emptying, Sizing, Partition, Logging
 from support.custom import SliceOrderedDict as SODict
+from support.decorators import Signature
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -191,6 +192,7 @@ class ETradeSecurityDownloader(ETradeDownloader):
 
 
 class ETradeStockDownloader(ETradeSecurityDownloader, page=ETradeStockPage):
+    @Signature("symbols->stocks")
     def execute(self, symbols, *args, **kwargs):
         symbols = self.querys(symbols, Querys.Symbol)
         if not bool(symbols): return
@@ -211,6 +213,7 @@ class ETradeStockDownloader(ETradeSecurityDownloader, page=ETradeStockPage):
 
 
 class ETradeOptionDownloader(ETradeSecurityDownloader, page=ETradeOptionPage):
+    @Signature("symbols,expires->options")
     def execute(self, symbols, expires, *args, **kwargs):
         symbols = self.querys(symbols, Querys.Symbol)
         if not bool(symbols): return
@@ -229,6 +232,7 @@ class ETradeOptionDownloader(ETradeSecurityDownloader, page=ETradeOptionPage):
 
 
 class ETradeExpireDownloader(ETradeDownloader, page=ETradeExpirePage, title="Downloaded"):
+    @Signature("symbols->expires")
     def execute(self, symbols, *args, **kwargs):
         symbols = self.querys(symbols, Querys.Symbol)
         if not bool(symbols): return
