@@ -21,7 +21,6 @@ from webscraping.webdatas import WebJSON
 from webscraping.weburl import WebURL
 from support.mixins import Emptying, Sizing, Partition, Logging
 from support.custom import SliceOrderedDict as SODict
-from support.decorators import Signature
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -192,14 +191,13 @@ class ETradeSecurityDownloader(ETradeDownloader):
 
 
 class ETradeStockDownloader(ETradeSecurityDownloader, page=ETradeStockPage):
-    @Signature("symbols->stocks")
-    def execute(self, symbols, *args, **kwargs):
+    def execute(self, symbols, /, **kwargs):
         symbols = self.querys(symbols, Querys.Symbol)
         if not bool(symbols): return
         symbols = [symbols[index:index+25] for index in range(0, len(symbols), 100)]
         for symbols in iter(symbols):
             parameters = {"tickers": [str(symbol.ticker) for symbol in symbols]}
-            stocks = self.download(*args, **parameters, **kwargs)
+            stocks = self.download(**parameters, **kwargs)
             assert isinstance(stocks, pd.DataFrame)
             if isinstance(symbols, dict):
                 function = lambda series: symbols[Querys.Symbol(series.to_dict())]
@@ -213,13 +211,12 @@ class ETradeStockDownloader(ETradeSecurityDownloader, page=ETradeStockPage):
 
 
 class ETradeOptionDownloader(ETradeSecurityDownloader, page=ETradeOptionPage):
-    @Signature("symbols,expires->options")
-    def execute(self, symbols, expires, *args, **kwargs):
+    def execute(self, symbols, expires, /, **kwargs):
         symbols = self.querys(symbols, Querys.Symbol)
         if not bool(symbols): return
         for symbol, expire in product(list(symbols), list(expires)):
             parameters = {"ticker": str(symbol.ticker), "expire": expire}
-            options = self.download(*args, **parameters, **kwargs)
+            options = self.download(**parameters, **kwargs)
             assert isinstance(options, pd.DataFrame)
             if isinstance(symbols, dict):
                 function = lambda series: symbols[Querys.Symbol(series.to_dict())]
@@ -232,13 +229,12 @@ class ETradeOptionDownloader(ETradeSecurityDownloader, page=ETradeOptionPage):
 
 
 class ETradeExpireDownloader(ETradeDownloader, page=ETradeExpirePage, title="Downloaded"):
-    @Signature("symbols->expires")
-    def execute(self, symbols, *args, **kwargs):
+    def execute(self, symbols, /, **kwargs):
         symbols = self.querys(symbols, Querys.Symbol)
         if not bool(symbols): return
         for symbol in iter(symbols):
             parameters = {"ticker": str(symbol.ticker)}
-            expires = self.download(*args, **parameters, **kwargs)
+            expires = self.download(**parameters, **kwargs)
             assert isinstance(expires, list)
             self.console(f"{str(symbol)}[{len(expires):.0f}]")
             if not bool(expires): return

@@ -16,7 +16,6 @@ from webscraping.webpages import WebJSONPage, WebHTMLPage
 from webscraping.weburl import WebURL, WebPayload
 from webscraping.webdatas import WebJSON
 from support.mixins import Emptying, Logging, Naming
-from support.decorators import Signature
 
 __author__ = "Jack Kirby Cook"
 __all__ = ["ETradeOrderUploader"]
@@ -121,16 +120,15 @@ class ETradeOrderUploader(Emptying, Logging, title="Uploaded"):
         self.__account = str(account)
         self.__page = page
 
-    @Signature("prospects->")
-    def execute(self, prospects, *args, **kwargs):
+    def execute(self, prospects, /, **kwargs):
         assert isinstance(prospects, pd.DataFrame)
         if self.empty(prospects): return
         if "quantity" not in prospects.columns: prospects["quantity"] = 1
         if "priority" not in prospects.columns: prospects["priority"] = prospects["npv"]
         prospects = prospects.sort_values("priority", axis=0, ascending=False, inplace=False, ignore_index=False)
         prospects = prospects.reset_index(drop=True, inplace=False)
-        for preview, valuation in self.calculator(prospects, *args, **kwargs):
-            self.upload(preview, *args, **kwargs)
+        for preview, valuation in self.calculator(prospects, **kwargs):
+            self.upload(preview, **kwargs)
             securities = ", ".join(list(map(str, preview.order.instruments)))
             self.console(f"{str(securities)}[{preview.order.quantity:.0f}] @ {str(valuation)}")
 
