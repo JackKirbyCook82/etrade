@@ -123,16 +123,10 @@ class ETradeOrderUploader(Emptying, Logging, title="Uploaded"):
     def execute(self, prospects, /, **kwargs):
         assert isinstance(prospects, pd.DataFrame)
         if self.empty(prospects): return
-        if "quantity" not in prospects.columns: prospects["quantity"] = 1
-        if "priority" not in prospects.columns: prospects["priority"] = prospects["npv"]
-        prospects = prospects.sort_values("priority", axis=0, ascending=False, inplace=False, ignore_index=False)
-        prospects = prospects.reset_index(drop=True, inplace=False)
         for preview, valuation in self.calculator(prospects, **kwargs):
             self.upload(preview, **kwargs)
             securities = ", ".join(list(map(str, preview.order.instruments)))
             self.console(f"{str(securities)}[{preview.order.quantity:.0f}] @ {str(valuation)}")
-
-            raise Exception()
 
     def upload(self, preview, *args, **kwargs):
         assert preview.order.term in (Concepts.Markets.Term.MARKET, Concepts.Markets.Term.LIMIT)
@@ -143,6 +137,7 @@ class ETradeOrderUploader(Emptying, Logging, title="Uploaded"):
     def calculator(prospects, *args, term, tenure, **kwargs):
         assert term in (Concepts.Markets.Term.MARKET, Concepts.Markets.Term.LIMIT)
         for index, prospect in prospects.iterrows():
+            identity = random.randint(1000000000, 9999999999)
             strategy, quantity = prospect[["strategy", "quantity"]].values
             spot, breakeven = prospect[["spot", "breakeven"]].values
             settlement = prospect[list(Querys.Settlement)].to_dict()
@@ -150,11 +145,12 @@ class ETradeOrderUploader(Emptying, Logging, title="Uploaded"):
             options = {Securities.Options[option]: strike for option, strike in options.items() if not np.isnan(strike)}
             stocks = [Securities.Stocks(stock) for stock in strategy.stocks]
             assert spot >= breakeven and quantity >= 1
+
             options = [ETradeInstrument(security, strike=strike, quantity=quantity, **settlement) for security, strike in options.items()]
             stocks = [ETradeInstrument(security, quantity=quantity * 100, **settlement) for security in stocks]
             valuation = ETradeValuation(npv=prospect["npv"])
             order = ETradeOrder(instruments=options + stocks, term=term, tenure=tenure, limit=-breakeven, stop=None)
-            preview = ETradePreview(identity=random.randint(1000000000, 9999999999), order=order)
+            preview = ETradePreview(identity=identity, order=order)
             yield preview, valuation
 
     @property
