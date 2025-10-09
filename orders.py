@@ -145,7 +145,6 @@ class ETradeOrderUploader(Emptying, Logging, title="Uploaded"):
             options = {Securities.Options[option]: strike for option, strike in options.items() if not np.isnan(strike)}
             stocks = [Securities.Stocks(stock) for stock in strategy.stocks]
             assert spot >= breakeven and quantity >= 1
-
             options = [ETradeInstrument(security, strike=strike, quantity=quantity, **settlement) for security, strike in options.items()]
             stocks = [ETradeInstrument(security, quantity=quantity * 100, **settlement) for security in stocks]
             valuation = ETradeValuation(npv=prospect["npv"])
