@@ -87,6 +87,7 @@ class ETradeOptionData(WebJSON, ABC, multiple=False, optional=False):
     class Ask(WebJSON.Text, locator="//ask", key="ask", parser=np.float32): pass
     class Demand(WebJSON.Text, locator="//bidSize", key="demand", parser=np.int32): pass
     class Supply(WebJSON.Text, locator="//askSize", key="supply", parser=np.int32): pass
+    class Implied(WebJSON.Text, locator="//OptionGreeks/iv", key="implied", parser=np.float32): pass
 
     def execute(self, *args, **kwargs):
         options = super().execute(*args, **kwargs)
