@@ -175,8 +175,8 @@ class ETradeDownloader(Sizing, Emptying, Partition, Logging, ABC, title="Downloa
 
 
 class ETradeSecurityDownloader(ETradeDownloader):
-    def download(self, *args, **kwargs):
-        securities = self.page(*args, **kwargs)
+    def download(self, /, **kwargs):
+        securities = self.page(**kwargs)
         assert isinstance(securities, pd.DataFrame)
         assert not self.empty(securities)
         return securities
@@ -241,8 +241,8 @@ class ETradeExpireDownloader(ETradeDownloader, page=ETradeExpirePage, title="Dow
             if not bool(expires): return
             yield expires
 
-    def download(self, *args, **kwargs):
-        expires = self.page(*args, **kwargs)
+    def download(self, /, **kwargs):
+        expires = self.page(**kwargs)
         assert isinstance(expires, list)
         expires.sort()
         return expires

@@ -128,13 +128,13 @@ class ETradeOrderUploader(Emptying, Logging, title="Uploaded"):
             securities = ", ".join(list(map(str, preview.order.instruments)))
             self.console(f"{str(securities)}[{preview.order.quantity:.0f}] @ {str(valuation)}")
 
-    def upload(self, preview, *args, **kwargs):
+    def upload(self, preview, /, **kwargs):
         assert preview.order.term in (Concepts.Markets.Term.MARKET, Concepts.Markets.Term.LIMIT)
         parameters = dict(account=self.account, preview=preview)
-        self.page(*args, **parameters, **kwargs)
+        self.page(**parameters, **kwargs)
 
     @staticmethod
-    def calculator(prospects, *args, term, tenure, **kwargs):
+    def calculator(prospects, /, term, tenure, **kwargs):
         assert term in (Concepts.Markets.Term.MARKET, Concepts.Markets.Term.LIMIT)
         for index, prospect in prospects.iterrows():
             identity = random.randint(1000000000, 9999999999)
