@@ -107,6 +107,11 @@ class ETradePreviewPage(WebHTMLPage):
     def execute(self, *args, account, preview, **kwargs):
         url = ETradePreviewURL(*args, account=account, **kwargs)
         payload = ETradePreviewPayload(preview, *args, **kwargs)
+
+        print(url)
+        print(payload)
+        raise Exception()
+
         self.load(url, *args, payload=payload.json, **kwargs)
 
 
