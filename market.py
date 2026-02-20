@@ -159,28 +159,8 @@ class ETradeExpirePage(WebJSONPage):
         return contents
 
 
-class ETradeDownloader(Sizing, Emptying, Partition, Logging, ABC, title="Downloaded"):
-    def __init_subclass__(cls, *args, **kwargs):
-        super().__init_subclass__(*args, **kwargs)
-        cls.__pagetype__ = kwargs.get("page", getattr(cls, "__pagetype__", None))
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.__page = self.pagetype(*args, **kwargs)
-
-    @property
-    def pagetype(self): return type(self).__pagetype__
-    @property
-    def page(self): return self.__page
-
-
-class ETradeSecurityDownloader(ETradeDownloader):
-    def download(self, /, **kwargs):
-        securities = self.page(**kwargs)
-        assert isinstance(securities, pd.DataFrame)
-        assert not self.empty(securities)
-        return securities
-
+class ETradeDownloader(Sizing, Emptying, Partition, Logging, ABC, title="Downloaded"): pass
+class ETradeSecurityDownloader(ETradeDownloader, ABC):
     @staticmethod
     def querys(querys, querytype):
         assert isinstance(querys, (list, dict, querytype))
@@ -191,7 +171,7 @@ class ETradeSecurityDownloader(ETradeDownloader):
         return querys
 
 
-class ETradeStockDownloader(ETradeSecurityDownloader, page=ETradeStockPage):
+class ETradeStockDownloader(ETradeSecurityDownloader):
     def execute(self, symbols, /, **kwargs):
         symbols = self.querys(symbols, Querys.Symbol)
         if not bool(symbols): return
@@ -210,8 +190,14 @@ class ETradeStockDownloader(ETradeSecurityDownloader, page=ETradeStockPage):
             if self.empty(stocks): return
             yield stocks
 
+    def download(self, /, **kwargs):
+        securities = ETradeStockPage(**kwargs)
+        assert isinstance(securities, pd.DataFrame)
+        assert not self.empty(securities)
+        return securities
 
-class ETradeOptionDownloader(ETradeSecurityDownloader, page=ETradeOptionPage):
+
+class ETradeOptionDownloader(ETradeSecurityDownloader):
     def execute(self, symbols, expires, /, **kwargs):
         symbols = self.querys(symbols, Querys.Symbol)
         if not bool(symbols): return
@@ -228,8 +214,14 @@ class ETradeOptionDownloader(ETradeSecurityDownloader, page=ETradeOptionPage):
             if self.empty(options): return
             yield options
 
+    def download(self, /, **kwargs):
+        securities = ETradeOptionPage(**kwargs)
+        assert isinstance(securities, pd.DataFrame)
+        assert not self.empty(securities)
+        return securities
 
-class ETradeExpireDownloader(ETradeDownloader, page=ETradeExpirePage, title="Downloaded"):
+
+class ETradeExpireDownloader(ETradeDownloader):
     def execute(self, symbols, /, **kwargs):
         symbols = self.querys(symbols, Querys.Symbol)
         if not bool(symbols): return
@@ -242,7 +234,7 @@ class ETradeExpireDownloader(ETradeDownloader, page=ETradeExpirePage, title="Dow
             yield expires
 
     def download(self, /, **kwargs):
-        expires = self.page(**kwargs)
+        expires = ETradeExpirePage(**kwargs)
         assert isinstance(expires, list)
         expires.sort()
         return expires
