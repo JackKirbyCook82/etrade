@@ -130,8 +130,9 @@ class ETradeExpireData(WebJSON, locator="//OptionExpireDateResponse/ExpirationDa
 
 
 class ETradeStockPage(WebJSONPage):
-    def execute(self, *args, **kwargs):
-        url = ETradeStockURL(*args, **kwargs)
+    def execute(self, *args, symbols, **kwargs):
+        tickers = [str(symbol.ticker) for symbol in symbols]
+        url = ETradeStockURL(*args, tickers=tickers, **kwargs)
         self.load(url, *args, **kwargs)
         stocks = ETradeStocksData(self.json, *args, **kwargs)
         stocks = [data(*args, **kwargs) for data in iter(stocks)]
@@ -139,8 +140,8 @@ class ETradeStockPage(WebJSONPage):
         return stocks
 
 class ETradeOptionPage(WebJSONPage):
-    def execute(self, *args, **kwargs):
-        url = ETradeOptionURL(*args, **kwargs)
+    def execute(self, *args, symbol, expire, **kwargs):
+        url = ETradeOptionURL(*args, ticker=str(symbol.ticker), expire=expire, **kwargs)
         self.load(url, *args, **kwargs)
         options = ETradeOptionsData(self.json, *args, **kwargs)
         options = options(*args, **kwargs)
@@ -148,8 +149,8 @@ class ETradeOptionPage(WebJSONPage):
         return options
 
 class ETradeExpirePage(WebJSONPage):
-    def execute(self, *args, expiry=None, **kwargs):
-        url = ETradeExpireURL(*args, **kwargs)
+    def execute(self, *args, symbol, expiry=None, **kwargs):
+        url = ETradeExpireURL(*args, ticker=str(symbol.ticker), **kwargs)
         self.load(url, *args, **kwargs)
         datas = ETradeExpireData(self.json, *args, **kwargs)
         assert isinstance(datas, list)
@@ -177,8 +178,7 @@ class ETradeStockDownloader(ETradeSecurityDownloader):
         if not bool(symbols): return
         symbols = [symbols[index:index+25] for index in range(0, len(symbols), 100)]
         for symbols in iter(symbols):
-            parameters = {"tickers": [str(symbol.ticker) for symbol in symbols]}
-            stocks = self.download(**parameters, **kwargs)
+            stocks = self.download(symbols=symbols, **kwargs)
             assert isinstance(stocks, pd.DataFrame)
             if isinstance(symbols, dict):
                 function = lambda series: symbols[Querys.Symbol(series.to_dict())]
@@ -202,8 +202,7 @@ class ETradeOptionDownloader(ETradeSecurityDownloader):
         symbols = self.querys(symbols, Querys.Symbol)
         if not bool(symbols): return
         for symbol, expire in product(list(symbols), list(expires)):
-            parameters = {"ticker": str(symbol.ticker), "expire": expire}
-            options = self.download(**parameters, **kwargs)
+            options = self.download(symbol=symbol, expire=expire, **kwargs)
             assert isinstance(options, pd.DataFrame)
             if isinstance(symbols, dict):
                 function = lambda series: symbols[Querys.Symbol(series.to_dict())]
@@ -222,12 +221,11 @@ class ETradeOptionDownloader(ETradeSecurityDownloader):
 
 
 class ETradeExpireDownloader(ETradeDownloader):
-    def execute(self, symbols, /, **kwargs):
+    def execute(self, symbols, /, expiry=None, **kwargs):
         symbols = self.querys(symbols, Querys.Symbol)
         if not bool(symbols): return
         for symbol in iter(symbols):
-            parameters = {"ticker": str(symbol.ticker)}
-            expires = self.download(**parameters, **kwargs)
+            expires = self.download(symbol=symbol, expiry=expiry, **kwargs)
             assert isinstance(expires, list)
             self.console(f"{str(symbol)}[{len(expires):.0f}]")
             if not bool(expires): return
