@@ -104,26 +104,22 @@ class ETradeAccountPage(WebJSONPage):
         return accounts
 
 class ETradePreviewPage(WebHTMLPage):
-    def execute(self, *args, account, preview, **kwargs):
-        url = ETradePreviewURL(*args, account=account, **kwargs)
+    def execute(self, *args, preview, **kwargs):
+        parameters = dict(account=self.source.account)
+        url = ETradePreviewURL(*args, **parameters, **kwargs)
         payload = ETradePreviewPayload(preview, *args, **kwargs)
-
-        print(url)
-        print(payload)
-        raise Exception()
-
         self.load(url, *args, payload=payload.json, **kwargs)
 
 
 class ETradeOrderUploader(Emptying, Logging, title="Uploaded"):
-    def __init__(self, *args, source, webapi, **kwargs):
+    def __init__(self, *args, account, **kwargs):
         super().__init__(*args, **kwargs)
-        page = ETradeAccountPage(*args, source=source, **kwargs)
+        page = ETradeAccountPage(*args, **kwargs)
         account = page(*args, **kwargs)
         account = account.loc[int(webapi.account), "value"]
-        page = ETradePreviewPage(*args, source=source, **kwargs)
-        self.__account = str(account)
-        self.__page = page
+        page = ETradePreviewPage(*args, **kwargs)
+        self.account = str(account)
+        self.page = page
 
     def execute(self, prospects, /, **kwargs):
         assert isinstance(prospects, pd.DataFrame)
@@ -156,11 +152,6 @@ class ETradeOrderUploader(Emptying, Logging, title="Uploaded"):
             order = ETradeOrder(instruments=options + stocks, term=term, tenure=tenure, limit=-breakeven, stop=None)
             preview = ETradePreview(identity=identity, order=order)
             yield preview, valuation
-
-    @property
-    def account(self): return self.__account
-    @property
-    def page(self): return self.__page
 
 
 

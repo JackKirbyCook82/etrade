@@ -132,7 +132,8 @@ class ETradeExpireData(WebJSON, locator="//OptionExpireDateResponse/ExpirationDa
 class ETradeStockPage(WebJSONPage):
     def execute(self, *args, symbols, **kwargs):
         tickers = [str(symbol.ticker) for symbol in symbols]
-        url = ETradeStockURL(*args, tickers=tickers, **kwargs)
+        parameters = dict(tickers=tickers)
+        url = ETradeStockURL(*args, **parameters, **kwargs)
         self.load(url, *args, **kwargs)
         stocks = ETradeStocksData(self.json, *args, **kwargs)
         stocks = [data(*args, **kwargs) for data in iter(stocks)]
@@ -141,7 +142,8 @@ class ETradeStockPage(WebJSONPage):
 
 class ETradeOptionPage(WebJSONPage):
     def execute(self, *args, symbol, expire, **kwargs):
-        url = ETradeOptionURL(*args, ticker=str(symbol.ticker), expire=expire, **kwargs)
+        parameters = dict(ticker=str(symbol.ticker), expire=expire)
+        url = ETradeOptionURL(*args, **parameters, **kwargs)
         self.load(url, *args, **kwargs)
         options = ETradeOptionsData(self.json, *args, **kwargs)
         options = options(*args, **kwargs)
@@ -150,7 +152,8 @@ class ETradeOptionPage(WebJSONPage):
 
 class ETradeExpirePage(WebJSONPage):
     def execute(self, *args, symbol, expiry=None, **kwargs):
-        url = ETradeExpireURL(*args, ticker=str(symbol.ticker), **kwargs)
+        parameters = dict(ticker=str(symbol.ticker))
+        url = ETradeExpireURL(*args, **parameters, **kwargs)
         self.load(url, *args, **kwargs)
         datas = ETradeExpireData(self.json, *args, **kwargs)
         assert isinstance(datas, list)
@@ -160,7 +163,16 @@ class ETradeExpirePage(WebJSONPage):
         return contents
 
 
-class ETradeDownloader(Sizing, Emptying, Partition, Logging, ABC, title="Downloaded"): pass
+class ETradeDownloader(Sizing, Emptying, Partition, Logging, ABC, title="Downloaded"):
+    def __init_subclass__(cls, *args, page, **kwargs):
+        super().__init_subclass__(*args, **kwargs)
+        cls.Page = page
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.page = self.Page(*args, **kwargs)
+
+
 class ETradeSecurityDownloader(ETradeDownloader, ABC):
     @staticmethod
     def querys(querys, querytype):
@@ -172,7 +184,7 @@ class ETradeSecurityDownloader(ETradeDownloader, ABC):
         return querys
 
 
-class ETradeStockDownloader(ETradeSecurityDownloader):
+class ETradeStockDownloader(ETradeSecurityDownloader, page=ETradeStockPage):
     def execute(self, symbols, /, **kwargs):
         symbols = self.querys(symbols, Querys.Symbol)
         if not bool(symbols): return
@@ -191,13 +203,13 @@ class ETradeStockDownloader(ETradeSecurityDownloader):
             yield stocks
 
     def download(self, /, **kwargs):
-        securities = ETradeStockPage(**kwargs)
+        securities = ETradeStockPage(source=self.source)(**kwargs)
         assert isinstance(securities, pd.DataFrame)
         assert not self.empty(securities)
         return securities
 
 
-class ETradeOptionDownloader(ETradeSecurityDownloader):
+class ETradeOptionDownloader(ETradeSecurityDownloader, page=ETradeOptionPage):
     def execute(self, symbols, expires, /, **kwargs):
         symbols = self.querys(symbols, Querys.Symbol)
         if not bool(symbols): return
@@ -214,13 +226,13 @@ class ETradeOptionDownloader(ETradeSecurityDownloader):
             yield options
 
     def download(self, /, **kwargs):
-        securities = ETradeOptionPage(**kwargs)
+        securities = ETradeOptionPage(source=self.source)(**kwargs)
         assert isinstance(securities, pd.DataFrame)
         assert not self.empty(securities)
         return securities
 
 
-class ETradeExpireDownloader(ETradeDownloader):
+class ETradeExpireDownloader(ETradeDownloader, page=ETradeExpirePage):
     def execute(self, symbols, /, expiry=None, **kwargs):
         symbols = self.querys(symbols, Querys.Symbol)
         if not bool(symbols): return
@@ -232,7 +244,7 @@ class ETradeExpireDownloader(ETradeDownloader):
             yield expires
 
     def download(self, /, **kwargs):
-        expires = ETradeExpirePage(**kwargs)
+        expires = ETradeExpirePage(source=self.source)(**kwargs)
         assert isinstance(expires, list)
         expires.sort()
         return expires

@@ -10,6 +10,7 @@ import webbrowser
 import tkinter as tk
 from abc import ABC
 
+from tornado.web import authenticated
 from webscraping.webreaders import WebService
 from webscraping.webdrivers import WebDriver
 from webscraping.webpages import WebELMTPage
@@ -36,13 +37,13 @@ class ETradeSecurityData(WebELMT.Value, locator=r"//input[@type='text']", key="s
 
 
 class ETradeDriverPage(WebELMTPage):
-    def execute(self, url, *args, webapi, timeout, **kwargs):
+    def execute(self, url, *args, timeout, **kwargs):
         self.load(*args, url=str(url), **kwargs)
         username = ETradeUsernameData(self.elmt, *args, timeout=timeout, **kwargs)
         password = ETradePasswordData(self.elmt, *args, timeout=timeout, **kwargs)
         login = ETradeLoginData(self.elmt, *args, timeout=timeout, **kwargs)
-        username.fill(webapi.username)
-        password.fill(webapi.password)
+        username.fill(self.account.username)
+        password.fill(selff.account.password)
         with self.delayer: login.click()
         accept = ETradeAcceptData(self.elmt, *args, timeout=timeout, **kwargs)
         with self.delayer: accept.click()
@@ -57,11 +58,11 @@ class ETradeDriverService(ETradeService):
         self.__executable = executable
         self.__timeout = int(timeout)
 
-    def security(self, url, *args, **kwargs):
-        parameters = dict(executable=self.executable, timeout=self.timeout, delayer=self.delayer)
+    def security(self, url, *args, account, authenticator, delayer, **kwargs):
+        parameters = dict(executable=self.executable, delayer=delayer, timeout=self.timeout)
         with WebDriver(**parameters) as source:
             page = ETradeDriverPage(*args, source=source, **kwargs)
-            parameters = dict(timeout=self.timeout, webapi=self.webapi)
+            parameters = dict(account=account, authenticator=authenticator, timeout=self.timeout)
             security = page(url, *args, **parameters, **kwargs)
             return security
 
