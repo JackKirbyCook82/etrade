@@ -16,6 +16,7 @@ from datetime import timezone as Timezone
 from datetime import datetime as Datetime
 
 from finance.concepts import Querys, Concepts, OSI
+from webscraping.websupport import WebDownloader
 from webscraping.webpages import WebJSONPage
 from webscraping.webdatas import WebJSON
 from webscraping.weburl import WebURL
@@ -163,25 +164,12 @@ class ETradeExpirePage(WebJSONPage):
         return contents
 
 
-class ETradeDownloader(Sizing, Emptying, Partition, Logging, ABC, title="Downloaded"):
-    def __init_subclass__(cls, *args, page, **kwargs):
-        super().__init_subclass__(*args, **kwargs)
-        cls.Page = page
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.page = self.Page(*args, **kwargs)
-
-
-class ETradeSecurityDownloader(ETradeDownloader, ABC):
-    @staticmethod
-    def querys(querys, querytype):
-        assert isinstance(querys, (list, dict, querytype))
-        assert all([isinstance(query, querytype) for query in querys]) if isinstance(querys, (list, dict)) else True
-        if isinstance(querys, querytype): querys = [querys]
-        elif isinstance(querys, dict): querys = SODict(querys)
-        else: querys = list(querys)
-        return querys
+class ETradeSecurityDownloader(WebDownloader, ABC):
+    def download(self, /, **kwargs):
+        securities = self.page(source=self.source)(**kwargs)
+        assert isinstance(securities, pd.DataFrame)
+        assert not self.empty(securities)
+        return securities
 
 
 class ETradeStockDownloader(ETradeSecurityDownloader, page=ETradeStockPage):
@@ -202,12 +190,6 @@ class ETradeStockDownloader(ETradeSecurityDownloader, page=ETradeStockPage):
             if self.empty(stocks): return
             yield stocks
 
-    def download(self, /, **kwargs):
-        securities = ETradeStockPage(source=self.source)(**kwargs)
-        assert isinstance(securities, pd.DataFrame)
-        assert not self.empty(securities)
-        return securities
-
 
 class ETradeOptionDownloader(ETradeSecurityDownloader, page=ETradeOptionPage):
     def execute(self, symbols, expires, /, **kwargs):
@@ -224,12 +206,6 @@ class ETradeOptionDownloader(ETradeSecurityDownloader, page=ETradeOptionPage):
             self.console(f"{str(symbol)}|{str(expire.strftime('%Y%m%d'))}[{int(size):.0f}]")
             if self.empty(options): return
             yield options
-
-    def download(self, /, **kwargs):
-        securities = ETradeOptionPage(source=self.source)(**kwargs)
-        assert isinstance(securities, pd.DataFrame)
-        assert not self.empty(securities)
-        return securities
 
 
 class ETradeExpireDownloader(ETradeDownloader, page=ETradeExpirePage):
@@ -249,11 +225,5 @@ class ETradeExpireDownloader(ETradeDownloader, page=ETradeExpirePage):
         expires.sort()
         return expires
 
-    @staticmethod
-    def querys(querys, querytype):
-        assert isinstance(querys, (list, querytype))
-        assert all([isinstance(query, querytype) for query in querys]) if isinstance(querys, list) else True
-        querys = list(querys) if isinstance(querys, list) else [querys]
-        return querys
 
 
