@@ -60,8 +60,6 @@ class ETradeExpireURL(ETradeMarketURL, path=["v1", "market", "optionexpiredate" 
 
 
 class ETradeStocksData(WebJSON, locator="//QuoteResponse/QuoteData[]", multiple=True, optional=False):
-    class Quoting(WebJSON.Text, locator="//quoteStatus", key="quoting", parser=Concepts.Markets.Quoting): pass
-    class Timing(WebJSON.Text, locator="//dateTimeUTC", key="timing", parser=timestamp_parser): pass
     class Ticker(WebJSON.Text, locator="//Product/symbol", key="ticker", parser=str): pass
     class Last(WebJSON.Text, locator="//All/lastTrade", key="last", parser=np.float32): pass
     class Bid(WebJSON.Text, locator="//All/bid", key="bid", parser=np.float32): pass
@@ -99,8 +97,6 @@ class ETradeOptionData(WebJSON, ABC, multiple=False, optional=False):
 
 
 class ETradeOptionsData(WebJSON, ABC, locator="//OptionChainResponse", multiple=False, optional=False):
-    class Quoting(WebJSON.Text, locator="//quoteType", key="quoting", parser=Concepts.Markets.Quoting): pass
-    class Timing(WebJSON.Text, locator="//timeStamp", key="timing", parser=timestamp_parser): pass
     class Options(WebJSON, locator="OptionPair[]", key="option", multiple=True, optional=False):
         class Call(ETradeOptionData, locator="//Call", key="call"): pass
         class Put(ETradeOptionData, locator="//Put", key="put"): pass
