@@ -20,8 +20,6 @@ from webscraping.websupport import WebDownloader
 from webscraping.webpages import WebJSONPage
 from webscraping.webdatas import WebJSON
 from webscraping.weburl import WebURL
-from support.mixins import Emptying, Sizing, Partition, Logging
-from support.custom import SliceOrderedDict as SODict
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -162,7 +160,7 @@ class ETradeExpirePage(WebJSONPage):
 
 class ETradeSecurityDownloader(WebDownloader, ABC):
     def download(self, /, **kwargs):
-        securities = self.page(source=self.source)(**kwargs)
+        securities = self.page(**kwargs)
         assert isinstance(securities, pd.DataFrame)
         assert not self.empty(securities)
         return securities
@@ -204,7 +202,7 @@ class ETradeOptionDownloader(ETradeSecurityDownloader, page=ETradeOptionPage):
             yield options
 
 
-class ETradeExpireDownloader(ETradeDownloader, page=ETradeExpirePage):
+class ETradeExpireDownloader(ETradeSecurityDownloader, page=ETradeExpirePage):
     def execute(self, symbols, /, expiry=None, **kwargs):
         symbols = self.querys(symbols, Querys.Symbol)
         if not bool(symbols): return
@@ -216,7 +214,7 @@ class ETradeExpireDownloader(ETradeDownloader, page=ETradeExpirePage):
             yield expires
 
     def download(self, /, **kwargs):
-        expires = ETradeExpirePage(source=self.source)(**kwargs)
+        expires = self.page(**kwargs)
         assert isinstance(expires, list)
         expires.sort()
         return expires

@@ -10,7 +10,6 @@ import webbrowser
 import tkinter as tk
 from abc import ABC
 
-from tornado.web import authenticated
 from webscraping.webreaders import WebService
 from webscraping.webdrivers import WebDriver
 from webscraping.webpages import WebELMTPage
@@ -43,7 +42,7 @@ class ETradeDriverPage(WebELMTPage):
         password = ETradePasswordData(self.elmt, *args, timeout=timeout, **kwargs)
         login = ETradeLoginData(self.elmt, *args, timeout=timeout, **kwargs)
         username.fill(self.account.username)
-        password.fill(selff.account.password)
+        password.fill(self.account.password)
         with self.delayer: login.click()
         accept = ETradeAcceptData(self.elmt, *args, timeout=timeout, **kwargs)
         with self.delayer: accept.click()
@@ -78,7 +77,7 @@ class ETradePromptService(ETradeService):
         window = tk.Tk()
         window.title("Enter Security Code:")
         variable = tk.StringVar()
-        entry = tk.Entry(window, width=50, justify=tk.CENTER, textvariable=variable)
+        entry = tk.Entry(window, width=50, justify="center", textvariable=variable)
         entry.focus_set()
         entry.grid(padx=10, pady=10)
         button = tk.Button(window, text="Submit", command=window.destroy)

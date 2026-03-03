@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-1Created on Sat May 31 2025
+Created on Sat May 31 2025
 @name:   ETrade Order Objects
 @author: Jack Kirby Cook
 
@@ -112,11 +112,10 @@ class ETradePreviewPage(WebHTMLPage):
 
 
 class ETradeOrderUploader(Emptying, Logging, title="Uploaded"):
-    def __init__(self, *args, account, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, *args, source, **kwargs):
+        super().__init__(*args, source=source, **kwargs)
         page = ETradeAccountPage(*args, **kwargs)
-        account = page(*args, **kwargs)
-        account = account.loc[int(webapi.account), "value"]
+        account = page(*args, **kwargs).loc[int(source.account.identity), "value"]
         page = ETradePreviewPage(*args, **kwargs)
         self.account = str(account)
         self.page = page
