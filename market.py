@@ -66,12 +66,12 @@ class ETradeStocksData(WebJSON, locator="//QuoteResponse/QuoteData[]", multiple=
     class Supply(WebJSON.Text, locator="//All/askSize", key="supply", parser=np.int32): pass
 
     def execute(self, *args, **kwargs):
-        stocks = super().execute(*args, **kwargs)
-        assert isinstance(stocks, dict)
-        stocks = pd.DataFrame.from_records([stocks])
-        stocks["instrument"] = Concepts.Securities.Instrument.STOCK
-        stocks["option"] = Concepts.Securities.Option.EMPTY
-        return stocks
+        stock = super().execute(*args, **kwargs)
+        assert isinstance(stock, dict)
+        stock = pd.DataFrame.from_records([stock])
+        stock["instrument"] = Concepts.Securities.Instrument.STOCK
+        stock["option"] = Concepts.Securities.Option.EMPTY
+        return stock
 
 
 class ETradeOptionData(WebJSON, ABC, multiple=False, optional=False):
@@ -87,11 +87,11 @@ class ETradeOptionData(WebJSON, ABC, multiple=False, optional=False):
     class Implied(WebJSON.Text, locator="//OptionGreeks/iv", key="implied", parser=np.float32): pass
 
     def execute(self, *args, **kwargs):
-        options = super().execute(*args, **kwargs)
-        assert isinstance(options, dict)
-        options = pd.DataFrame.from_records([options])
-        options["instrument"] = Concepts.Securities.Instrument.OPTION
-        return options
+        option = super().execute(*args, **kwargs)
+        assert isinstance(option, dict)
+        option = pd.DataFrame.from_records([option])
+        option["instrument"] = Concepts.Securities.Instrument.OPTION
+        return option
 
 
 class ETradeOptionsData(WebJSON, ABC, locator="//OptionChainResponse", multiple=False, optional=False):
