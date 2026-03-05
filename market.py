@@ -16,8 +16,7 @@ from datetime import timezone as Timezone
 from datetime import datetime as Datetime
 
 from finance.concepts import Querys, Concepts, OSI
-from webscraping.websupport import WebDownloader
-from webscraping.webpages import WebJSONPage
+from webscraping.webpages import WebJSONPage, WebDownloader
 from webscraping.webdatas import WebJSON
 from webscraping.weburl import WebURL
 
@@ -170,7 +169,8 @@ class ETradeStockDownloader(ETradeSecurityDownloader, page=ETradeStockPage):
     def execute(self, symbols, /, **kwargs):
         symbols = self.querys(symbols, Querys.Symbol)
         if not bool(symbols): return
-        symbols = [symbols[index:index+25] for index in range(0, len(symbols), 100)]
+        if self.limit:
+            symbols = [symbols[index:index+self.limit] for index in range(0, len(symbols), self.limit)]
         for symbols in iter(symbols):
             stocks = self.download(symbols=symbols, **kwargs)
             assert isinstance(stocks, pd.DataFrame)

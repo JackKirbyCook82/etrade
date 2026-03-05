@@ -12,10 +12,10 @@ import pandas as pd
 from abc import ABC
 
 from finance.concepts import Querys, Concepts, Securities, OSI
-from webscraping.webpages import WebJSONPage, WebHTMLPage
+from webscraping.webpages import WebJSONPage, WebHTMLPage, WebUploader
 from webscraping.weburl import WebURL, WebPayload
 from webscraping.webdatas import WebJSON
-from support.mixins import Emptying, Logging, Naming
+from support.mixins import Naming
 
 __author__ = "Jack Kirby Cook"
 __all__ = ["ETradeOrderUploader"]
@@ -60,7 +60,7 @@ class ETradeAccountURL(WebURL, domain="https://api.etrade.com", path=["v1", "acc
 class ETradeOrderURL(WebURL, domain="https://api.etrade.com", path=["v1", "accounts"]): pass
 class ETradePreviewURL(ETradeOrderURL):
     @staticmethod
-    def path(*args, account, **kwargs): return [str(account), "orders", "preview" + ".json"]
+    def path(*args, identity, **kwargs): return [str(identity), "orders", "preview" + ".json"]
 
 
 class ETradeAccountData(WebJSON, locator="//AccountListResponse/Accounts/Account[]", multiple=True, optional=False):
@@ -111,14 +111,13 @@ class ETradePreviewPage(WebHTMLPage):
         self.load(url, *args, payload=payload.json, **kwargs)
 
 
-class ETradeOrderUploader(Emptying, Logging, title="Uploaded"):
+class ETradeOrderUploader(WebUploader, page=ETradePreviewPage):
     def __init__(self, *args, source, **kwargs):
         super().__init__(*args, source=source, **kwargs)
         page = ETradeAccountPage(*args, **kwargs)
-        account = page(*args, **kwargs).loc[int(source.account.identity), "value"]
-        page = ETradePreviewPage(*args, **kwargs)
-        self.account = str(account)
-        self.page = page
+        accounts = page(*args, **kwargs)
+        identity = accounts.loc[int(source.account.identity), "value"]
+        self.identity = str(identity)
 
     def execute(self, prospects, /, **kwargs):
         assert isinstance(prospects, pd.DataFrame)
@@ -130,7 +129,7 @@ class ETradeOrderUploader(Emptying, Logging, title="Uploaded"):
 
     def upload(self, preview, /, **kwargs):
         assert preview.order.term in (Concepts.Markets.Term.MARKET, Concepts.Markets.Term.LIMIT)
-        parameters = dict(account=self.account, preview=preview)
+        parameters = dict(identity=self.identity, preview=preview)
         self.page(**parameters, **kwargs)
 
     @staticmethod
