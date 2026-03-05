@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from abc import ABC
 
-from finance.concepts import Querys, Concepts, Securities, OSI
+from finance.concepts import Querys, Concepts, Securities
 from webscraping.webpages import WebJSONPage, WebHTMLPage, WebUploader
 from webscraping.weburl import WebURL, WebPayload
 from webscraping.webdatas import WebJSON
@@ -28,14 +28,10 @@ action_formatter = lambda instrument: {Concepts.Securities.Position.LONG: "BUY",
 
 
 class ETradeProduct(Naming, ABC, fields=["ticker", "instrument", "option"]): pass
-class ETradeOption(ETradeProduct, fields=["expire", "strike"]):
-    def __str__(self): return str(OSI([self.ticker, self.expire, self.option, self.strike]))
-
-class ETradeStock(ETradeProduct):
-    def __str__(self): return str(self.ticker)
+class ETradeOption(ETradeProduct, fields=["expire", "strike"]): pass
+class ETradeStock(ETradeProduct): pass
 
 class ETradeInstrument(Naming, fields=["position", "quantity", "product"]):
-    def __str__(self): return str(self.product)
     def __new__(cls, security, *args, quantity, **kwargs):
         if security.instrument == Concepts.Securities.Instrument.OPTION:
             quantity = quantity * 1
@@ -49,11 +45,10 @@ class ETradeInstrument(Naming, fields=["position", "quantity", "product"]):
         parameters = dict(position=security.position, quantity=quantity, product=product)
         return super().__new__(cls, *args, **parameters, **kwargs)
 
-class ETradeValuation(Naming, fields=["npv"]):
-    def __str__(self): return f"${self.npv.min():.0f}"
-
 class ETradeOrder(Naming, fields=["term", "tenure", "limit", "stop", "instruments"]): pass
 class ETradePreview(Naming, fields=["identity", "order"]): pass
+class ETradeValuation(Naming, fields=["npv"]):
+    def __str__(self): return f"${self.npv.min():.0f}"
 
 
 class ETradeAccountURL(WebURL, domain="https://api.etrade.com", path=["v1", "accounts", "list" + ".json"]): pass
