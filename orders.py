@@ -134,7 +134,6 @@ class ETradeOrderUploader(WebUploader, page=ETradePreviewPage):
 
     @staticmethod
     def calculator(prospects, /, term, tenure, **kwargs):
-        assert term in (Concepts.Markets.Term.MARKET, Concepts.Markets.Term.LIMIT)
         for index, prospect in prospects.iterrows():
             identity = random.randint(1000000000, 9999999999)
             strategy, quantity = prospect[["strategy", "quantity"]].values
