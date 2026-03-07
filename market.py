@@ -169,8 +169,7 @@ class ETradeStockDownloader(ETradeSecurityDownloader, page=ETradeStockPage):
     def execute(self, symbols, /, **kwargs):
         symbols = self.querys(symbols, Querys.Symbol)
         if not bool(symbols): return
-        if self.limit:
-            symbols = [symbols[index:index+self.limit] for index in range(0, len(symbols), self.limit)]
+        symbols = [symbols[index:index+100] for index in range(0, len(symbols), 100)]
         for symbols in iter(symbols):
             stocks = self.download(symbols=symbols, **kwargs)
             assert isinstance(stocks, pd.DataFrame)

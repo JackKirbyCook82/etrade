@@ -10,6 +10,7 @@ import random
 import numpy as np
 import pandas as pd
 from abc import ABC
+from collections import OrderedDict as ODict
 
 from finance.concepts import Querys, Concepts, Securities
 from webscraping.webpages import WebJSONPage, WebHTMLPage, WebUploader
@@ -30,22 +31,8 @@ action_formatter = lambda instrument: {Concepts.Securities.Position.LONG: "BUY",
 class ETradeProduct(Naming, ABC, fields=["ticker", "instrument", "option"]): pass
 class ETradeOption(ETradeProduct, fields=["expire", "strike"]): pass
 class ETradeStock(ETradeProduct): pass
-
-class ETradeInstrument(Naming, fields=["position", "quantity", "product"]):
-    def __new__(cls, security, *args, quantity, **kwargs):
-        if security.instrument == Concepts.Securities.Instrument.OPTION:
-            quantity = quantity * 1
-            parameters = dict(instrument=security.instrument, option=security.option)
-            product = ETradeOption(*args, **parameters, **kwargs)
-        elif security.instrument == Concepts.Securities.Instrument.STOCK:
-            quantity = quantity * 100
-            parameters = dict(instrument=security.instrument)
-            product = ETradeStock(*args, **parameters, **kwargs)
-        else: raise ValueError(security.instrument)
-        parameters = dict(position=security.position, quantity=quantity, product=product)
-        return super().__new__(cls, *args, **parameters, **kwargs)
-
-class ETradeOrder(Naming, fields=["term", "tenure", "limit", "stop", "instruments"]): pass
+class ETradeSecurity(Naming, fields=["position", "quantity", "product"]): pass
+class ETradeOrder(Naming, fields=["term", "tenure", "limit", "stop", "securities"]): pass
 class ETradePreview(Naming, fields=["identity", "order"]): pass
 class ETradeValuation(Naming, fields=["npv"]):
     def __str__(self): return f"${self.npv.min():.0f}"
@@ -74,7 +61,7 @@ class ETradeOrderPayload(WebPayload, key="order", locator="Order", fields={"allO
     stop = lambda order: {"stopPrice": f"{order.stop:.02f}"} if order.term in (Concepts.Markets.Term.STOP, Concepts.Markets.Term.STOPLIMIT) else {}
     tenure = lambda order: {"orderTerm": tenure_formatter(order)}
 
-    class Instrument(WebPayload, key="instruments", locator="Instrument", multiple=True, optional=False):
+    class Security(WebPayload, key="securities", locator="Instrument", multiple=True, optional=False):
         action = lambda instrument: {"orderAction": action_formatter(instrument)}
         quantity = lambda instrument: {"quantity": str(instrument.quantity)}
 
@@ -129,6 +116,7 @@ class ETradeOrderUploader(WebUploader, page=ETradePreviewPage):
 
     @staticmethod
     def calculator(prospects, /, term, tenure, **kwargs):
+        assert term in (Concepts.Markets.Term.MARKET, Concepts.Markets.Term.LIMIT)
         for index, prospect in prospects.iterrows():
             identity = random.randint(1000000000, 9999999999)
             strategy, quantity = prospect[["strategy", "quantity"]].values
@@ -138,11 +126,13 @@ class ETradeOrderUploader(WebUploader, page=ETradePreviewPage):
             options = {Securities.Options[option]: strike for option, strike in options.items() if not np.isnan(strike)}
             stocks = [Securities.Stocks(stock) for stock in strategy.stocks]
             assert spot >= breakeven and quantity >= 1
-            options = [ETradeInstrument(security, strike=strike, quantity=quantity, **settlement) for security, strike in options.items()]
-            stocks = [ETradeInstrument(security, quantity=quantity * 100, **settlement) for security in stocks]
-            valuation = ETradeValuation(npv=prospect["npv"])
-            order = ETradeOrder(instruments=options + stocks, term=term, tenure=tenure, limit=-breakeven, stop=None)
+            options = ODict([(security, ETradeOption(**dict(security), **settlement)) for security, strike in options.items()])
+            stocks = ODict([(security, ETradeStock(**dict(security), **settlement)) for security in stocks])
+            options = [ETradeSecurity(quantity=quantity * 1, product=product, **dict(security)) for security, product in options.items()]
+            stocks = [ETradeSecurity(quantity=quantity * 100, product=product, **dict(security)) for security, product in stocks.items()]
+            order = ETradeOrder(securities=options + stocks, term=term, tenure=tenure, limit=-breakeven, stop=None)
             preview = ETradePreview(identity=identity, order=order)
+            valuation = ETradeValuation(npv=prospect["npv"])
             yield preview, valuation
 
 
