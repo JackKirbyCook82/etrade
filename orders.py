@@ -28,11 +28,11 @@ tenure_formatter = lambda order: {Concepts.Markets.Tenure.DAY: "GOOD_FOR_DAY", C
 action_formatter = lambda instrument: {Concepts.Securities.Position.LONG: "BUY", Concepts.Securities.Position.SHORT: "SELL"}[instrument.position]
 
 
-class ETradeProduct(Naming, ABC, fields=["ticker", "instrument", "option"]): pass
-class ETradeOption(ETradeProduct, fields=["expire", "strike"]): pass
+class ETradeProduct(Naming, ABC, fields=["ticker", "instrument"]): pass
+class ETradeOption(ETradeProduct, fields=["option", "expire", "strike"]): pass
 class ETradeStock(ETradeProduct): pass
 class ETradeSecurity(Naming, fields=["position", "quantity", "product"]): pass
-class ETradeOrder(Naming, fields=["term", "tenure", "limit", "stop", "securities"]): pass
+class ETradeOrder(Naming, fields=["term", "tenure", "limit", "stop", "quantity", "securities"]): pass
 class ETradePreview(Naming, fields=["identity", "order"]): pass
 class ETradeValuation(Naming, fields=["npv"]):
     def __str__(self): return f"${self.npv.min():.0f}"
@@ -130,7 +130,7 @@ class ETradeOrderUploader(WebUploader, page=ETradePreviewPage):
             stocks = ODict([(security, ETradeStock(**dict(security), **settlement)) for security in stocks])
             options = [ETradeSecurity(quantity=quantity * 1, product=product, **dict(security)) for security, product in options.items()]
             stocks = [ETradeSecurity(quantity=quantity * 100, product=product, **dict(security)) for security, product in stocks.items()]
-            order = ETradeOrder(securities=options + stocks, term=term, tenure=tenure, limit=-breakeven, stop=None)
+            order = ETradeOrder(securities=options + stocks, term=term, tenure=tenure, limit=-breakeven, stop=None, quantity=quantity)
             preview = ETradePreview(identity=identity, order=order)
             valuation = ETradeValuation(npv=prospect["npv"])
             yield preview, valuation
